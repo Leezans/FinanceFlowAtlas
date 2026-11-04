@@ -31,7 +31,6 @@ Environment: `FFA_DATA_DIR` selects API data directory (default `var`). CLI/work
 - packages/contracts — exported machine-readable schemas
 - tests — synthetic unit/API tests, no captured financial data
 - docs — architecture, source semantics and verification
-- legacy — previous single-Worker prototype, not the v0.2 runtime
 
 Raw CSVs, databases, snapshots, credentials and vendor observations stay outside Git. Source license does not grant provider-data redistribution rights. Review IMF, geographic-data and dependency licenses before your chosen deployment.
 

@@ -18,4 +18,4 @@ Monorepo; modular monolith, no microservices required. apps/web consumes apps/ap
 SCALE must not be blindly used as a multiplier. Adapter currently requires operator-reviewed unit semantics before publishing amounts. Unknown units, nonfinite/negative amounts, duplicates, malformed data and empty validated sets fail publication.
 
 ## Migration
-legacy/ preserves v0.1 reference implementation for traceability; not part of the new runtime. Existing private Site remains v0.1 until a compatible Python hosting plan is selected. This monorepo does not pretend Cloudflare Workers can directly host a Python FastAPI service.
+The unused v0.1 legacy/ source directory has been removed from the current tree. Its reference implementation remains recoverable from Git history, including commit 2b1c877904c9653c909a9ff9d3f740eebb6ddf66. This repository-only cleanup does not delete or update the independently deployed private v0.1 Site, which remains unchanged until a separate deployment is authorized. This monorepo does not pretend Cloudflare Workers can directly host a Python FastAPI service.
