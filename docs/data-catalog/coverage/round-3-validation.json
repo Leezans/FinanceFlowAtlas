@@ -1,0 +1,128 @@
+{
+  "checked_at": "2026-11-04",
+  "records": 46,
+  "europe_americas_economies": 18,
+  "other_regions_economies": 28,
+  "between_groups_overlap": [],
+  "overlap_with_prior_committed_rounds": [],
+  "prior_committed_round_economies": 108,
+  "cumulative_round_economies": 154,
+  "cumulative_round_source_records": 158,
+  "all_not_certified": true,
+  "csv_json_equal": true,
+  "existing_files_modified": false,
+  "link_checks": {
+    "date": "2026-11-04",
+    "method": "single HEAD, no bodies retained, prior failed downloads not retried",
+    "urls": 53,
+    "attempted": 43,
+    "status_counts": {
+      "200": 35,
+      "None": 11,
+      "503": 3,
+      "403": 4
+    },
+    "non_200_or_not_retried": [
+      {
+        "url": "https://cdn.eccb-centralbank.org/documents/Balance-of-Payments/2024-03-14-05-06-04-ECCU-External-Sector-Statistics-2022.pdf",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://gosdmx.bct.gov.tn/",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.bancomoc.mz/media/tynl2yt0/der_relato-rio-semestral-da-balanc-a-de-pagamentos-iii-semestre-2025_v02.pdf",
+        "status": null,
+        "result": "TimeoutError"
+      },
+      {
+        "url": "https://www.bank-of-algeria.dz/balance-des-paiements/",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.bcv.cv/pt/Estatisticas/Quadros%20Estatisticos/Sector%20Externo/quadrosestatisticos/Documents/2026/Setembro/Balan%C3%A7a%20de%20Pagamentos%20%28Estat%C3%ADsticas%20do%201%C2%BA%20trimestre%20de%202012%20a%202%C2%BA%20trimestre%20de%202026%29.xls",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "HTTP Error 503: Service Unavailable"
+      },
+      {
+        "url": "https://www.bcv.cv/pt/Estatisticas/Quadros%20Estatisticos/Sector%20Externo/quadrosestatisticos/Paginas/BalancadePagamentos.aspx",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.cbe.org.eg/en/economic-research/sdds",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.cbvs.sr/en/balance-of-payments-en",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.cbvs.sr/images/content/statistieken/Database/BalanceofPayments_BPM5.xlsx",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.cbvs.sr/images/content/statistieken/Metadata/Suriname_GDDS_DQAF_EXT_Balanceofpayments_25Apr2017.pdf",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.elibrary.imf.org/view/journals/002/2024/093/article-A002-en.xml",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.elibrary.imf.org/view/journals/002/2025/104/article-A003-en.xml",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.nrb.org.np/departments/statistics-data-links/",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://www.rma.org.bt/media/news_upload/Annual%20Report%202022-23.pdf",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.statistica.sm/on-line/nsdp/SMR_BOP_SDMX.xml",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.statistica.sm/pub1/StatisticaSM/e-gdds/nsdp.html",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.statistica.sm/pub1/dam/jcr%3A92a9dbf3-6ed0-464b-a666-4885f676c537/",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www3.gov.bm/print/html/node/447331",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      }
+    ]
+  }
+}

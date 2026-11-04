@@ -1,0 +1,20 @@
+{
+  "records": 28,
+  "economies": 28,
+  "prior_economies_checked": 120,
+  "overlap": [],
+  "all_production_not_certified": true,
+  "raw_source_data_in_artifact": false,
+  "verification_counts": {
+    "numeric_pdf_table_opened": 1,
+    "page_opened_download_503": 1,
+    "http_200_xlsx_metadata": 2,
+    "official_search_evidence_open_502": 1,
+    "numeric_html_table_opened": 1,
+    "page_opened_coverage_conflict": 1,
+    "official_search_plus_attributed_portal_opened": 1,
+    "official_search_evidence": 18,
+    "official_search_evidence_open_timeout": 1,
+    "official_metadata_only": 1
+  }
+}

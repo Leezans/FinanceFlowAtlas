@@ -1,0 +1,71 @@
+[
+  {
+    "economy_code": "CPV",
+    "url": "https://www.bcv.cv/pt/Estatisticas/Quadros%20Estatisticos/Sector%20Externo/quadrosestatisticos/Documents/2026/Setembro/Balan%C3%A7a%20de%20Pagamentos%20%28Estat%C3%ADsticas%20do%201%C2%BA%20trimestre%20de%202012%20a%202%C2%BA%20trimestre%20de%202026%29.xls",
+    "raw_persisted": false,
+    "error": "HTTP Error 503: Service Unavailable",
+    "research_date": "2026-11-04"
+  },
+  {
+    "economy_code": "SYC",
+    "url": "https://www.cbs.sc/Downloads/StaExcel/Balance%20of%20Payments.xlsx",
+    "raw_persisted": false,
+    "http_status": 200,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "bytes": 440246,
+    "sha256": "8b5dd38efb3b7ea9047a6b25c2a7f23fa16567da361385d5bc4a702bebb614af",
+    "sheets": [
+      "Notes",
+      "BPM4",
+      "BPM5",
+      "BPM6.Q(Incl Offshore)",
+      "BPM6.Q(Excl Offshore)"
+    ],
+    "relevant_labels": [
+      "BPM4",
+      "BPM5",
+      "BPM6",
+      "Quarterly",
+      "Balance of Payments of Seychelles, compiled according to the IMF's Balance of Payment Manual 4, USD million, Flows",
+      "Balance of Payments of Seychelles, compiled according to the IMF's Balance of Payment Manual 5, USD million, Flows",
+      "Balance of Payments of Seychelles, compiled according to the IMF's Balance of Payment Manual 6, USD million, Flows",
+      "Portfolio investment ",
+      "in US$Million",
+      " 1992-2006 BPM5",
+      " 1978-1991 BPM4",
+      "Scale:  Millions",
+      "BPM6 Concept",
+      "     Portfolio investment",
+      "Balance of Payments, Current Account, Primary income, Investment income, Portfolio investment, Net",
+      "Balance of Payments, Current Account, Primary income, Investment income, Portfolio investment, Credit",
+      "Balance of Payments, Current Account, Primary income, Investment income, Portfolio investment, Debit",
+      "    Equity other than reinvestment of earnings",
+      "Portfolio investment",
+      "Balance of Payments, Financial account, Portfolio investment",
+      "Balance of Payments, Financial account, Portfolio investment, Net acquisition of financial assets",
+      "Balance of Payments, Financial account, Portfolio investment, Net acquisition of financial assets, Debt securities",
+      "Balance of Payments, Financial account, Portfolio investment, Net incurrence of liabilities",
+      "Balance of Payments, Financial account, Portfolio investment, Net incurrence of liabilities, Debt securities",
+      "of which Equity securities other than investment fund shares"
+    ],
+    "research_date": "2026-11-04"
+  },
+  {
+    "economy_code": "AFG",
+    "url": "https://dab.gov.af/sites/default/files/2021-06/Balance%20of%20payments%20%28BOP%29%20summary%20%282%29.xlsx",
+    "raw_persisted": false,
+    "http_status": 200,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "bytes": 45374,
+    "sha256": "a25d154549ad1a35eefa803821605a719c9cf131bb8649081a5af2694396c77b",
+    "sheets": [
+      "Sheet1"
+    ],
+    "relevant_labels": [
+      "Balance of Payments Transactions (BPM6)",
+      " Portfolio investment",
+      "(In million USD) "
+    ],
+    "research_date": "2026-11-04"
+  }
+]
