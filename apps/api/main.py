@@ -24,3 +24,7 @@ def snapshot(request:Request,response:Response):
 # Transactions have a distinct schema and storage; never replace the holdings snapshot.
 from financeflow.tic_service import router as tic_router
 app.include_router(tic_router())
+
+# SEC fund-share activity remains separate from country holdings and TIC transactions.
+from financeflow.sec_nport_service import router as sec_nport_router
+app.include_router(sec_nport_router())

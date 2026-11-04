@@ -111,11 +111,11 @@ def normalize(submission_raw: bytes, fund_raw: bytes, *, report_month: str,
                 'accession_number': accession, 'filing_type': sub['SUB_TYPE'],
                 'report_date': _date(sub['REPORT_DATE']).isoformat(), 'filing_date': filing_date.isoformat(),
                 'period': period, 'source_month_index': i,
-                'sales_excluding_reinvestment_usd': None if sales is None else str(sales),
-                'reinvestment_usd': None if reinvestment is None else str(reinvestment),
-                'redemptions_usd': None if redemptions is None else str(redemptions),
+                'sales_excluding_reinvestment_usd': None if sales is None else format(sales, 'f'),
+                'reinvestment_usd': None if reinvestment is None else format(reinvestment, 'f'),
+                'redemptions_usd': None if redemptions is None else format(redemptions, 'f'),
                 'quality_flags': ['negative_reported_gross_flow'] if any(v is not None and v < 0 for v in (sales, reinvestment, redemptions)) else [],
-                'net_external_flow_usd': None if net is None else str(net)})
+                'net_external_flow_usd': None if net is None else format(net, 'f')})
     if not records:
         raise ValueError('No eligible funds for requested report month')
     hashes = {'SUBMISSION.tsv': hashlib.sha256(submission_raw).hexdigest(), 'FUND_REPORTED_INFO.tsv': hashlib.sha256(fund_raw).hexdigest()}

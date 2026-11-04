@@ -27,6 +27,14 @@ class SecNportTests(unittest.TestCase):
     def test_large_decimal_precision(self):
         s = run(fund=FUND.replace(b'100.25', b'123456789012345678901234.123456789012'))
         self.assertEqual(s['records'][0]['net_external_flow_usd'], '123456789012345678901194.123456789012')
+    def test_fixed_point_small_and_zero(self):
+        for value in (b'0.000000000001', b'0.000000000000'):
+            raw = FUND.replace(b'100.25', value).replace(b'999', value).replace(b'40', b'0.000000000000')
+            row = run(fund=raw)['records'][0]
+            self.assertEqual(row['sales_excluding_reinvestment_usd'], value.decode())
+            self.assertEqual(row['reinvestment_usd'], value.decode())
+            self.assertEqual(row['redemptions_usd'], '0.000000000000')
+            self.assertEqual(row['net_external_flow_usd'], value.decode())
     def test_missing_not_zero(self):
         s = run(fund=FUND.replace(b'100.25', b''))
         self.assertIsNone(s['records'][0]['net_external_flow_usd'])
