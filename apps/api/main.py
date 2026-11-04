@@ -20,3 +20,7 @@ def snapshot(request:Request,response:Response):
     if request.headers.get('if-none-match')==etag:return Response(status_code=304,headers={'ETag':etag})
     response.headers['ETag']=etag;response.headers['Cache-Control']='no-cache'
     return s.model_dump()
+
+# Transactions have a distinct schema and storage; never replace the holdings snapshot.
+from financeflow.tic_service import router as tic_router
+app.include_router(tic_router())

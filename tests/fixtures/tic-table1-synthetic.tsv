@@ -1,0 +1,10 @@
+Table 1: U.S. Long-Term Securities Held by Foreign Residents
+SYNTHETIC TEST FIXTURE - invented values; never production data
+Millions of dollars
+country	country_code	date	for_lt_eqty_pos	for_lt_eqty_net	for_lt_eqty_valchg
+Austria	10189	2026-08	1000	7	13
+Total Europe	19992	2026-08	2000	99	21
+Canada	29998	2026-08	3000	-4	17
+Japan	42609	2026-08	4000	0	-3
+Grand Total	99996	2026-08	9000	3	27
+Definitions:

@@ -1,0 +1,236 @@
+{
+  "$defs": {
+    "Flow": {
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "title": "Record Id",
+          "type": "string"
+        },
+        "foreign_economy_iso3": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Foreign Economy Iso3",
+          "type": "string"
+        },
+        "foreign_economy_name": {
+          "title": "Foreign Economy Name",
+          "type": "string"
+        },
+        "treasury_country_code": {
+          "title": "Treasury Country Code",
+          "type": "string"
+        },
+        "issuer_economy_iso3": {
+          "const": "USA",
+          "default": "USA",
+          "title": "Issuer Economy Iso3",
+          "type": "string"
+        },
+        "net_foreign_purchases_usd": {
+          "title": "Net Foreign Purchases Usd",
+          "type": "integer"
+        },
+        "period": {
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+          "title": "Period",
+          "type": "string"
+        },
+        "source_id": {
+          "const": "us-tic-slt-equity-transactions",
+          "default": "us-tic-slt-equity-transactions",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "record_id",
+        "foreign_economy_iso3",
+        "foreign_economy_name",
+        "treasury_country_code",
+        "net_foreign_purchases_usd",
+        "period"
+      ],
+      "title": "Flow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "concept": {
+      "const": "reported_net_transactions",
+      "default": "reported_net_transactions",
+      "title": "Concept",
+      "type": "string"
+    },
+    "asset_class": {
+      "const": "equity",
+      "default": "equity",
+      "title": "Asset Class",
+      "type": "string"
+    },
+    "frequency": {
+      "const": "monthly",
+      "default": "monthly",
+      "title": "Frequency",
+      "type": "string"
+    },
+    "is_live": {
+      "const": false,
+      "default": false,
+      "title": "Is Live",
+      "type": "boolean"
+    },
+    "period": {
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+      "title": "Period",
+      "type": "string"
+    },
+    "source_id": {
+      "const": "us-tic-slt-equity-transactions",
+      "default": "us-tic-slt-equity-transactions",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_url": {
+      "const": "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table1.txt",
+      "default": "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table1.txt",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "source_field": {
+      "const": "for_lt_eqty_net",
+      "default": "for_lt_eqty_net",
+      "title": "Source Field",
+      "type": "string"
+    },
+    "source_unit": {
+      "const": "USD millions",
+      "default": "USD millions",
+      "title": "Source Unit",
+      "type": "string"
+    },
+    "output_unit": {
+      "const": "USD",
+      "default": "USD",
+      "title": "Output Unit",
+      "type": "string"
+    },
+    "observation_release_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observation Release Date"
+    },
+    "release_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Release Url"
+    },
+    "source_revision_published_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Revision Published At"
+    },
+    "retrieved_at": {
+      "format": "date-time",
+      "title": "Retrieved At",
+      "type": "string"
+    },
+    "raw_sha256": {
+      "title": "Raw Sha256",
+      "type": "string"
+    },
+    "adapter_version": {
+      "default": "tic-equity-v1.0.0",
+      "title": "Adapter Version",
+      "type": "string"
+    },
+    "geography_version": {
+      "default": "tic-table1-2026-08-v1",
+      "title": "Geography Version",
+      "type": "string"
+    },
+    "excluded_records": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Excluded Records",
+      "type": "object"
+    },
+    "country_flows": {
+      "items": {
+        "$ref": "#/$defs/Flow"
+      },
+      "title": "Country Flows",
+      "type": "array"
+    },
+    "grand_total_net_foreign_purchases_usd": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Grand Total Net Foreign Purchases Usd"
+    },
+    "direction_note": {
+      "default": "Positive = foreign net purchases of U.S. equity (money into U.S.); negative = net sales (money out). Do not reverse investor/issuer identities on negative observations.",
+      "title": "Direction Note",
+      "type": "string"
+    },
+    "coverage_note": {
+      "default": "U.S.-centric monthly transactions in U.S. corporate equity, including fund shares. Geographic attribution is reported foreign residence, subject to custodial/intermediary bias, not ultimate beneficial ownership or exchange location. Listed country rows are not exhaustive; do not sum them as the world total. Not real time and not comparable to IMF holdings levels.",
+      "title": "Coverage Note",
+      "type": "string"
+    },
+    "license_note": {
+      "default": "Treasury federal statistical data; source attribution retained. Repository software license does not license provider data or Treasury branding. No third-party materials or blanket worldwide reuse guarantee implied.",
+      "title": "License Note",
+      "type": "string"
+    },
+    "rights_url": {
+      "default": "https://www.copyright.gov/history/copyright-exhibit/lifecycle/",
+      "title": "Rights Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "period",
+    "retrieved_at",
+    "raw_sha256",
+    "excluded_records",
+    "country_flows"
+  ],
+  "title": "FlowSnapshot",
+  "type": "object"
+}
