@@ -1,0 +1,168 @@
+{
+  "checked_at": "2026-11-04",
+  "records": 54,
+  "europe_americas_economies": 25,
+  "asia_africa_middle_east_oceania_economies": 29,
+  "within_round_overlap": [],
+  "overlap_prior_source_research": [],
+  "newly_researched_economies": 54,
+  "cumulative_economies": 108,
+  "cumulative_source_records": 112,
+  "all_not_certified": true,
+  "csv_json_equal": true,
+  "existing_files_modified": false,
+  "link_checks": {
+    "date": "2026-11-04",
+    "method": "single HEAD, no bodies retained, prior failed downloads not retried",
+    "urls": 78,
+    "attempted": 76,
+    "status_counts": {
+      "403": 4,
+      "200": 51,
+      "None": 6,
+      "503": 8,
+      "404": 6,
+      "500": 2,
+      "301": 1
+    },
+    "non_200_or_not_retried": [
+      {
+        "url": "https://bank.gov.ua/files/ES/BOP_m_en.pdf",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://bank.gov.ua/files/ES/BOP_q_en.pdf",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://cbs.gov.ws/media/B1-Balance-of-Payments-8.xlsx",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "HTTP Error 404: Not Found"
+      },
+      {
+        "url": "https://cbu.uz/upload/medialibrary/89e/BALANCE-OF-PAYMENTS_-INTERNATIONAL-INVESTMENT-POSITION.pdf",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://fined.cbbh.ba/Content/Read/29?lang=en",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://nbc.gov.kh/download_files/economic_research/bop_eng/BOP_Bulletin_No_88_2025Q3_ENG.pdf",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://pcbs.gov.ps/en/post-details/?postId=23408",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://pxdata.stat.fi/PxWeb/pxweb/en/StatFin/StatFin__mata/statfin_mata_pxt_12gk.px/?action=selectdefault",
+        "status": 500,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://rbv.gov.vu/images/Quarterly-Economic-Reviews/2021/September%202021%20QER%20-FINAL.pdf",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://statdb.bank.lv/",
+        "status": null,
+        "result": "TimeoutError"
+      },
+      {
+        "url": "https://www.bankpng.gov.pg/sites/default/files/2026-09/QEB%20Table%209.1%20%28B%29.xlsx",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.bb.org.bd/pub/annual/bop/bop%202024-25.pdf",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.bceao.int/fr/publications/balance-des-paiements-et-position-exterieure-globale-du-togo-2024",
+        "status": null,
+        "result": "TimeoutError"
+      },
+      {
+        "url": "https://www.bnr.ro/en/642-home",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.bol.gov.la/en/External_Sectors",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.cbbh.ba/Content/Archive/35",
+        "status": 500,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.cbsi.com.sb/wp-content/uploads/2026/05/December-2025-Qrt-Report-Final.pdf",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.central-bank.org.tt/sites/default/files/latest-news/net-errors-omissions-in-the-balance-of-payments-august-2024.pdf",
+        "status": null,
+        "result": "TimeoutError"
+      },
+      {
+        "url": "https://www.central-bank.org.tt/statistics/data-centre",
+        "status": null,
+        "result": "TimeoutError"
+      },
+      {
+        "url": "https://www.centralbankbahamas.com/index.php/e-gdds",
+        "status": 301,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.commerce.gov.bf/fileadmin/user_upload/storage/images/Rapport_BdP_2024_Version_finale__1_.pdf",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.finances.gov.ma/Pages/TAND_Maroc_Francais.htm",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.inec.gob.pa/Publicaciones/Default2.aspx?ID_CATEGORIA=4&ID_SUBCATEGORIA=24",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.inec.gob.pa/Publicaciones/Default3.aspx?ID_CATEGORIA=4&ID_PUBLICACION=1428&ID_SUBCATEGORIA=24",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.lb.lt/en/external-statistics-3",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.lb.lt/en/m_statistics/t-balance-of-payments-2/",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.nbrm.mk/content/statistika/Soopstenija/PB/2024/Press_Release_BOP_3_2024.pdf",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      }
+    ]
+  }
+}

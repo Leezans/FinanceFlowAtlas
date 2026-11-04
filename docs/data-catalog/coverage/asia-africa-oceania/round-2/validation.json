@@ -1,0 +1,17 @@
+{
+  "records": 29,
+  "economies": 29,
+  "overlap_with_round1": [],
+  "raw_source_data_in_artifact": false,
+  "all_production_not_certified": true,
+  "verification_counts": {
+    "numeric_table_opened": 1,
+    "official_search_evidence": 22,
+    "official_search_evidence_methodology": 1,
+    "official_search_evidence_open_timeout": 1,
+    "http_200_xlsx_metadata": 1,
+    "page_opened_download_403": 1,
+    "page_opened_download_404": 1,
+    "http_200_binary_download_only": 1
+  }
+}
