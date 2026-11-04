@@ -1,0 +1,16 @@
+{
+  "unique_country_rows": 250,
+  "bop_unique_observation_keys": 5253,
+  "bop_query_dimensions_match": true,
+  "bop_all_status_fields_empty": true,
+  "bop_monetary_scale_validation": "not_completed",
+  "rights_review": "not_completed",
+  "repository_preflight": {
+    "csv_json_consistency": true,
+    "unique_country_codes": 250,
+    "all_production_readiness_not_certified": true,
+    "raw_observations_distributed": false,
+    "monetary_values_distributed": false,
+    "scope": "Metadata and coverage counts only; no claim of complete source integration"
+  }
+}

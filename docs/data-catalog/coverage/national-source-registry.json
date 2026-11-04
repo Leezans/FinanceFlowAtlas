@@ -1,0 +1,411 @@
+[
+  {
+    "source_id": "national-01",
+    "economies": [
+      "USA"
+    ],
+    "catalogue_status": "P0 / V1",
+    "source_description": "美国 [Treasury TIC](https://home.treasury.gov/data/treasury-international-capital-tic-system/)",
+    "official_url": "https://home.treasury.gov/data/treasury-international-capital-tic-system/",
+    "semantics": "外国持有美国证券、美国持有外国证券；股权、国债、机构债和企业债交易；国家及部分官方/私人分类",
+    "frequency_access": "SLT 月度、年度基准调查；公开表格/文件；百万美元",
+    "limitations": "扩展 SLT 于 2023-02 开始；更早流量需分段方法。托管地不必是最终持有人地。保存发布版本。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-02",
+    "economies": [
+      "CAN"
+    ],
+    "catalogue_status": "P0 / V1",
+    "source_description": "加拿大 [StatCan 36-10-0030-01](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3610003001)",
+    "official_url": "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3610003001",
+    "semantics": "加拿大与外国证券交易，按地区分类，实际证券投资流量",
+    "frequency_access": "月度；百万，币种核对表元数据；CSV 全表、SDMX、开发者入口",
+    "limitations": "优先机器可读下载；工具细分表 36-10-0028-01 为下一验证目标，尚未单独测试。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-03",
+    "economies": [
+      "BRA"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "巴西 [B3 Dados de Mercado](https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/market-data/consultas/mercado-a-vista/dados-de-mercado/)",
+    "official_url": "https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/market-data/consultas/mercado-a-vista/dados-de-mercado/",
+    "semantics": "投资者参与比例、外国投资者金融净额；现货及相关市场",
+    "frequency_access": "每日发布；投资者数据 D+2；月/年累计表；外国金额为百万 BRL",
+    "limitations": "**页面明确禁止自动采集，包括 AI，商业与非商业均在内。不得抓取；申请许可或授权 feed。**2020–22 借券剔除修订、2023 大宗市场和一级市场方法变化应标记。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "restricted",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-04",
+    "economies": [
+      "BRA"
+    ],
+    "catalogue_status": "P2 / V1",
+    "source_description": "巴西 [CVM 外国投资](https://www.gov.br/cvm/pt-br/centrais-de-conteudo/publicacoes/series-historicas/investimento-estrangeiro/)",
+    "official_url": "https://www.gov.br/cvm/pt-br/centrais-de-conteudo/publicacoes/series-historicas/investimento-estrangeiro/",
+    "semantics": "非居民组合流量/头寸、国家组合表",
+    "frequency_access": "XLS/ODS；已看到截至 2024-12 文件；频率/单位依表",
+    "limitations": "历史补充；最新连续更新未确认，不能代替日频 B3。数据由法律代表报送。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-05",
+    "economies": [
+      "CHL"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "智利 [中央银行 BDE API](https://si3.bcentral.cl/estadisticas/Principal1/Web_Services/acceso_api.html)",
+    "official_url": "https://si3.bcentral.cl/estadisticas/Principal1/Web_Services/acceso_api.html",
+    "semantics": "BOP 金融账户及证券投资，按表可有部门细分",
+    "frequency_access": "BDE 表格/API；频率、币种与倍率依系列",
+    "limitations": "[API 条款](https://si3.bcentral.cl/estadisticas/Principal1/Web_Services/terminos_condiciones.html)要求注册并接受；账号、实际系列映射与许可待落实。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-06",
+    "economies": [
+      "GBR"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "英国 [ONS Pink Book](https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/bulletins/unitedkingdombalanceofpaymentsthepinkbook/2026)",
+    "official_url": "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/bulletins/unitedkingdombalanceofpaymentsthepinkbook/2026",
+    "semantics": "金融账户证券投资资产/负债，股权/基金与债务",
+    "frequency_access": "年度详表及季度 BOP；GBP 系列，倍率依表；链接到 07 Financial account 数据集",
+    "limitations": "季度股权负债系列 XBLW 在当前发布中出现；具体下载/系列 API 待验证。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-07",
+    "economies": [
+      "TUR"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "土耳其 [TCMB Securities Statistics](https://www.tcmb.gov.tr/wps/wcm/connect/EN/TCMB%2BEN/Main%2BMenu/Statistics/Monetary%2Band%2BFinancial%2BStatistics/Securities%2BStatistics/)",
+    "official_url": "https://www.tcmb.gov.tr/wps/wcm/connect/EN/TCMB%2BEN/Main%2BMenu/Statistics/Monetary%2Band%2BFinancial%2BStatistics/Securities%2BStatistics/",
+    "semantics": "非居民股票、债券持仓及每周净交易",
+    "frequency_access": "周度；报告为百万美元；ZIP/PDF、EVDS 时间序列",
+    "limitations": "直接官方净交易可用；EVDS API、认证和系列配置待验证。不可将美元持仓变化直接称作买入。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-08",
+    "economies": [
+      "JPN"
+    ],
+    "catalogue_status": "P0 / V1",
+    "source_description": "日本 [MOF International Transactions in Securities](https://www.mof.go.jp/english/policy/international_policy/reference/itn_transactions_in_securities/index.htm)",
+    "official_url": "https://www.mof.go.jp/english/policy/international_policy/reference/itn_transactions_in_securities/index.htm",
+    "semantics": "居民境外、非居民境内股票/基金和债务买卖；月度有投资者类别",
+    "frequency_access": "周/月；周表亿日元；历史文件/PDF",
+    "limitations": "指定大型机构样本，不是完整 BOP。**2014-01 起对外投资净额正号由净卖出改为净买入**。按成交日；债券处置含偿还。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-09",
+    "economies": [
+      "JPN"
+    ],
+    "catalogue_status": "P0 / V1",
+    "source_description": "日本 [JPX investor type](https://www.jpx.co.jp/english/markets/statistics-equities/investor-type/index.html)，[J-Quants Pro 产品](https://pro.jpx-jquants.com/datasets/1)",
+    "official_url": "https://www.jpx.co.jp/english/markets/statistics-equities/investor-type/index.html",
+    "semantics": "海外、个人及细分机构买/卖/净额；市场分部；股票、ETF、REIT 有分别统计",
+    "frequency_access": "周/月/年；数量和金额分文件；周报约下周第 4 工作日；Pro REST/SFTP/Snowflake、CSV/JSON、历史从 2008-01",
+    "limitations": "原文件金额倍率必须核验；市场分部重组设断点。Pro 商业报价/授权待确认，不可假定免费。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-10",
+    "economies": [
+      "IND"
+    ],
+    "catalogue_status": "P0 / V1",
+    "source_description": "印度 [SEBI FPI 来源目录](https://www.sebi.gov.in/curation/fpi.html)，链接 NSDL/CDSL",
+    "official_url": "https://www.sebi.gov.in/curation/fpi.html",
+    "semantics": "FPI 投资、历史汇总及行业统计",
+    "frequency_access": "日/月/年，行业为半月；公开网页及归档；单位依报告",
+    "limitations": "校验成交/结算日期、一级市场范围与币种；不得与交易所现货净额混接。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-11",
+    "economies": [
+      "IND"
+    ],
+    "catalogue_status": "P0 / V1",
+    "source_description": "印度 [NSE FII/FPI & DII](https://www.nseindia.com/reports/fii-dii?os=___)",
+    "official_url": "https://www.nseindia.com/reports/fii-dii?os=___",
+    "semantics": "资本市场的境内机构和外国投资者交易；NSE 单独及 NSE/BSE/MSEI 合计",
+    "frequency_access": "日度；INR crore/billion 可选；CSV",
+    "limitations": "与 NSDL 范围不同，分开保存。自动化和再分发权待确认。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-12",
+    "economies": [
+      "KOR"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "韩国 [KRX Data Marketplace](https://data.krx.co.kr/contents/MDC/MAIN/main/index.cmd?locale=en)",
+    "official_url": "https://data.krx.co.kr/contents/MDC/MAIN/main/index.cmd?locale=en",
+    "semantics": "KOSPI/KOSDAQ/KONEX 按投资者买/卖/净额；期货期权另表",
+    "frequency_access": "日度；主仪表盘十亿 KRW；网页门户",
+    "limitations": "官方产品确认；稳定 API、历史权限和商业再分发未验证。不得把非官方抓取接口视为承诺的 API。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-13",
+    "economies": [
+      "TWN"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "台湾 [TWSE 日机构交易数据产品](https://eshop.twse.com.tw/en/product/detail/6edec1b6e62345cb9f1244acbbcefae0)",
+    "official_url": "https://eshop.twse.com.tw/en/product/detail/6edec1b6e62345cb9f1244acbbcefae0",
+    "semantics": "逐证券外国/大陆、外国自营、投信、自营/避险买卖，字段为**股数**",
+    "frequency_access": "日度，2004-10-01 起；TEXT/Excel；18:00/20:00 不含/含大宗版本",
+    "limitations": "标价内部使用 NT$1,500/月、外部使用 NT$3,000/月；**外部使用仍不允许公开披露**，须谈产品分发权。股数乘收盘价只是估计，不是实际成交资金。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "restricted",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-14",
+    "economies": [
+      "THA"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "泰国 [SET 投资者统计](https://www.set.or.th/en/market/statistics/investor-type?market=settrade)",
+    "official_url": "https://www.set.or.th/en/market/statistics/investor-type?market=settrade",
+    "semantics": "外国、本地机构、个人、自营交易金额",
+    "frequency_access": "日度/汇总视图；币种与倍率核查报告",
+    "limitations": "区分 SET、mai、排除 DR 版本；API、历史和分发权限未确认。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-15",
+    "economies": [
+      "IDN"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "印尼 [IDX Stock Summary](https://idx.co.id/id/data-pasar/ringkasan-perdagangan/ringkasan-saham/)",
+    "official_url": "https://idx.co.id/id/data-pasar/ringkasan-perdagangan/ringkasan-saham/",
+    "semantics": "逐证券 Foreign Buy/Sell 及全市场成交数据",
+    "frequency_access": "日度；网页下载；Foreign 字段单位待样本验证",
+    "limitations": "外资字段可能为股数，不能当货币额；优先官方授权数据，不依赖未文档化端点。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-16",
+    "economies": [
+      "CHN",
+      "HKG"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "中国内地/香港 [HKEX Stock Connect](https://www.hkex.com.hk/Mutual-Market/Connect-Hub/Stock-Connect?sc_lang=en)，[披露调整公告](https://www.hkex.com.hk/News/Market-Communications/2024/2404122news?sc_lang=en)",
+    "official_url": "https://www.hkex.com.hk/Mutual-Market/Connect-Hub/Stock-Connect?sc_lang=en",
+    "semantics": "互联互通渠道交易和持仓，不是全部跨境证券流",
+    "frequency_access": "日度/定期取决字段；RMB/HKD",
+    "limitations": "2024 年披露变化，2024-08-19 为重要实施断点。不得承诺当前北向日净流连续可得；额度使用也不等于净买入。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-17",
+    "economies": [
+      "SAU"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "沙特 [Saudi Exchange 定期报告](https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/reports-publications/annual-reports?locale=ar)",
+    "official_url": "https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/reports-publications/annual-reports?locale=ar",
+    "semantics": "国籍/投资者类别交易与持仓，主板及 Nomu",
+    "frequency_access": "周/月 PDF；SAR 金额与百分比",
+    "limitations": "交易和所有权变化分开。公开 API、完整历史及许可未验证。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-18",
+    "economies": [
+      "ARE"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "阿联酋迪拜 [DFM 国籍交易](https://www.dfm.ae/the-exchange/statistics-reports/historical-data/trade-by-nationality)，[日公报](https://service.dfm.ae/Bulletins?L=1)",
+    "official_url": "https://www.dfm.ae/the-exchange/statistics-reports/historical-data/trade-by-nationality",
+    "semantics": "国籍买/卖/净投资；另有客户类别；公报有外资和机构净额",
+    "frequency_access": "日度/日期范围；AED；下载/导出",
+    "limitations": "自助最多 2 年，老历史需登录提交申请；收费与再分发权待确认。未验证公开 API。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-19",
+    "economies": [
+      "KWT"
+    ],
+    "catalogue_status": "P2 / V1",
+    "source_description": "科威特 [Boursa 国籍与类别统计](https://reports.boursakuwait.com.kw/ar/analysis/trading-volumes-according-to-nationality-and-category)",
+    "official_url": "https://reports.boursakuwait.com.kw/ar/analysis/trading-volumes-according-to-nationality-and-category",
+    "semantics": "按国籍及投资者类别的月交易",
+    "frequency_access": "月度索引从 2008 起；下载格式/金额单位需样本核查",
+    "limitations": "可先人工验证报告，API、复用权及连续性未知。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-20",
+    "economies": [
+      "NGA"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "尼日利亚 [NGX 外资组合报告](https://ngxgroup.com/exchange/data/foreign-portfolio-investment-report/)",
+    "official_url": "https://ngxgroup.com/exchange/data/foreign-portfolio-investment-report/",
+    "semantics": "国内/外国参与、外资流入/流出、国内机构/散户分类",
+    "frequency_access": "月 PDF；单位逐报告检查",
+    "limitations": "当前官方索引确认；API 与再分发许可未确认。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-21",
+    "economies": [
+      "ZAF"
+    ],
+    "catalogue_status": "P2 / V1-H",
+    "source_description": "南非 [JSE 市场概况历史样例](https://www.jse.co.za/sites/default/files/media/documents/jse-markets-profile-20230731/JSE%20Markets%26%23039%3B%20Profile%2020230731.pdf)",
+    "official_url": "https://www.jse.co.za/sites/default/files/media/documents/jse-markets-profile-20230731/JSE%20Markets%26%23039%3B%20Profile%2020230731.pdf",
+    "semantics": "外资 JSE 股票交易、净买/卖",
+    "frequency_access": "市场概况报告；百万 ZAR",
+    "limitations": "只确认历史官方样例，最新连续获取路线未验证；可谈授权交易所统计，BOP 作国家级回退。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-22",
+    "economies": [
+      "KEN"
+    ],
+    "catalogue_status": "P2 / V1-H",
+    "source_description": "肯尼亚 [CMA 季度统计公报](https://www.cmarcp.or.ke/images/bulletin/Statistical%20Bulletin/2025/CMA-Quarterly-Statistical-Bulletin-Q3.-2025.pdf)",
+    "official_url": "https://www.cmarcp.or.ke/images/bulletin/Statistical%20Bulletin/2025/CMA-Quarterly-Statistical-Bulletin-Q3.-2025.pdf",
+    "semantics": "Nairobi 股票外资参与趋势",
+    "frequency_access": "季度 PDF；单位与净额字段待抽样",
+    "limitations": "用于官方核对/回填；不能据此声称有已验证的日频交易所资金流。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-23",
+    "economies": [
+      "AUS"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "澳大利亚 [ABS BOP/IIP](https://www.abs.gov.au/statistics/economy/international-trade/balance-payments-and-international-investment-position-australia/latest-release)",
+    "official_url": "https://www.abs.gov.au/statistics/economy/international-trade/balance-payments-and-international-investment-position-australia/latest-release",
+    "semantics": "证券投资及其他金融账户股权/债务流量与头寸",
+    "frequency_access": "季度；表格下载；AUD，倍率依表",
+    "limitations": "选择交易项，不是净股权头寸变化；系列、API 映射和许可需元数据核查。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-24",
+    "economies": [
+      "NZL"
+    ],
+    "catalogue_status": "P1 / V1",
+    "source_description": "新西兰 [Stats NZ BOP/IIP](https://www.stats.govt.nz/information-releases/balance-of-payments-and-international-investment-position-year-ended-31-march-2026/)",
+    "official_url": "https://www.stats.govt.nz/information-releases/balance-of-payments-and-international-investment-position-year-ended-31-march-2026/",
+    "semantics": "季度交易/头寸，年度选定对手国家存量流量",
+    "frequency_access": "季度/年；Excel；单位逐表检查",
+    "limitations": "居民国家层，不是日频机构交易。Infoshare 正迁移至 Aotearoa Data Explorer，采集接口需重新验证。",
+    "evidence": "existing_catalogue_V1_not_fresh_endpoint_test",
+    "access_status": "not_tested_this_pass",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  }
+]

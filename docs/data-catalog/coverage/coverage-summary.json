@@ -1,0 +1,90 @@
+{
+  "as_of": "2026-11-04",
+  "universe": {
+    "iso_3166_1_entries": 249,
+    "explicit_extra_economies": [
+      "XKX"
+    ],
+    "total_rows": 250,
+    "warning": "Includes territories; not a sovereign-state count"
+  },
+  "pip": {
+    "snapshot": "2025-S2",
+    "indicator": "P_F51_P_USD",
+    "raw_rows": 14463,
+    "retained_bilateral_rows": 12886,
+    "reporter_economies": 80,
+    "counterparty_economies": 240,
+    "metric": "position",
+    "sha256": "33db99563ecd00d459e20a650f8fad2d8c50313f7a1d9bb66e8a7cd94a34a1bf",
+    "crosswalk": {
+      "KOS": "XKX",
+      "WBG": "PSE",
+      "TX585": "IOT",
+      "TX814": "CXR",
+      "TX865": "CCK",
+      "TX117": "JEY",
+      "TX793": "ESH"
+    },
+    "existing_adapter_strict_iso": {
+      "edges": 12501,
+      "reporters": 79,
+      "counterparties": 237
+    },
+    "expanded_crosswalk_is_not_deployed": true,
+    "raw_source_distribution": "not_included"
+  },
+  "bop": {
+    "equity": {
+      "indicator": "P_F51",
+      "raw_observations": 1943,
+      "raw_reporter_codes": 95,
+      "economies_with_usable_numeric_observations": 93,
+      "excluded_nonuniverse_reporter_codes": [
+        "CWX",
+        "G163"
+      ],
+      "query_period": "2024 through 2026",
+      "accounting_entries": [
+        "A_NFA_T",
+        "L_NIL_T"
+      ],
+      "unit": "USD",
+      "frequencies": [
+        "A",
+        "Q"
+      ],
+      "metric": "transaction_flow",
+      "production_semantics_validation": "pending"
+    },
+    "equity_and_funds": {
+      "indicator": "P_F5",
+      "raw_observations": 3310,
+      "raw_reporter_codes": 172,
+      "economies_with_usable_numeric_observations": 169,
+      "excluded_nonuniverse_reporter_codes": [
+        "CWX",
+        "G163",
+        "G309"
+      ],
+      "query_period": "2024 through 2026",
+      "accounting_entries": [
+        "A_NFA_T",
+        "L_NIL_T"
+      ],
+      "unit": "USD",
+      "frequencies": [
+        "A",
+        "Q"
+      ],
+      "metric": "transaction_flow",
+      "production_semantics_validation": "pending"
+    }
+  },
+  "national": {
+    "catalogue_sources": 24,
+    "economies_with_catalogue_products": 22,
+    "economies_only_candidates": 23,
+    "economies_not_researched": 205
+  }
+}
