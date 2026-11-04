@@ -28,3 +28,7 @@ app.include_router(tic_router())
 # SEC fund-share activity remains separate from country holdings and TIC transactions.
 from financeflow.sec_nport_service import router as sec_nport_router
 app.include_router(sec_nport_router())
+
+# BOP national transactions remain distinct; unresolved monetary units stay gated.
+from financeflow.bop_service import router as bop_router
+app.include_router(bop_router())

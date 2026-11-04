@@ -1,0 +1,321 @@
+{
+  "$defs": {
+    "BopFact": {
+      "additionalProperties": false,
+      "properties": {
+        "reporter_iso3": {
+          "title": "Reporter Iso3",
+          "type": "string"
+        },
+        "accounting_entry": {
+          "enum": [
+            "A_NFA_T",
+            "L_NIL_T"
+          ],
+          "title": "Accounting Entry",
+          "type": "string"
+        },
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "frequency": {
+          "enum": [
+            "A",
+            "Q"
+          ],
+          "title": "Frequency",
+          "type": "string"
+        },
+        "indicator": {
+          "enum": [
+            "P_F51",
+            "P_F5"
+          ],
+          "title": "Indicator",
+          "type": "string"
+        },
+        "methodology": {
+          "enum": [
+            "BPM6",
+            "BPM7"
+          ],
+          "title": "Methodology",
+          "type": "string"
+        },
+        "source_value": {
+          "title": "Source Value",
+          "type": "string"
+        },
+        "source_unit": {
+          "const": "USD",
+          "default": "USD",
+          "title": "Source Unit",
+          "type": "string"
+        },
+        "source_scale": {
+          "const": "6",
+          "default": "6",
+          "title": "Source Scale",
+          "type": "string"
+        },
+        "value_usd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Usd"
+        },
+        "positive_means": {
+          "title": "Positive Means",
+          "type": "string"
+        },
+        "negative_means": {
+          "title": "Negative Means",
+          "type": "string"
+        },
+        "observation_status": {
+          "title": "Observation Status",
+          "type": "string"
+        },
+        "derivation_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Derivation Type"
+        }
+      },
+      "required": [
+        "reporter_iso3",
+        "accounting_entry",
+        "direction",
+        "period",
+        "frequency",
+        "indicator",
+        "methodology",
+        "source_value",
+        "positive_means",
+        "negative_means",
+        "observation_status"
+      ],
+      "title": "BopFact",
+      "type": "object"
+    },
+    "UnitEvidence": {
+      "additionalProperties": false,
+      "description": "An operator-reviewed, exact-response reconciliation, not a magnitude heuristic.",
+      "properties": {
+        "raw_sha256": {
+          "title": "Raw Sha256",
+          "type": "string"
+        },
+        "indicator": {
+          "enum": [
+            "P_F51",
+            "P_F5"
+          ],
+          "title": "Indicator",
+          "type": "string"
+        },
+        "factor_to_usd": {
+          "enum": [
+            "1",
+            "1000000"
+          ],
+          "title": "Factor To Usd",
+          "type": "string"
+        },
+        "official_reference_url": {
+          "title": "Official Reference Url",
+          "type": "string"
+        },
+        "reconciliation_note": {
+          "title": "Reconciliation Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw_sha256",
+        "indicator",
+        "factor_to_usd",
+        "official_reference_url",
+        "reconciliation_note"
+      ],
+      "title": "UnitEvidence",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "source_id": {
+      "const": "imf-bop-portfolio-equity-transactions",
+      "default": "imf-bop-portfolio-equity-transactions",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "adapter_version": {
+      "default": "imf-bop-transactions-v1",
+      "title": "Adapter Version",
+      "type": "string"
+    },
+    "source_url": {
+      "title": "Source Url",
+      "type": "string"
+    },
+    "source_sha256": {
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "retrieved_at": {
+      "title": "Retrieved At",
+      "type": "string"
+    },
+    "response_prepared_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Response Prepared At"
+    },
+    "dataset_published_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Dataset Published At"
+    },
+    "dataset_updated_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Dataset Updated At"
+    },
+    "period": {
+      "title": "Period",
+      "type": "string"
+    },
+    "frequency": {
+      "enum": [
+        "A",
+        "Q"
+      ],
+      "title": "Frequency",
+      "type": "string"
+    },
+    "indicator": {
+      "enum": [
+        "P_F51",
+        "P_F5"
+      ],
+      "title": "Indicator",
+      "type": "string"
+    },
+    "indicator_label": {
+      "title": "Indicator Label",
+      "type": "string"
+    },
+    "unit_status": {
+      "enum": [
+        "review_required",
+        "verified"
+      ],
+      "title": "Unit Status",
+      "type": "string"
+    },
+    "unit_evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UnitEvidence"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reporting_economy_count": {
+      "title": "Reporting Economy Count",
+      "type": "integer"
+    },
+    "both_directions_economy_count": {
+      "title": "Both Directions Economy Count",
+      "type": "integer"
+    },
+    "excluded_records": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Excluded Records",
+      "type": "object"
+    },
+    "facts": {
+      "items": {
+        "$ref": "#/$defs/BopFact"
+      },
+      "title": "Facts",
+      "type": "array"
+    },
+    "coverage_note": {
+      "title": "Coverage Note",
+      "type": "string"
+    },
+    "license_note": {
+      "default": "IMF terms apply. Personal-use connector; public redistribution is not certified.",
+      "title": "License Note",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "source_url",
+    "source_sha256",
+    "retrieved_at",
+    "response_prepared_at",
+    "dataset_published_at",
+    "dataset_updated_at",
+    "period",
+    "frequency",
+    "indicator",
+    "indicator_label",
+    "unit_status",
+    "unit_evidence",
+    "reporting_economy_count",
+    "both_directions_economy_count",
+    "excluded_records",
+    "facts",
+    "coverage_note"
+  ],
+  "title": "BopSnapshot",
+  "type": "object"
+}
