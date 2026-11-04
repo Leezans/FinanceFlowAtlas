@@ -1,0 +1,480 @@
+[
+  {
+    "economy_code": "ALA",
+    "economy_name": "Åland Islands",
+    "record_id": "inventory-closure-20261104-ala",
+    "coverage_status": "aggregate_territory_only",
+    "agency": "Statistics Finland",
+    "statistical_area": "FIN including ALA",
+    "evidence": "Statistics Finland BOP/IIP methodology explicitly includes Aland. No independent Aland equity series established. Do not copy Finnish observations to Aland.",
+    "evidence_urls": [
+      "https://stat.fi/til/mata/2016/mata_2016-06-01_men_001.pdf"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://stat.fi/til/mata/2016/mata_2016-06-01_men_001.pdf",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "ATA",
+    "economy_name": "Antarctica",
+    "record_id": "inventory-closure-20261104-ata",
+    "coverage_status": "discovery_gap",
+    "agency": null,
+    "statistical_area": "Antarctica; no single statistical jurisdiction assigned",
+    "evidence": "Antarctic Treaty Secretariat explains preserved and overlapping territorial claims under Article IV. No unified BOP compiler or independent equity series verified; do not allocate Antarctica to a single country.",
+    "evidence_urls": [
+      "https://www.ats.aq/e/antarctictreaty.html"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.ats.aq/e/antarctictreaty.html",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "BES",
+    "economy_name": "Bonaire, Sint Eustatius and Saba",
+    "record_id": "inventory-closure-20261104-bes",
+    "coverage_status": "discovery_gap",
+    "agency": "Statistics Netherlands (general statistics); BOP compiler unknown",
+    "statistical_area": "Bonaire, Sint Eustatius and Saba; BOP area unknown",
+    "evidence": "CBS publishes island-specific merchandise trade. This is not portfolio equity or proof of BOP coverage. Do not infer Netherlands BOP inclusion from political or payment-system jurisdiction.",
+    "evidence_urls": [
+      "https://www.cbs.nl/nl-nl/cijfers/detail/82659ENG"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.cbs.nl/nl-nl/cijfers/detail/82659ENG",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "BLR",
+    "economy_name": "Belarus",
+    "record_id": "inventory-closure-20261104-blr",
+    "coverage_status": "agency_verified_series_unknown",
+    "agency": "National Bank of the Republic of Belarus",
+    "statistical_area": "Belarus",
+    "evidence": "Country-supplied IMF DSBB national-accounts metadata identifies National Bank as BOP compiler. BOP endpoint returned only a generic shell in this check; current independent equity series is not established.",
+    "evidence_urls": [
+      "https://dsbb.imf.org/sdds/dqaf-base/country/BLR/category/NAG00"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://dsbb.imf.org/sdds/dqaf-base/country/BLR/category/NAG00",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "BVT",
+    "economy_name": "Bouvet Island",
+    "record_id": "inventory-closure-20261104-bvt",
+    "coverage_status": "discovery_gap",
+    "agency": null,
+    "statistical_area": "Bouvet Island; BOP perimeter unknown",
+    "evidence": "Norwegian Offshore Directorate documents uninhabited Bouvet Island. Lack of permanent population does not itself prove no independent series or inclusion in Norwegian BOP.",
+    "evidence_urls": [
+      "https://www.sodir.no/en/whats-new/news/general-news/2019/continental-shelfs-extent-outside-bouvet-island-clarified/"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.sodir.no/en/whats-new/news/general-news/2019/continental-shelfs-extent-outside-bouvet-island-clarified/",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "CUB",
+    "economy_name": "Cuba",
+    "record_id": "inventory-closure-20261104-cub",
+    "coverage_status": "discovery_gap",
+    "agency": "ONEI (trade-in-services statistics); BOP compiler unverified",
+    "statistical_area": "Cuba; BOP statistical perimeter not verified",
+    "evidence": "ALADI hosts Cuba metadata naming ONEI as compiler of international trade in services from 2019. This is not evidence of a public financial-account or portfolio-equity series.",
+    "evidence_urls": [
+      "https://www2.aladi.org/SitioALADI/documentos/AAMServicios/metadatosCuba.pdf"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www2.aladi.org/SitioALADI/documentos/AAMServicios/metadatosCuba.pdf",
+        "http_status": 503
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "FLK",
+    "economy_name": "Falkland Islands (Malvinas)",
+    "record_id": "inventory-closure-20261104-flk",
+    "coverage_status": "discovery_gap",
+    "agency": "Falkland Islands Government statistical service",
+    "statistical_area": "Falkland Islands; BOP perimeter unknown",
+    "evidence": "Official statistical portal supplies national accounts and other economic reports. Independent BOP/equity series not established; national accounts are not interchangeable with portfolio flows.",
+    "evidence_urls": [
+      "https://www.gov.fk/policy/statistics/"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.gov.fk/policy/statistics/",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "GGY",
+    "economy_name": "Guernsey",
+    "record_id": "inventory-closure-20261104-ggy",
+    "coverage_status": "excluded_from_parent_bop_local_series_unknown",
+    "agency": null,
+    "statistical_area": "Excluded from UK BOP economic territory",
+    "evidence": "ONS BOP QMI explicitly excludes the Channel Islands and Isle of Man. Local compiler and independent equity series are unresolved; do not inherit UK observations.",
+    "evidence_urls": [
+      "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/methodologies/balanceofpaymentsqmi"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/methodologies/balanceofpaymentsqmi",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "GIB",
+    "economy_name": "Gibraltar",
+    "record_id": "inventory-closure-20261104-gib",
+    "coverage_status": "discovery_gap",
+    "agency": "Gibraltar Statistics Office",
+    "statistical_area": "Gibraltar; BOP perimeter unknown",
+    "evidence": "Official agency page confirms national accounts and trade statistics responsibilities. Public independent BOP equity series not established.",
+    "evidence_urls": [
+      "https://www.gibraltar.gov.gi/statistics"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.gibraltar.gov.gi/statistics",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "IMN",
+    "economy_name": "Isle of Man",
+    "record_id": "inventory-closure-20261104-imn",
+    "coverage_status": "excluded_from_parent_bop_local_series_unknown",
+    "agency": null,
+    "statistical_area": "Excluded from UK BOP economic territory",
+    "evidence": "ONS BOP QMI explicitly excludes the Channel Islands and Isle of Man. Local compiler and independent equity series are unresolved; do not inherit UK observations.",
+    "evidence_urls": [
+      "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/methodologies/balanceofpaymentsqmi"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/methodologies/balanceofpaymentsqmi",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "JEY",
+    "economy_name": "Jersey",
+    "record_id": "inventory-closure-20261104-jey",
+    "coverage_status": "excluded_from_parent_bop_local_series_unknown",
+    "agency": null,
+    "statistical_area": "Excluded from UK BOP economic territory",
+    "evidence": "ONS BOP QMI explicitly excludes the Channel Islands and Isle of Man. Local compiler and independent equity series are unresolved; do not inherit UK observations.",
+    "evidence_urls": [
+      "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/methodologies/balanceofpaymentsqmi"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.ons.gov.uk/economy/nationalaccounts/balanceofpayments/methodologies/balanceofpaymentsqmi",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "SGS",
+    "economy_name": "South Georgia and the South Sandwich Islands",
+    "record_id": "inventory-closure-20261104-sgs",
+    "coverage_status": "discovery_gap",
+    "agency": null,
+    "statistical_area": "South Georgia and South Sandwich Islands; BOP perimeter unknown",
+    "evidence": "Territory government FAQ documents no permanent human population on South Georgia. BOP compiler and independent equity series remain unknown; this is not a zero-flow claim.",
+    "evidence_urls": [
+      "https://gov.gs/frequently-asked-questions/"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://gov.gs/frequently-asked-questions/",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "SJM",
+    "economy_name": "Svalbard and Jan Mayen",
+    "record_id": "inventory-closure-20261104-sjm",
+    "coverage_status": "aggregate_territory_only",
+    "agency": "Statistics Norway",
+    "statistical_area": "NOR including Svalbard and Jan Mayen",
+    "evidence": "SSB international accounts scope explicitly includes Svalbard and Jan Mayen with Bjornoya. This establishes aggregate scope only.",
+    "evidence_urls": [
+      "https://www.ssb.no/en/utenriksokonomi/statistikker/ur/kvartal/"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.ssb.no/en/utenriksokonomi/statistikker/ur/kvartal/",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "TCA",
+    "economy_name": "Turks and Caicos Islands",
+    "record_id": "inventory-closure-20261104-tca",
+    "coverage_status": "candidate",
+    "agency": "Turks and Caicos Islands Statistics Authority",
+    "statistical_area": "Turks and Caicos Islands",
+    "evidence": "Official BOP page opened and lists annual BPM6 BOP 2014-2025f and IIP 2014-2025 downloads. Equity breakdown and numeric cells not checked; forecast flag must be preserved.",
+    "evidence_urls": [
+      "https://www.gov.tc/stats/statistics/economic/46-balance-of-payments",
+      "https://www.gov.tc/stats/latest/publications"
+    ],
+    "source_id": "national-closure-20261104-tca",
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.gov.tc/stats/statistics/economic/46-balance-of-payments",
+        "http_status": 200
+      },
+      {
+        "url": "https://www.gov.tc/stats/latest/publications",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "VAT",
+    "economy_name": "Holy See (Vatican City State)",
+    "record_id": "inventory-closure-20261104-vat",
+    "coverage_status": "discovery_gap",
+    "agency": null,
+    "statistical_area": "Holy See / Vatican City; BOP perimeter unknown",
+    "evidence": "Official Vatican information distinguishes the Holy See and Vatican City and describes territory. No official BOP compiler or independent portfolio-equity series verified. Do not assume inclusion in Italy from geography or currency.",
+    "evidence_urls": [
+      "https://www.vatican.va/roman_curia/secretariat_state/documents/informazione_generale/sp_ss_scv_info-generale_en.html"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.vatican.va/roman_curia/secretariat_state/documents/informazione_generale/sp_ss_scv_info-generale_en.html",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "VEN",
+    "economy_name": "Venezuela, Bolivarian Republic of",
+    "record_id": "inventory-closure-20261104-ven",
+    "coverage_status": "agency_verified_series_unknown",
+    "agency": "Banco Central de Venezuela",
+    "statistical_area": "Venezuela",
+    "evidence": "Country-supplied IMF reserve metadata identifies BCV and its Balance of Payments Yearbook. Current BOP equity series and direct endpoint not verified.",
+    "evidence_urls": [
+      "https://dsbb.imf.org/e-gdds/dqaf-base/country/VEN/category/ILV00"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://dsbb.imf.org/e-gdds/dqaf-base/country/VEN/category/ILV00",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "VGB",
+    "economy_name": "Virgin Islands, British",
+    "record_id": "inventory-closure-20261104-vgb",
+    "coverage_status": "historical_documented_gap",
+    "agency": "British Virgin Islands government; current BOP compiler unverified",
+    "statistical_area": "British Virgin Islands",
+    "evidence": "Caribbean Development Bank 2017 country review states BVI did not compile BOP and expected initial compilation in 2018/19. This is historical evidence only, not a current absence claim. Current independent equity series remains unknown.",
+    "evidence_urls": [
+      "https://www.caribank.org/sites/default/files/publication-resources/BVI%20CER%202018_final.pdf"
+    ],
+    "source_id": null,
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://www.caribank.org/sites/default/files/publication-resources/BVI%20CER%202018_final.pdf",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  },
+  {
+    "economy_code": "XKX",
+    "economy_name": "Kosovo",
+    "record_id": "inventory-closure-20261104-xkx",
+    "coverage_status": "candidate",
+    "agency": "Central Bank of the Republic of Kosovo",
+    "statistical_area": "Kosovo",
+    "evidence": "Official external-sector page documents Kosovo BOP compilation and BPM6 adoption; time-series catalogue lists BOP and financial account. Equity instrument rows, units, signs and downloadable numeric series not checked.",
+    "evidence_urls": [
+      "https://bqk-kos.org/statistikat/statistikat-e-sektorit-te-jashtem/?lang=en",
+      "https://bqk-kos.org/statistikat/serite-kohore/?lang=en"
+    ],
+    "source_id": "national-closure-20261104-xkx",
+    "series_id": null,
+    "independent_equity_series_status": "unknown",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "production_readiness": "not_certified",
+    "checked_at": "2026-11-04",
+    "evidence_link_check": [
+      {
+        "url": "https://bqk-kos.org/statistikat/statistikat-e-sektorit-te-jashtem/?lang=en",
+        "http_status": 200
+      },
+      {
+        "url": "https://bqk-kos.org/statistikat/serite-kohore/?lang=en",
+        "http_status": 200
+      }
+    ],
+    "evidence_link_checked_at": "2026-11-04"
+  }
+]

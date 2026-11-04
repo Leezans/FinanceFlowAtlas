@@ -1,0 +1,77 @@
+{
+  "universe_count": 250,
+  "prior_combined_round_unique_economies": 220,
+  "baseline_unique_economies": 22,
+  "baseline_only_economies": [
+    "BRA",
+    "CAN",
+    "CHL",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "KEN",
+    "KOR",
+    "KWT",
+    "TUR",
+    "USA"
+  ],
+  "baseline_overlap_with_rounds": [
+    "ARE",
+    "AUS",
+    "CHN",
+    "JPN",
+    "NGA",
+    "NZL",
+    "SAU",
+    "THA",
+    "TWN",
+    "ZAF"
+  ],
+  "repeated_round_economy_codes": {
+    "TWN": 2,
+    "JPN": 2,
+    "JOR": 2,
+    "TZA": 2
+  },
+  "repeated_baseline_economy_codes": {
+    "BRA": 2,
+    "JPN": 2,
+    "IND": 2
+  },
+  "prior_all_registry_and_round_unique_economies": 232,
+  "new_unique_economies": 18,
+  "new_overlap_prior": [],
+  "after_unique_inventory_economies": 250,
+  "new_status_counts": {
+    "aggregate_territory_only": 2,
+    "discovery_gap": 8,
+    "agency_verified_series_unknown": 2,
+    "excluded_from_parent_bop_local_series_unknown": 3,
+    "candidate": 2,
+    "historical_documented_gap": 1
+  },
+  "new_source_lead_economies": 2,
+  "new_production_certified_series": 0,
+  "unrepresented_after": [],
+  "raw_data_included": false,
+  "repository_files_modified": false,
+  "csv_json_equal": true,
+  "verified_repository_commit": "f7a3ee0120e235a9ed9ab6e14159e0a7666c1bc4",
+  "verification_date": "2026-11-04",
+  "link_checks": {
+    "method": "one HEAD per distinct evidence URL, no bodies retained",
+    "urls": 18,
+    "status_counts": {
+      "200": 17,
+      "503": 1
+    },
+    "non_200": [
+      {
+        "url": "https://www2.aladi.org/SitioALADI/documentos/AAMServicios/metadatosCuba.pdf",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      }
+    ]
+  }
+}
