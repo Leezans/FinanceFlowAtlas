@@ -1,10 +1,10 @@
-# Hosted application: independent TIC layer
+# Private hosted proof: independent TIC layer
 
 This deployment proof preserves the Vinext Sites starter's worker, connector integration, authentication boundary, and hosting manifest. It does not replace the Python monorepo architecture. No secrets, upload route, writer API, seed observations, captured source data, or scheduler are included.
 
 ## Frontend
 
-The existing IMF + TIC React interface is rendered by `app/page.tsx`. TIC is the default. The IMF layer is explicitly unavailable in this hosted proof; its status endpoint says so and its snapshot endpoint returns 503. Foreign exchange, futures and crypto remain unconnected. Geography uses the bundled attributed Natural Earth polygons and ISO index.
+The connected TIC React interface is rendered by `app/page.tsx`. Unconnected IMF, foreign exchange, futures and crypto action buttons are removed from this hosted view; the coverage disclosure states their unavailability. The unchanged IMF status/snapshot routes still report unavailable/503. Geography uses the bundled attributed Natural Earth polygons and ISO index. Source methodology and zero-row lists are collapsed with accessible summaries; errors, stale warnings and the essential tile-area/sign/unit semantics remain visible.
 
 TIC currently targets the **fixed, previously verified 2026-08 month**, not an automatically inferred latest release. The UI states this. The foreign country indicates reported residence; the security issuer economy remains the United States even for negative transactions. Monthly net transactions are never mixed with IMF holdings, approximated from holdings differences, or presented as real-time flows. Industry/individual-security data are not supplied.
 
@@ -27,3 +27,15 @@ Run `npm test` (or `npx vitest run --config vitest.config.ts`) for synthetic ada
 The primary TIC visualization is now a grouped rectangular treemap, with a geographic-map tab. It uses d3-hierarchy squarify, grouping the actual reported foreign-residence rows by the geographic index's region. Region headers and country tiles support drilldown, with a breadcrumb back to the complete reported-country view. This is not an industry or individual-stock hierarchy.
 
 Tile weight is the absolute signed monthly net transaction amount. Its denominator is only the sum of absolute net amounts of the included reported country rows; it is neither market capitalization, gross purchases/sales, nor the Treasury Grand Total. Negative amounts retain their original identity and sign. Reported zero rows appear separately with no positive-area tile; missing rows receive no area and an unavailable denominator is shown as a dash. The China/global palette toggle changes color conventions only. Keyboard labels and single-string SVG titles provide full values where tiles are too small for labels. Responsive layout recomputes rectangles rather than shrinking a desktop image.
+
+The focused hosted UI exposes only the available TIC surface. The fixed observation month is read-only: unsupported historical months are not presented as a user-selectable feature. Visible signed-direction controls and buy/sell wording describe foreign-resident accounts' net U.S. equity transactions, not changes in countries' aggregate money or wealth. Signed summaries group reported country net amounts, not gross trading amounts or an official global total. Source methodology, unsupported coverage and geography-license/download links remain in the folded source disclosure. Access-triggered checking and absence of background tasks are stated unchanged.
+
+## Temporary private A-share entry
+
+`/ashare` and `/api/v1/ashare/{snapshot,status}` use normal public Eastmoney endpoints for an owner-only personal research view. No account credentials or user personal data are sent. Existing homepage/TIC behavior is preserved. This scoped private use is not a claim of general redistribution rights.
+
+A-share payloads are ephemeral in-memory only, never D1 or committed source. D1 `ashare_source_gate` stores only global coordination metadata: an exclusive whole-acquisition token, times, and a sanitized permanent-denial reason. All isolates use the same primary binding and row; rejected/challenge sources are latched, not automatically retried. Busy operations are never automatically taken over after a crash. Migration adds this single metadata row, not market observations.
+
+The first-level industry query is based on Eastmoney's own published level metadata. An independent limited Python execution verified 31 first-level industries and one complete 523-stock/6-page scope. This is not a claim that every industry was sampled. The deployed JS path still requires actual runtime verification. Provider order-classified main-net values are labeled as estimates, not actual market money creation. Source observation time/trading date/latency remain unknown; acquisition time is separate.
+
+The frontend checks every minute; acquisition is on demand with bounded cache/coordination, not a permanent background process. Every page is validated before publication. Source permission denial/challenges stop acquisition persistently; last-good values are explicitly stale. No custom fetcher, `isolatedForTests`, credential or proxy override is configured in the production host adapter.
