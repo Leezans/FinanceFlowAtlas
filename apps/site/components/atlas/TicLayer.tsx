@@ -7,6 +7,7 @@ import type {FeatureCollection,Geometry} from 'geojson';
 import topology from 'world-atlas/countries-110m.json';
 import fallback from './countries.json';
 import TicTreemap from './TicTreemap';
+import TicHistory from './TicHistory';
 import {countryRegion} from './treemapModel';
 import {type Country,POLL_MS,timestamp} from './model';
 import {type TicSnapshot,type TicStatus,validateTic,signedMillions,flowDirection,selectTicRows} from './ticModel';
@@ -44,6 +45,7 @@ export default function TicLayer(){
  const max=Math.max(1,...rows.map(r=>Math.abs(r.net_foreign_purchases_usd)));
  const options=countries.filter(c=>`${c.name} ${c.iso3} ${c.iso2}`.toLowerCase().includes(query.toLowerCase()));
  return <section className={`tic-layer palette-${palette}`} aria-label="TIC monthly equity net transactions"><div className="tic-intro"><div><h2>美国股权净交易（含基金份额）</h2><span className="tic-month-note">2026-08 · 月度统计，非实时</span></div><button onClick={()=>void refresh()} aria-label="Refresh TIC data">刷新 TIC ↻</button></div>
+ <TicHistory/>
  <div className="workspace tic-map-workspace"><details className="tic-filters"><summary>筛选国家 / 地区</summary><aside className="controls"><div className="section-label">TIC · INDEPENDENT LAYER</div><label>搜索国家 / 地区<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="TIC country or ISO…"/></label><label>交易对方居住地<select aria-label="TIC counterparty residence" value={country} onChange={e=>{setCountry(e.target.value);setTreeRegion('')}}><option value="">全部已报告国家 / 地区</option>{options.map(c=><option value={c.iso3} key={c.iso3}>{c.name}{c.iso3==='USA'?' · 美国发行经济体':''}</option>)}</select></label><div className="filter-month"><span>观测月份</span><strong>{activePeriod}</strong><small>固定核验月，无历史切换</small></div><button className="reset" onClick={()=>{setCountry('');setQuery('');setSign('all');setTreeRegion('')}}>重置 TIC 视图</button><div className="coverage-note"><span className="eyebrow">MONTHLY · NOT LIVE</span><p>页面每 60 秒读取缓存；源数据月度发布，有时滞。访问时才检查来源，成功后缓存 24 小时，失败后至少间隔 5 分钟。关闭页面后无后台任务。未报告不等于零。</p></div></aside></details>
  <div className="main-panel">
  {status?.state==='stale'&&!error&&<div className="notice warning" role="status"><strong>TIC 源检查逾期或失败。</strong> 保留最后已验证月度快照。{status.error} 最近检查：{timestamp(status.last_checked_at)}</div>}
