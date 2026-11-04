@@ -1,0 +1,14 @@
+{
+  "records": 53,
+  "unique_economies": 53,
+  "prior_economies": 166,
+  "prior_overlap": [],
+  "production_certified": 0,
+  "status_counts": {
+    "candidate": 30,
+    "regional_candidate": 1,
+    "aggregate_territory_only": 10,
+    "historical_documented_gap": 1,
+    "discovery_gap": 11
+  }
+}

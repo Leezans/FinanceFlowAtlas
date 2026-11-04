@@ -1,0 +1,172 @@
+[
+  {
+    "economy_code": "LIE",
+    "economy_name": "列支敦士登",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "CHE",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://surveys.snb.ch/public/erlaeuterungen/D_CAS_1.0.html"
+    ],
+    "evidence": "SNB现行调查说明明确Swiss BOP包含Liechtenstein，CH/LI均属居民。该覆盖证据不意味着有LIE独立股权序列。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "MCO",
+    "economy_name": "摩纳哥",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "GLP",
+    "economy_name": "瓜德罗普",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "GUF",
+    "economy_name": "法属圭亚那",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "MTQ",
+    "economy_name": "马提尼克",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "SPM",
+    "economy_name": "圣皮埃尔和密克隆",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "BLM",
+    "economy_name": "圣巴泰勒米",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "MAF",
+    "economy_name": "法属圣马丁",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_other_BOP_statistical_territory",
+    "aggregate_economy": "FRA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://ec.europa.eu/eurostat/cache/metadata/en/bop_6_simsb62_fr.htm"
+    ],
+    "evidence": "法国国家提供的Eurostat BOP元数据明确包含本地区。未验证本地区独立证券股权流；IEDOM通用地理选择框不能证明每个指标均有每个地区数据。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "VIR",
+    "economy_name": "美属维尔京群岛",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "included_in_US_ITA_statistical_territory",
+    "aggregate_economy": "USA",
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://bea.gov/index.php/help/faq/1188"
+    ],
+    "evidence": "BEA FAQ明确ITA把美国属地纳入国内经济领土，而NIPA处理不同。未找到本地独立股权BOP系列，不应复制美国总量。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  },
+  {
+    "economy_code": "GRL",
+    "economy_name": "格陵兰",
+    "record_type": "territorial_scope_or_gap_not_source",
+    "status": "excluded_from_Denmark_BOP_local_source_unresolved",
+    "aggregate_economy": null,
+    "national_source_id": null,
+    "official_evidence_urls": [
+      "https://www.dst.dk/en/Statistik/dokumentation/documentationofstatistics/balance-of-payments/statistical-presentation"
+    ],
+    "evidence": "现行丹麦BOP统计范围明确排除格陵兰。当地独立股权序列尚未找到；不能把排除误写成纳入，也不能据此断言无本地BOP。",
+    "standalone_equity_flow": "not_verified",
+    "must_not_copy_aggregate_values": true,
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "verified_at": "2026-11-04"
+  }
+]

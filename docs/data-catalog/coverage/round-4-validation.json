@@ -1,0 +1,145 @@
+{
+  "checked_at": "2026-11-04",
+  "new_economy_or_territory_records": 66,
+  "national_europe_americas_source_leads": 3,
+  "europe_americas_scope_or_gap_not_source": 10,
+  "other_regions_status_counts": {
+    "candidate": 30,
+    "regional_candidate": 1,
+    "aggregate_territory_only": 10,
+    "historical_documented_gap": 1,
+    "discovery_gap": 11
+  },
+  "total_source_leads_including_regional": 34,
+  "non_source_scope_or_gap_records": 32,
+  "prior_round_economies": 154,
+  "overlap_prior_rounds": [],
+  "between_groups_overlap": [],
+  "cumulative_economies_with_any_research_or_scope_record": 220,
+  "cumulative_economies_with_source_leads": 188,
+  "cumulative_source_lead_records": 192,
+  "candidate_ids_on_gap_records_are_not_sources": true,
+  "csv_json_equal": true,
+  "production_certified": 0,
+  "existing_files_modified": false,
+  "link_checks": {
+    "date": "2026-11-04",
+    "method": "single HEAD, no bodies retained, prior failures not retried",
+    "urls": 52,
+    "attempted": 50,
+    "status_counts": {
+      "200": 31,
+      "500": 1,
+      "None": 20
+    },
+    "non_200_or_not_retried": [
+      {
+        "url": "https://bcm.mr/",
+        "status": 500,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://jp.pr.gov/wp-content/uploads/2025/06/Balanza-de-Pagos-2024-1.pdf",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://niuestatistics.nu/economic/balance-of-payments-2024-2025/",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://nsdp.nso.gov.vn/GSO-chung/",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://nso.gov.ki/download/112/balance-of-payments/2190/balance-of-payments-2025-q2",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://nso.gov.ki/statistics/economy/external-sector-statistics/balance-of-payments/",
+        "status": null,
+        "result": "prior_failure_not_retried",
+        "prior_error": "Prior unsuccessful source access recorded; not retried"
+      },
+      {
+        "url": "https://pacificdata.org/data/dataset/balance-of-payments-df-bop",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://redibacen.bcr.gob.sv/conferencia.php?cod=304",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://redibacen.bcr.gob.sv/sitios.php",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://rmieppso.org/wp-content/uploads/economics/economic_review/RMI-FY22-Brief-Final-Sep2022-Digital-Remediated.pdf",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://statbank.hagstova.fo/pxweb/fo/H2/H2__TB__TB01/",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://stats.gov.fm/topics/economic-statistics/external-sector-statistics/",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://stats.gov.tv/dashboard/",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://surveys.snb.ch/public/erlaeuterungen/D_CAS_1.0.html",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://unctadstat.unctad.org/CountryProfile/GeneralProfile/en-GB/260/index.html",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://www.abs.gov.au/methodologies/international-investment-position-australia-supplementary-statistics-methodology/2018",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://www.banky-foibe.mg/admin/wp-content/uploads/2025/03/Note-de-conjoncture-%C3%A9conomique-T32024.pdf",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://www.banque-france.fr/fr/publications-et-statistiques/publications/france-pacifique-nickel-et-tourisme-au-defi-de-la-crise-sanitaire",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://www.banque-france.fr/system/files/2023-08/banque_de_france_espace_declarants_notice_methodologique_efi.pdf",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://www.bcc.cd/publications",
+        "status": null,
+        "result": "URLError"
+      },
+      {
+        "url": "https://www.bceao.int/index.php/fr/publications/balance-des-paiements-et-position-exterieure-globale-de-la-guinee-bissau-2024",
+        "status": null,
+        "result": "URLError"
+      }
+    ]
+  }
+}

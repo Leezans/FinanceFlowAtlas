@@ -1,0 +1,84 @@
+[
+  {
+    "economy_code": "TCD",
+    "url": "https://www.beac.int/wp-content/uploads/2016/10/BDP_TCHAD_2024_09092026.xlsx",
+    "http_status": 200,
+    "bytes": 194322,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "matching_labels": [
+      "COMPTE DES TRANSACTIONS COURANTES",
+      "Investissements de portefeuille",
+      " COMPTE DES TRANSACTIONS COURANTES",
+      "    Investissements de portefeuille",
+      "   Investissements de portefeuille",
+      "       Actions/parts ",
+      "     Investissements de portefeuille",
+      "      Actions et autres participations liées à une réduction de la dette",
+      "A. COMPTE DES TRANSACTIONS COURANTES",
+      "   Investissements de portefeuille, actifs",
+      "   Investissements de portefeuille, passifs",
+      "Solde du compte des transactions courantes (+ excédent; - déficit)",
+      "Revenus des actions et parts dans les fonds de placement",
+      "Dividendes sur actions hors parts dans les fonds de placement",
+      "Revenus des actions et des parts dans les fonds de placement",
+      "Capacité (+)/Besoin (-) de financement du solde des transactions courantes et de capital",
+      "Actions et parts de fonds de placement",
+      "Actions et autres participations autres que réinvestissements des bénéfices",
+      "Actions et autres participations liées à une réduction de la dette",
+      "dont contrepartie des émissions de  titres publics et transactions sous-régionales"
+    ],
+    "workbook_container_valid": true,
+    "research_date": "2026-11-04"
+  },
+  {
+    "economy_code": "CAF",
+    "url": "https://www.beac.int/wp-content/uploads/2016/10/BDP_RCA_2024_09092024.xlsx",
+    "http_status": 200,
+    "bytes": 193235,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "matching_labels": [
+      "COMPTE DES TRANSACTIONS COURANTES",
+      "Investissements de portefeuille",
+      " COMPTE DES TRANSACTIONS COURANTES",
+      "    Investissements de portefeuille",
+      "   Investissements de portefeuille",
+      "       Actions/parts ",
+      "     Investissements de portefeuille",
+      "      Actions et autres participations liées à une réduction de la dette",
+      "A. COMPTE DES TRANSACTIONS COURANTES",
+      "   Investissements de portefeuille, actifs",
+      "   Investissements de portefeuille, passifs",
+      "Solde du compte des transactions courantes (+ excédent; - déficit)",
+      "Revenus des actions et parts dans les fonds de placement",
+      "Dividendes sur actions hors parts dans les fonds de placement",
+      "Revenus des actions et des parts dans les fonds de placement",
+      "Capacité (+)/Besoin (-) de financement du solde des transactions courantes et de capital",
+      "Actions et parts de fonds de placement",
+      "Actions et autres participations autres que réinvestissements des bénéfices",
+      "Actions et autres participations liées à une réduction de la dette",
+      "dont contrepartie des émissions de  titres publics et transactions sous-régionales"
+    ],
+    "workbook_container_valid": true,
+    "research_date": "2026-11-04"
+  },
+  {
+    "economy_code": "CMR",
+    "url": "https://www.beac.int/wp-content/uploads/2016/10/Balance-des-Paiments-Analytique-2022-Cameroun.xlsx",
+    "http_status": 200,
+    "bytes": 83519,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "matching_labels": [
+      "COMPTE DES TRANSACTIONS COURANTES",
+      "Investissements de portefeuille",
+      "Actions/parts "
+    ],
+    "workbook_container_valid": true,
+    "research_date": "2026-11-04"
+  },
+  {
+    "economy_code": "KIR",
+    "url": "https://nso.gov.ki/download/112/balance-of-payments/2190/balance-of-payments-2025-q2",
+    "error": "HTTP Error 403: Forbidden",
+    "research_date": "2026-11-04"
+  }
+]

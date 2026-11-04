@@ -1,0 +1,97 @@
+[
+  {
+    "source_id": "national-ea5-20261104-pri",
+    "economies": [
+      "PRI"
+    ],
+    "economy_name": "波多黎各",
+    "agency": "Junta de Planificación",
+    "official_url": "https://jp.pr.gov/wp-content/uploads/2025/06/Balanza-de-Pagos-2024-1.pdf",
+    "catalogue_status": "P2 / V1",
+    "priority": "P2",
+    "verification_level": "V1",
+    "frequency": "annual fiscal years",
+    "units": "million dollars; USD currency code requires metadata confirmation",
+    "semantics": "国家/地区BOP来源；不代表机构投资者交易流",
+    "semantic_validation": "portfolio_equity_and_fund_assets_liabilities_numeric_rows_seen",
+    "evidence": "已打开官方2024报告的数值表：Table 1为财政年度标准BOP，证券投资资产与负债均分别列Equity and investment fund shares以及Debt securities。表列2015起至2024，纯股票与基金未拆开，符号约定和财政年度日期待核。另见2025产品目录，尚未读取2025文件。美国BEA ITA把属地纳入美国经济领土，而本地BOP采用地区边界；不可与美国总量简单相加。",
+    "evidence_urls": [
+      "https://jp.pr.gov/wp-content/uploads/2025/06/Balanza-de-Pagos-2024-1.pdf",
+      "https://www.jp.pr.gov/estudios-e-investigacion/informe-economico-a-la-gobernadora-y-a-la-asamblea-legislativa?f3c90564_page=1",
+      "https://bea.gov/index.php/help/faq/1188"
+    ],
+    "series_id": null,
+    "access_status": "official_web_evidence_no_api_test",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "cost": "unknown",
+    "production_readiness": "not_certified",
+    "verified_at": "2026-11-04",
+    "next_action": "验证实际序列、期间/符号和完整性；法律条款未核验，不自动授权抓取或再分发",
+    "official_url_head_status": "URLError",
+    "official_url_head_checked_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-ea5-20261104-fro",
+    "economies": [
+      "FRO"
+    ],
+    "economy_name": "法罗群岛",
+    "agency": "Statistics Faroe Islands / Hagstova Føroya",
+    "official_url": "https://hagstova.fo/en/economy/national-accounts/balance-payments",
+    "catalogue_status": "P2 / V1",
+    "priority": "P2",
+    "verification_level": "V1",
+    "frequency": "annual release schedule; individual series frequency pending",
+    "units": "unknown",
+    "semantics": "国家/地区BOP来源；不代表机构投资者交易流",
+    "semantic_validation": "equity_series_not_validated",
+    "evidence": "已打开官方BOP页，2026-10-05更新，下一次2027-10-04；实际链接PxWeb TB01目录。未核具体金融账户/股权系列；丹麦现行BOP明确排除此地区。",
+    "evidence_urls": [
+      "https://hagstova.fo/en/economy/national-accounts/balance-payments",
+      "https://statbank.hagstova.fo/pxweb/fo/H2/H2__TB__TB01/",
+      "https://www.dst.dk/en/Statistik/dokumentation/documentationofstatistics/balance-of-payments/statistical-presentation"
+    ],
+    "series_id": null,
+    "access_status": "official_web_evidence_no_api_test",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "cost": "unknown",
+    "production_readiness": "not_certified",
+    "verified_at": "2026-11-04",
+    "next_action": "验证实际序列、期间/符号和完整性；法律条款未核验，不自动授权抓取或再分发",
+    "official_url_head_status": "200",
+    "official_url_head_checked_at": "2026-11-04"
+  },
+  {
+    "source_id": "national-ea5-20261104-slv",
+    "economies": [
+      "SLV"
+    ],
+    "economy_name": "萨尔瓦多",
+    "agency": "Banco Central de Reserva de El Salvador",
+    "official_url": "https://redibacen.bcr.gob.sv/conferencia.php?cod=304",
+    "catalogue_status": "P2 / C",
+    "priority": "P2",
+    "verification_level": "C",
+    "frequency": "unknown",
+    "units": "unknown",
+    "semantics": "国家/地区BOP来源；不代表机构投资者交易流",
+    "semantic_validation": "equity_series_not_validated",
+    "evidence": "BCR官方REDIBACEN材料确认编制发布BOP职责及金融账户解释；仅为机构方法证据，不是可下载series。国家经济数据库具体股权表仍未锁定，不采用IMF工作人员预测替代国家观测。",
+    "evidence_urls": [
+      "https://redibacen.bcr.gob.sv/conferencia.php?cod=304",
+      "https://redibacen.bcr.gob.sv/sitios.php"
+    ],
+    "series_id": null,
+    "access_status": "official_web_evidence_no_api_test",
+    "automation_rights": "unknown",
+    "public_display_rights": "unknown",
+    "cost": "unknown",
+    "production_readiness": "not_certified",
+    "verified_at": "2026-11-04",
+    "next_action": "验证实际序列、期间/符号和完整性；法律条款未核验，不自动授权抓取或再分发",
+    "official_url_head_status": "URLError",
+    "official_url_head_checked_at": "2026-11-04"
+  }
+]
