@@ -1,0 +1,2 @@
+export const sample=(rows:string[])=>new TextEncoder().encode(['Table 1: U.S. Long-Term Securities Held by Foreign Residents','Millions of dollars','country\tcountry_code\tdate\tfor_lt_eqty_net',...rows,'Definitions:'].join('\n'));
+export const valid=()=>sample(['Japan\t42609\t2026-08\t5','United Kingdom\t13005\t2026-08\t-3','Canada\t29998\t2026-08\t0','France\t10804\t2026-08\tn.a.','Grand Total\t99996\t2026-08\t9','Japan\t42609\t2026-07\t6','Europe\t99999\t2026-08\t20']);

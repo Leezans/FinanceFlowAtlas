@@ -1,0 +1,41 @@
+import {z} from 'zod';
+import {COUNTRIES} from './geography';
+export const SOURCE_URL='https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table1.txt';
+export const SOURCE_ID='us-tic-slt-equity-transactions';
+export const VERIFIED_PERIOD='2026-08';
+export const ADAPTER_VERSION='tic-equity-v1.0.0';
+const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+const rowSchema=z.object({record_id:z.string(),foreign_economy_iso3:z.string().regex(/^[A-Z]{3}$/),foreign_economy_name:z.string(),treasury_country_code:z.string(),issuer_economy_iso3:z.literal('USA'),net_foreign_purchases_usd:z.number().int().safe(),period:month,source_id:z.literal(SOURCE_ID)}).strict();
+export const snapshotSchema=z.object({version:z.string(),concept:z.literal('reported_net_transactions'),asset_class:z.literal('equity'),frequency:z.literal('monthly'),is_live:z.literal(false),period:month,source_id:z.literal(SOURCE_ID),source_url:z.literal(SOURCE_URL),source_field:z.literal('for_lt_eqty_net'),source_unit:z.literal('USD millions'),output_unit:z.literal('USD'),observation_release_date:z.string().nullable(),release_url:z.string().url().nullable(),source_revision_published_at:z.string().datetime({offset:true}).nullable(),retrieved_at:z.string().datetime({offset:true}),raw_sha256:z.string().regex(/^[a-f0-9]{64}$/),adapter_version:z.string(),geography_version:z.string(),excluded_records:z.record(z.number().int().nonnegative()),country_flows:z.array(rowSchema).min(1),grand_total_net_foreign_purchases_usd:z.number().int().safe(),direction_note:z.string(),coverage_note:z.string(),license_note:z.string(),rights_url:z.string().url()}).strict().superRefine((s,ctx)=>{const seen=new Set<string>();for(const r of s.country_flows){if(r.period!==s.period||seen.has(r.foreign_economy_iso3)||COUNTRIES[r.treasury_country_code]?.[1]!==r.foreign_economy_iso3)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Invalid geography, duplicate country, or inconsistent period'});seen.add(r.foreign_economy_iso3)}});
+export type FlowSnapshot=z.infer<typeof snapshotSchema>;
+export async function sha256(bytes:Uint8Array|string){const input=typeof bytes==='string'?new TextEncoder().encode(bytes):bytes;const digest=await crypto.subtle.digest('SHA-256',input as BufferSource);return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('')}
+/** Python json.dumps(sort_keys=True) formatting, to retain cross-runtime snapshot identity. */
+function canonical(value:unknown):string{if(Array.isArray(value))return '['+value.map(canonical).join(', ')+']';if(value&&typeof value==='object')return '{'+Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>JSON.stringify(k)+': '+canonical(v)).join(', ')+'}';return JSON.stringify(value)}
+function tsv(line:string):string[]{const result:string[]=[];let value='',quoted=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quoted&&line[i+1]==='"'){value+='"';i++}else if(!value||quoted)quoted=!quoted;else value+=c}else if(c==='\t'&&!quoted){result.push(value);value=''}else value+=c}if(quoted)throw new Error('Unterminated source quote');result.push(value);return result}
+export async function normalize(raw:Uint8Array,period=VERIFIED_PERIOD,retrievedAt=new Date().toISOString()):Promise<FlowSnapshot>{
+ if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)||period<'2023-02')throw new Error('Unsupported TIC observation month');
+ if(!/([zZ]|[+-]\d\d:\d\d)$/.test(retrievedAt)||!Number.isFinite(Date.parse(retrievedAt)))throw new Error('retrieved_at must include timezone');
+ if(raw.byteLength>10_000_000)throw new Error('TIC source exceeds size limit');
+ const lines=new TextDecoder('utf-8',{fatal:true}).decode(raw).replace(/^\uFEFF/,'').split(/\r?\n/);
+ if(!lines[0]?.startsWith('Table 1: U.S. Long-Term Securities Held by Foreign Residents'))throw new Error('Unexpected TIC table title');
+ if(!lines.slice(0,10).some(line=>line.split('\t')[0]==='Millions of dollars'))throw new Error('Unverified source unit');
+ const heads=lines.flatMap((line,i)=>line.startsWith('country\tcountry_code\tdate\t')?[i]:[]),feet=lines.flatMap((line,i)=>line.split('\t')[0]==='Definitions:'?[i]:[]);
+ if(heads.length!==1||feet.length!==1||feet[0]<=heads[0])throw new Error('Missing/duplicate header or footer; possibly truncated source');
+ const headers=tsv(lines[heads[0]]);if(new Set(headers).size!==headers.length||!['country','country_code','date','for_lt_eqty_net'].every(h=>headers.includes(h)))throw new Error('Missing or duplicate equity transaction columns');
+ const excluded:Record<string,number>={},records:z.infer<typeof rowSchema>[]=[],seen=new Set<string>();let total:number|null=null;
+ const exclude=(reason:string)=>{excluded[reason]=(excluded[reason]||0)+1};
+ for(const line of lines.slice(heads[0]+1,feet[0])){
+  if(!line.trim())continue;const values=tsv(line);if(values.length!==headers.length)throw new Error('Malformed source row');const row=Object.fromEntries(headers.map((h,i)=>[h,values[i]]));
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(row.date))throw new Error('Malformed data-row date');
+  if(row.date!==period){exclude('other_period');continue}const code=row.country_code;if(seen.has(code))throw new Error('Duplicate country/month observation');seen.add(code);
+  const country=COUNTRIES[code];if(!country&&code!=='99996'){exclude('aggregate_or_unmapped_geography');continue}
+  if(country&&row.country!==country[0]||code==='99996'&&row.country!=='Grand Total')throw new Error('Country code/name changed; mapping needs review');
+  const value=row.for_lt_eqty_net.trim();if(value===''||value==='n.a.'){exclude('missing_transaction_value');continue}if(!/^-?\d+$/.test(value))throw new Error('Unexpected transaction value');
+  const usd=Number(value)*1_000_000;if(!Number.isSafeInteger(usd))throw new Error('Transaction exceeds safe numeric precision');if(code==='99996'){total=usd;continue}
+  records.push({record_id:`${SOURCE_ID}:${code}:${period}`,foreign_economy_iso3:country[1],foreign_economy_name:country[0],treasury_country_code:code,issuer_economy_iso3:'USA',net_foreign_purchases_usd:usd,period,source_id:SOURCE_ID});
+ }
+ if(!records.length||total===null)throw new Error('Incomplete transaction month: country observations and published grand total are required');
+ const rawHash=await sha256(raw),release=period==='2026-08'?['2026-10-16','https://home.treasury.gov/news/press-releases/sb0662/']:[null,null];
+ const version=(await sha256(canonical({raw:rawHash,period,adapter:ADAPTER_VERSION,geography:COUNTRIES,release}))).slice(0,20);
+ return snapshotSchema.parse({version,concept:'reported_net_transactions',asset_class:'equity',frequency:'monthly',is_live:false,period,source_id:SOURCE_ID,source_url:SOURCE_URL,source_field:'for_lt_eqty_net',source_unit:'USD millions',output_unit:'USD',observation_release_date:release[0],release_url:release[1],source_revision_published_at:null,retrieved_at:retrievedAt,raw_sha256:rawHash,adapter_version:ADAPTER_VERSION,geography_version:'tic-table1-2026-08-v1',excluded_records:excluded,country_flows:records.sort((a,b)=>a.foreign_economy_iso3.localeCompare(b.foreign_economy_iso3)),grand_total_net_foreign_purchases_usd:total,direction_note:'Positive = foreign net purchases of U.S. equity (money into U.S.); negative = net sales (money out). Do not reverse investor/issuer identities on negative observations.',coverage_note:'U.S.-centric monthly transactions in U.S. corporate equity, including fund shares. Geographic attribution is reported foreign residence, subject to custodial/intermediary bias, not ultimate beneficial ownership or exchange location. Listed country rows are not exhaustive; do not sum them as the world total. Not real time and not comparable to IMF holdings levels.',license_note:'Treasury federal statistical data; source attribution retained. Repository software license does not license provider data or Treasury branding. No third-party materials or blanket worldwide reuse guarantee implied.',rights_url:'https://www.copyright.gov/history/copyright-exhibit/lifecycle/'});
+}
