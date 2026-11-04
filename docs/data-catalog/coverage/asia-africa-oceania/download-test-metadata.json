@@ -1,0 +1,166 @@
+[
+  {
+    "source_id": "tw-cbc-bop",
+    "http_status": 200,
+    "content_type": "application/octet-stream",
+    "bytes": 81749,
+    "sha256": "8b625f7d32c04150770823592230c874a48b44155525f40875b6f36003099dd0",
+    "tested_at": "2026-11-04",
+    "raw_data_persisted": false,
+    "row_count": 171,
+    "header": [
+      "期間",
+      "證券投資-淨額",
+      "證券投資-資產",
+      "證券投資-負債",
+      "證券投資-股權及投資基金-淨額",
+      "證券投資-股權及投資基金-資產",
+      "證券投資-股權及投資基金-負債",
+      "證券投資-股權及投資基金-中央銀行-淨額",
+      "證券投資-股權及投資基金-中央銀行-資產",
+      "證券投資-股權及投資基金-中央銀行-負債",
+      "證券投資-股權及投資基金-存款貨幣機構-淨額",
+      "證券投資-股權及投資基金-存款貨幣機構-資產",
+      "證券投資-股權及投資基金-存款貨幣機構-負債",
+      "證券投資-股權及投資基金-政府-淨額",
+      "證券投資-股權及投資基金-政府-資產",
+      "證券投資-股權及投資基金-政府-負債",
+      "證券投資-股權及投資基金-其他部門-淨額",
+      "證券投資-股權及投資基金-其他部門-資產",
+      "證券投資-股權及投資基金-其他部門-負債",
+      "證券投資-股權及投資基金-其他部門-其他金融機構-淨額",
+      "證券投資-股權及投資基金-其他部門-其他金融機構-資產",
+      "證券投資-股權及投資基金-其他部門-其他金融機構-負債",
+      "債務證券-淨額",
+      "債務證券-資產",
+      "債務證券-負債",
+      "債務證券-中央銀行-淨額",
+      "債務證券-中央銀行-資產",
+      "債務證券-中央銀行-負債",
+      "債務證券-存款貨幣機構-淨額",
+      "債務證券-存款貨幣機構-資產",
+      "債務證券-存款貨幣機構-負債",
+      "債務證券-存款貨幣機構-短期-淨額",
+      "債務證券-存款貨幣機構-短期-資產",
+      "債務證券-存款貨幣機構-短期-負債",
+      "債務證券-存款貨幣機構-長期-淨額",
+      "債務證券-存款貨幣機構-長期-資產",
+      "債務證券-存款貨幣機構-長期-負債",
+      "債務證券-政府-淨額",
+      "債務證券-政府-資產",
+      "債務證券-政府-負債",
+      "債務證券-政府-短期-淨額",
+      "債務證券-政府-短期-資產",
+      "債務證券-政府-短期-負債",
+      "債務證券-政府-長期-淨額",
+      "債務證券-政府-長期-資產",
+      "債務證券-政府-長期-負債",
+      "債務證券-其他部門-淨額",
+      "債務證券-其他部門-資產",
+      "債務證券-其他部門-負債",
+      "債務證券-其他部門-短期-淨額",
+      "債務證券-其他部門-短期-資產",
+      "債務證券-其他部門-短期-負債",
+      "債務證券-其他部門-長期-淨額",
+      "債務證券-其他部門-長期-資產",
+      "債務證券-其他部門-長期-負債",
+      "債務證券-其他部門-其他金融機構-淨額",
+      "債務證券-其他部門-其他金融機構-資產",
+      "債務證券-其他部門-其他金融機構-負債",
+      "債務證券-其他部門-其他金融機構-短期-淨額",
+      "債務證券-其他部門-其他金融機構-短期-資產",
+      "債務證券-其他部門-其他金融機構-短期-負債",
+      "債務證券-其他部門-其他金融機構-長期-淨額",
+      "債務證券-其他部門-其他金融機構-長期-資產",
+      "債務證券-其他部門-其他金融機構-長期-負債"
+    ],
+    "period_samples": [
+      "1984Q1",
+      "2026Q2"
+    ],
+    "row_widths": [
+      64
+    ]
+  },
+  {
+    "source_id": "abs-financial-account",
+    "http_status": 200,
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "bytes": 657430,
+    "sha256": "12506bb12420d2258c83086a0d782b55c53f09d9a1045c3039fafe8dcee6cb5d",
+    "tested_at": "2026-11-04",
+    "raw_data_persisted": false,
+    "portfolio_equity_labels": [
+      [
+        25,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares ;"
+      ],
+      [
+        26,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares, Central bank ;"
+      ],
+      [
+        27,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares, Deposit-taking corporations, except the central bank ;"
+      ],
+      [
+        28,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares, General government ;"
+      ],
+      [
+        29,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares, Other sectors ;"
+      ],
+      [
+        30,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares, Other sectors, Other financial corporations ;"
+      ],
+      [
+        31,
+        "PORTFOLIO INVESTMENT, Assets, Equity and investment fund shares, Other sectors, Nonfinancial corporations, households, and NPISHs ;"
+      ],
+      [
+        52,
+        "PORTFOLIO INVESTMENT, Liabilities, Equity and investment fund shares ;"
+      ],
+      [
+        53,
+        "PORTFOLIO INVESTMENT, Liabilities, Equity and investment fund shares, Deposit-taking corporations, except the central bank ;"
+      ],
+      [
+        54,
+        "PORTFOLIO INVESTMENT, Liabilities, Equity and investment fund shares, Other sectors ;"
+      ],
+      [
+        55,
+        "PORTFOLIO INVESTMENT, Liabilities, Equity and investment fund shares, Other sectors, Other financial corporations ;"
+      ],
+      [
+        56,
+        "PORTFOLIO INVESTMENT, Liabilities, Equity and investment fund shares, Other sectors, Nonfinancial corporations, households, and NPISHs ;"
+      ]
+    ],
+    "sheets": [
+      {
+        "name": "Index",
+        "sheetId": "4",
+        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id": "rId1"
+      },
+      {
+        "name": "Data1",
+        "sheetId": "1",
+        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id": "rId2"
+      },
+      {
+        "name": "Data2",
+        "sheetId": "2",
+        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id": "rId3"
+      },
+      {
+        "name": "Enquiries",
+        "sheetId": "3",
+        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id": "rId4"
+      }
+    ]
+  }
+]

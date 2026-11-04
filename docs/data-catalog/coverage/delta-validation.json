@@ -1,0 +1,78 @@
+{
+  "checked_at": "2026-11-04",
+  "source_records": 58,
+  "unique_source_ids": 58,
+  "europe_americas_economies": 32,
+  "asia_africa_middle_east_oceania_economies": 22,
+  "combined_unique_economies": 54,
+  "cross_region_overlap": [],
+  "existing_matrix_overlap": 54,
+  "new_economies_outside_matrix": [],
+  "csv_json_equal": true,
+  "all_not_certified": true,
+  "matrix_modified": false,
+  "link_checks": {
+    "method": "single HEAD per URL, no retry, no dataset body saved",
+    "unique_urls": 61,
+    "http_status_counts": {
+      "200": 51,
+      "503": 4,
+      "500": 1,
+      "501": 1,
+      "404": 1,
+      "403": 3
+    },
+    "non_200": [
+      {
+        "url": "https://qe.com.qa/en/web/guest/other-data-products",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://suameca.banrep.gov.co/descarga-multiple-de-datos/",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.ammanstockexchange.jo/en/Quotes-Market/Market-Performance/Foreign-Investment-Activity",
+        "status": 500,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.banxico.org.mx/SieInternet/consultarDirectorioInternetAction.do?accion=consultarCuadroAnalitico&idCuadro=CA737&sector=1",
+        "status": 501,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.bcu.gub.uy/Estadisticas-e-Indicadores/Paginas/Cuentas-Internacionales.aspx",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.oenb.at/en/Statistics/Standardized-Tables/external-sector/balance-of-payments-and-international-investment-position/balance-of-payments-summary-total.html",
+        "status": 404,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/reports-publications/annual-reports?locale=en",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.sbp.org.pk/ecodata/BS_SCRA.pdf",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.singstat.gov.sg/find-data/explore-data-themes/economy-prices/international-accounts",
+        "status": 403,
+        "result": "not_verified_by_HEAD"
+      },
+      {
+        "url": "https://www.stockexchangeofmauritius.com/media/11016/sem-factbook-2025-v4.pdf",
+        "status": 503,
+        "result": "not_verified_by_HEAD"
+      }
+    ]
+  }
+}

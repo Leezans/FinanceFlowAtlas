@@ -1,0 +1,21 @@
+{
+  "records": 26,
+  "economies": 22,
+  "all_production_not_certified": true,
+  "all_have_official_url": true,
+  "verification_counts": {
+    "http_200_csv_parsed": 1,
+    "official_search_evidence": 15,
+    "http_200_xlsx_metadata_parsed": 1,
+    "page_opened_empty_dynamic_values": 1,
+    "official_search_evidence_open_size_limit": 1,
+    "official_indexed_pdf_current_open_html": 1,
+    "numeric_table_opened": 2,
+    "official_search_evidence_open_error": 1,
+    "official_search_evidence_headings_only": 1,
+    "pdf_opened_numeric_tables": 1,
+    "page_opened_no_report_links": 1
+  },
+  "raw_source_data_in_artifact": false,
+  "tested_downloads": 2
+}
