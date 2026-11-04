@@ -1,0 +1,7 @@
+// All fixtures below are synthetic and are not captured market observations.
+import assert from 'node:assert/strict';
+import worker,{metrics,parseMOF,cryptoFlow} from './worker/index.js';
+const b=Array.from({length:70},(_,i)=>({t:i,c:100+i}));assert.equal(metrics(b).score,100);assert.throws(()=>metrics(b.slice(0,20)));
+const r=Array(23).fill('0');r[0]='2000．01．02～01．08';r[11]='1,234';r[22]='-56';const csv='Final Update January 13, 2000\n'+r.map(x=>'"'+x+'"').join(',');const m=parseMOF(csv);assert.equal(m.records[0].outwardNet,1234);assert.equal(m.records[0].inwardNet,-56);assert.throws(()=>parseMOF('bad'));
+const now=Date.now(),end=Math.floor(now/60000)*60000;let bars=Array.from({length:61},(_,i)=>[end-(61-i)*60000,0,0,0,0,0,end-(60-i)*60000-1,100,0,0,60]);globalThis.fetch=async()=>Response.json(bars);let f=await cryptoFlow('BTCUSDT');assert.equal(f.status,'ok');assert.equal(f.buy,3600);assert.equal(f.sell,2400);assert.equal(f.imbalance,1200);bars=bars.slice(0,10);assert.equal((await cryptoFlow('BTCUSDT')).status,'error');globalThis.fetch=async()=>new Response('down',{status:503});assert.equal((await cryptoFlow('BTCUSDT')).status,'error');
+const html=await (await worker.fetch(new Request('https://test/'))).text();assert(html.includes('<h1>FinanceFlowAtlas</h1>'));new Function(html.match(/<script>([\s\S]*)<\/script>/)[1]);console.log('9 verification groups passed: metrics, insufficient history, MOF units, malformed source, flow arithmetic, missing bars, source failure, title, browser JS syntax');

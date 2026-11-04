@@ -1,0 +1,1 @@
+{"name":"finance-flow-atlas","version":"0.1.0","private":true,"type":"module","license":"Apache-2.0","engines":{"node":">=18"},"scripts":{"dev":"node dev.mjs","test":"node test.mjs"}}
