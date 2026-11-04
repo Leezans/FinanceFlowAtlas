@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "Country": {
+      "properties": {
+        "iso3": {
+          "title": "Iso3",
+          "type": "string"
+        },
+        "iso2": {
+          "title": "Iso2",
+          "type": "string"
+        },
+        "numeric": {
+          "title": "Numeric",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "coverage": {
+          "enum": [
+            "reporter",
+            "counterpart_only",
+            "no_observations"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "iso3",
+        "iso2",
+        "numeric",
+        "name",
+        "coverage"
+      ],
+      "title": "Country",
+      "type": "object"
+    },
+    "Metadata": {
+      "properties": {
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "as_of": {
+          "title": "As Of",
+          "type": "string"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "concept": {
+          "const": "position",
+          "default": "position",
+          "title": "Concept",
+          "type": "string"
+        },
+        "asset_class": {
+          "const": "equity",
+          "default": "equity",
+          "title": "Asset Class",
+          "type": "string"
+        },
+        "coverage_note": {
+          "title": "Coverage Note",
+          "type": "string"
+        },
+        "unit_verified": {
+          "title": "Unit Verified",
+          "type": "boolean"
+        },
+        "raw_sha256": {
+          "title": "Raw Sha256",
+          "type": "string"
+        },
+        "excluded_records": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Excluded Records",
+          "type": "object"
+        },
+        "excluded_examples": {
+          "additionalProperties": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "default": {},
+          "title": "Excluded Examples",
+          "type": "object"
+        },
+        "adapter_version": {
+          "title": "Adapter Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "as_of",
+        "period",
+        "coverage_note",
+        "unit_verified",
+        "raw_sha256",
+        "excluded_records",
+        "adapter_version"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "Position": {
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "title": "Record Id",
+          "type": "string"
+        },
+        "reporter_iso3": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Reporter Iso3",
+          "type": "string"
+        },
+        "counterpart_iso3": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Counterpart Iso3",
+          "type": "string"
+        },
+        "value_usd": {
+          "minimum": 0,
+          "title": "Value Usd",
+          "type": "number"
+        },
+        "period": {
+          "pattern": "^\\d{4}-S[12]$",
+          "title": "Period",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "record_id",
+        "reporter_iso3",
+        "counterpart_iso3",
+        "value_usd",
+        "period",
+        "source_id"
+      ],
+      "title": "Position",
+      "type": "object"
+    },
+    "Source": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "retrieved_at": {
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "frequency": {
+          "title": "Frequency",
+          "type": "string"
+        },
+        "license_note": {
+          "title": "License Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "url",
+        "published_at",
+        "retrieved_at",
+        "status",
+        "frequency",
+        "license_note"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "countries": {
+      "items": {
+        "$ref": "#/$defs/Country"
+      },
+      "title": "Countries",
+      "type": "array"
+    },
+    "positions": {
+      "items": {
+        "$ref": "#/$defs/Position"
+      },
+      "title": "Positions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "metadata",
+    "sources",
+    "countries",
+    "positions"
+  ],
+  "title": "Snapshot",
+  "type": "object"
+}
