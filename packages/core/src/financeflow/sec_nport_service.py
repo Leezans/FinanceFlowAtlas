@@ -163,6 +163,8 @@ class FundStore:
     def save(self, payload):
         snapshot = validated(payload)
         with self.connect() as db:
+            # Serialize comparison and publication, preventing stale concurrent writers.
+            db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT s.report_month,s.vintage,s.retrieved_at FROM snapshots s JOIN current c ON s.version=c.version').fetchone()
             if row and ((snapshot.report_month, snapshot.bulk_vintage) < (row[0], row[1]) or
                         datetime.fromisoformat(snapshot.retrieved_at) < datetime.fromisoformat(row[2])):

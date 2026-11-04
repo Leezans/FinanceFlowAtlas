@@ -84,3 +84,30 @@ exact arithmetic and null preservation, rejection without overwrite, mutations
 of already-created models, period/vintage regression, corrupted payloads,
 content integrity, failed refresh and recovery, and HTTP cache transitions.
 The standalone and combined APIs use the same reviewed service; this change does not deploy either or expose real data publicly.
+
+## Explicit one-shot source refresh
+
+`financeflow.sec_nport_refresh` joins the existing bounded range downloader,
+normalizer and transactional store. It does not install a schedule or perform
+network access on startup or API reads. Both vintage and report-month cohort
+must be explicitly selected. A newer report month can contain fewer funds,
+so advancing the month is not a coverage upgrade and is never automatic.
+
+```sh
+# Configure SEC_USER_AGENT only with a real project contact authorized for SEC.
+# No contact is inferred from a user profile and no placeholder is transmitted.
+PYTHONPATH=packages/core/src python -m financeflow.sec_nport_refresh \
+  --download --vintage 2026q3 --report-month 2026-06 \
+  --data-dir /path/outside/git/financeflow-data
+```
+
+Without explicit `--download` and configured `SEC_USER_AGENT`, it fails before
+network access or database changes. No SEC account, API key, token or paid plan
+is needed. The contact identity is not stored in the snapshot. Existing HTTP
+request/byte/rate limits and fail-closed behavior apply, including no automatic
+retries on access denials, no redirect following and no full-archive fallback.
+Successful retrieval sets the actual retrieval time and source Last-Modified;
+failed retrieval or validation keeps the last valid snapshot and marks it stale.
+Local TSV import remains available without contacting SEC or providing identity.
+This entrypoint is a bounded single refresh, not a claim of continuous ingestion
+or current market coverage. No observations or databases belong in Git.
