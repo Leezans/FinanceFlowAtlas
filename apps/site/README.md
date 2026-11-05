@@ -95,8 +95,9 @@ with synthetic plain/gzip/Brotli XML and real networking disabled. See
 ## Personal Kraken spot layer
 
 `/crypto` reads the validated online USD spot catalog and ticker from Kraken
-without an account. It also adds a separate, bounded BTC/USD, ETH/USD and SOL/USD
-executed-trade imbalance matrix. See [trade source contract](../../docs/source-kraken-trades.md)
+without an account. It also adds a separate, bounded executed-trade imbalance matrix. BTC/USD,
+ETH/USD and SOL/USD are the default; the owner can explicitly select one to three
+pairs from the validated online USD catalog. See [trade source contract](../../docs/source-kraken-trades.md)
 for the five-minute requested window, REST side-label uncertainty and incomplete
 responses. The quote matrix shows last price, rolling-24h base-coin volume,
 VWAP and trade count, not net capital flow, derivative open interest or global
@@ -262,3 +263,45 @@ The visible page checks only its selected mode, and switching does not bypass
 shared cooldown or reset the permissions boundary. No SQL migration or source
 gate reset is required. Neither synthetic tests nor public documentation establish
 current provider availability; verify only through the application's normal gate.
+
+
+### Kraken selected-pair exploration
+
+The searchable selector uses only the verified full USD quote catalog, including
+catalog members whose ticker is unavailable. Draft changes do not fetch. Apply
+commits one to three display names; the server resolves them against its own
+catalog, never accepting a browser-supplied source ID or URL. Unknown or delisted
+names are explicitly listed as catalog-missing and are never requested upstream.
+Missing observations do not become zero or a substitute pair.
+
+Explicit `?pairs=ADA/USD,XRP/USD` snapshot requests use a canonical sorted selection
+and `kraken-trades/2` with `selected_pairs` plus response `requested_pairs`. The
+legacy no-query request retains its exact default `kraken-trades/1` wire shape.
+Repeated, malformed, duplicated or oversized query selections fail before gate
+or provider access. Status queries remain read-only.
+
+One bounded in-memory quote/trade bundle carries the selection key, with one
+shared in-flight acquisition and existing global cooldown. Quotes always cover
+the full validated USD catalog and remain usable during a selection change.
+Trade amounts are returned only when their key matches the requested selection.
+Concurrent different selections may wait for the same acquisition but receive no
+other selection's trade evidence and cannot immediately start a second fetch.
+Switching selections never resets the shared source gate, cooldown or deadline.
+The browser clears old trade evidence immediately, preserves valid quote context,
+and ignores late old-scope results. Denials and permission loss clear all evidence
+and stop checks even when the response belongs to a previous selection.
+
+The unchanged acquisition budget is at most one catalog GET, one ticker GET and
+three single-page Trades GETs, with 1.1-second spacing and a 12-second total
+deadline. Exact USD decimal arithmetic, the common five-minute requested window,
+1,000-row caps, original execution/acquisition timestamps, stale retention and
+15-minute expiry remain unchanged. This expands which pairs can be explored, not
+simultaneous coverage, source-side semantics, update frequency or redistribution
+rights. It is still one-venue returned-trade evidence, not global net capital flow.
+
+Verification uses synthetic fixtures only. Selection tests cover canonical cache
+identity, arbitrary catalog aliases, missing pairs, concurrent selections,
+cooldown, explicit-default/legacy reuse, failed refresh retention, strict client
+validation and global denial. The native workerd/D1 suite verifies custom
+selections and cross-worker cooldown with real networking disabled. No new
+provider, account, subscription, migration or standing collection process is added.

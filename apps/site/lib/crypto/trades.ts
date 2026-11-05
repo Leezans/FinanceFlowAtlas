@@ -1,13 +1,14 @@
 /** Bounded, single-venue executed-trade evidence. Never a net capital-flow model. */
 import type {KrakenPair, KrakenUniverse} from './kraken';
 import {KrakenError, krakenResult} from './protocol';
+import {DEFAULT_TRADE_PAIRS, TRADE_PAIR_PATTERN, canonicalTradeSelection} from './selection';
 
 export const KRAKEN_TRADES_DOCS = 'https://docs.kraken.com/api-reference/market-data/get-recent-trades';
 export const KRAKEN_TAKER_DOCS = 'https://docs.kraken.com/exchange/api-reference/spot-websocket-v2/trade';
-export const TRADE_PAIRS = ['BTC/USD', 'ETH/USD', 'SOL/USD'] as const;
+export const TRADE_PAIRS = DEFAULT_TRADE_PAIRS;
 export const TRADE_WINDOW_MS = 300_000;
 export const TRADE_LIMIT = 1_000;
-export type TradePair = typeof TRADE_PAIRS[number];
+export type TradePair = string;
 export type KrakenTradeRow = KrakenPair & {
   coverage: 'uncapped_response' | 'capped_response';
   returned_count: number;
@@ -23,7 +24,8 @@ export type KrakenTradeRow = KrakenPair & {
   imbalance_pct: number | null;
 };
 export type KrakenTradeSnapshot = {
-  schema: 'kraken-trades/1';
+  schema: 'kraken-trades/1' | 'kraken-trades/2';
+  selected_pairs?: string[];
   venue: 'Kraken';
   coverage: 'selected_usd_pairs_one_venue';
   window_started_at: string;
@@ -50,11 +52,11 @@ export function formatTradeNotional(value: bigint): string {
   const fraction = (absolute % NOTIONAL_SCALE).toString().padStart(24, '0').replace(/0+$/, '');
   return `${negative ? '-' : ''}${absolute / NOTIONAL_SCALE}${fraction ? `.${fraction}` : ''}`;
 }
-export function selectedTradePairs(universe: KrakenUniverse): KrakenPair[] {
-  return TRADE_PAIRS.flatMap(name => universe.pairs.filter(pair => pair.pair === name));
+export function selectedTradePairs(universe: KrakenUniverse, selected: readonly string[] = TRADE_PAIRS): KrakenPair[] {
+  return canonicalTradeSelection(selected).flatMap(name => universe.pairs.filter(pair => pair.pair === name));
 }
 export function tradeRequestUrl(pair: KrakenPair, windowStart: number): string {
-  if (!TRADE_PAIRS.includes(pair.pair as TradePair) || !/^[A-Z0-9][A-Z0-9.]{0,31}$/.test(pair.source_pair) || !Number.isSafeInteger(windowStart) || windowStart <= 0) fail('invalid_trade_request');
+  if (!TRADE_PAIR_PATTERN.test(pair.pair) || pair.pair !== `${pair.base}/USD` || pair.quote !== 'USD' || !/^[A-Z0-9][A-Z0-9.]{0,31}$/.test(pair.source_pair) || !Number.isSafeInteger(windowStart) || windowStart <= 0) fail('invalid_trade_request');
   const url = new URL('https://api.kraken.com/0/public/Trades');
   url.searchParams.set('pair', pair.source_pair);
   url.searchParams.set('since', (BigInt(windowStart) * BigInt(1_000_000)).toString());
@@ -96,7 +98,8 @@ export function parseKrakenTrades(payload: unknown, pair: KrakenPair, windowStar
     buy_notional_usd: capped ? null : formatTradeNotional(buy), sell_notional_usd: capped ? null : formatTradeNotional(sell), imbalance_usd: capped ? null : formatTradeNotional(buy - sell),
     imbalance_pct: capped || buy + sell === BigInt(0) ? null : Number((buy - sell) * BigInt(1_000_000) / (buy + sell)) / 10_000 };
 }
-export function tradeSnapshot(rows: KrakenTradeRow[], windowEnd: number, fetched: number): KrakenTradeSnapshot {
-  return {schema: 'kraken-trades/1', venue: 'Kraken', coverage: 'selected_usd_pairs_one_venue', window_started_at: new Date(windowEnd - TRADE_WINDOW_MS).toISOString(), window_ended_at: new Date(windowEnd).toISOString(), fetched_at: new Date(fetched).toISOString(), window_ms: TRADE_WINDOW_MS, trade_limit: TRADE_LIMIT,
-    rows, missing_pairs: TRADE_PAIRS.filter(pair => !rows.some(row => row.pair === pair)), net_capital_flow: null};
+export function tradeSnapshot(rows: KrakenTradeRow[], windowEnd: number, fetched: number, selected?: readonly string[]): KrakenTradeSnapshot {
+  const pairs = canonicalTradeSelection(selected ?? TRADE_PAIRS);
+  return {schema: selected ? 'kraken-trades/2' : 'kraken-trades/1', ...(selected ? {selected_pairs: pairs} : {}), venue: 'Kraken', coverage: 'selected_usd_pairs_one_venue', window_started_at: new Date(windowEnd - TRADE_WINDOW_MS).toISOString(), window_ended_at: new Date(windowEnd).toISOString(), fetched_at: new Date(fetched).toISOString(), window_ms: TRADE_WINDOW_MS, trade_limit: TRADE_LIMIT,
+    rows, missing_pairs: pairs.filter(pair => !rows.some(row => row.pair === pair)), net_capital_flow: null};
 }
