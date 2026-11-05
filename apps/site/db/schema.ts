@@ -163,3 +163,14 @@ export const polymarketSourceGate=sqliteTable('polymarket_source_gate',{
  check('polymarket_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
  check('polymarket_gate_payload',sql`${t.payload} IS NULL OR (json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000)`),
 ]);
+
+
+/** Monetary subset cache; acquisition also requires the original provider gate idle. */
+export const tpexSummaryGate=sqliteTable('tpex_summary_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('tpex_summary_gate_id',sql`${t.id} = 'institutional_money'`),
+ check('tpex_summary_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('tpex_summary_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);

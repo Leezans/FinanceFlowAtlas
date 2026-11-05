@@ -1,6 +1,6 @@
 # FinanceFlowAtlas hosted application
 
-This optional Sites/Vinext application lives alongside the Python API and Vite web app. It does not replace either. It renders the reviewed country treemap with a geographic-map alternative and a read-through Treasury TIC adapter backed by D1.
+This optional Sites/Vinext application lives alongside the Python API and Vite web app. It does not replace either. It provides independent country-owned industry and market matrices, with a geographic navigator and an explicitly separate U.S. Treasury TIC supplement backed by D1.
 
 ## Local setup and checks
 
@@ -375,3 +375,29 @@ Home or Reset restores the full view, and zoom limits release wheel events back
 to the page. Zoom survives same-scope refreshes and resets on a new scope or size.
 No source acquisition, polling, cache, permission gate or privacy boundary changes.
 Tests and browser QA use synthetic fixtures, never bundled production sample data.
+
+
+## Country-owned global market matrices
+
+`/markets` now opens the selected country’s own source, not a map of foreign
+transactions in U.S. securities. The 249 geographic entries do not imply global
+coverage. China’s CNY order-classified estimates, Taiwan OTC’s daily TWD
+institutional summary and Brazil’s monthly BRL public-fund trades retain distinct
+units, periods, scope and availability. Unsupported markets have an empty
+industry-money-flow canvas. TIC is a collapsed, explicit U.S. supplement. There
+is no world net-flow total or conversion of prices/holdings into money flow.
+
+The new Taiwan monetary summary has exact source parsing, nonoverlapping
+participant areas and a separately displayed total. Its optional industry/company
+panel still measures shares; the summary is never allocated into sector money.
+New report transport/lifetime/cache code is reusable under `lib/reports`, while
+source semantics stay in `lib/national` and country composition in
+`components/markets`. No production data or source snapshots are bundled.
+
+Migration `0016_tpex_summary_gate.sql` preserves the existing TPEx provider gate.
+Its blocked/busy/unknown/cooldown state prevents summary source requests, and a
+known block removes cached evidence. The current deployed TPEx stop is not
+reset or bypassed. This adapter’s offline tests do not establish live access.
+See [country-owned semantics](docs/global-own-market.md),
+[runtime boundaries](docs/tpex-summary-runtime.md), and
+`npm run test:tpex-summary-runtime`.

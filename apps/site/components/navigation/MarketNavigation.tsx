@@ -15,7 +15,7 @@ export const marketLinks = [
   {href: '/polymarket', label: '预测市场矩阵'},
   {href: '/futures', label: '期货持仓'},
   {href: '/forex', label: '外汇参考'},
-  {href: '/', label: '首页 / 美国 TIC'},
+  {href: '/', label: '首页 / A 股'},
 ] as const;
 
 /** Plain links avoid prefetching gated source pages from a navigation surface. */

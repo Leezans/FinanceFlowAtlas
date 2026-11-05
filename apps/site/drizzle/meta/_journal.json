@@ -113,6 +113,13 @@
       "when": 1793881000000,
       "tag": "0015_polymarket_market_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1793893600000,
+      "tag": "0016_tpex_summary_gate",
+      "breakpoints": true
     }
   ]
 }

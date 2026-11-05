@@ -1,38 +1,36 @@
-# Market navigation and landing
+# Market navigation and country selection
 
-The shared root layout exposes the independent `/ashare`, `/markets`, `/crypto`, `/forex`
-and `/` pages. A-share is the first navigation destination. The homepage keeps
-the existing TIC layer on `/`, now also addressable through `/#tic-view`, and
-adds an A-share-first visual entry section above it.
+The shared layout links all implemented independent market pages. The homepage
+opens the A-share industry matrix and retains the U.S. TIC disclosure at
+`/#tic-view`. The homepage navigation link is labeled “首页 / A 股”, not TIC.
+Ordinary anchors do not prefetch other sources.
 
-Navigation and entry cards use ordinary same-origin anchors. They do not fetch,
-prefetch, combine, or preview source observations. Route availability is not a
-claim of live source availability. No authentication, source gate, cache, adapter,
-database, or sharing behavior changes.
+`/markets` now selects each country's own market evidence. `?country=CHN`,
+`?country=TWN`, and `?country=BRA` open their independent sources. Other known
+country codes display an empty local industry-money-flow matrix, not their U.S.
+TIC counterpart activity. The map and country selector share URL state and
+Back/Forward behavior. No initial default-country source is mounted before the
+URL has been read.
 
-The A-share card describes industry-to-constituent drilldown and the provider's
-order-classified main-net estimate. The global map card distinguishes geographic
-navigation from observation coverage. Kraken remains selected BTC/USD and ETH/USD
-spot pairs at one venue, and volume is not called capital inflow. FX links to the integrated daily ECB reference layer, explicitly separate from
-capital flows and real-time transaction quotes. No fabricated preview
-values or heatmap observations are added.
+The 249-country geography is an index, not an observation count. Three local
+source entries do not imply three currently working feeds. Actual observations,
+frequency, units and denial/failure states are shown by the selected source.
+TIC loads only inside the explicit `#us-tic-supplement` disclosure. It remains
+monthly U.S.-issuer cross-border activity and is never counted as local-market
+coverage for every foreign residence.
 
-## Verification
+Source-specific workspaces are reused. Only the selected market is mounted;
+changing country removes its prior panel and cancels its browser request.
+Taiwan money and company share-count panels are independent, and Brazil remains
+explicitly monthly. No money is manufactured for unsupported industry drilldown.
 
-- Unit coverage checks implemented destinations, exact active-route state,
-  unknown routes, layout integration, no source fetching by the landing, source
-  semantics, preservation of TIC, and the direct TIC anchor.
-- Browser QA exercised homepage to A-share, global, crypto, Back, repeated return
-  to homepage, and the TIC anchor. Desktop layout had no horizontal overflow.
-- A temporary, untracked iframe harness exercised the real pages at 390 CSS
-  pixels (375 usable pixels with its scrollbar). Homepage and A-share had no
-  horizontal overflow, the four navigation links existing before the FX increment were visible with 44px touch
-  height, and the A-share card opened its page. This is narrow browser viewport
-  QA, not a physical mobile-device test. The harness was removed before commit.
-- Preview source requests reported unavailable/uninitialized-storage states.
-  These checks do not verify authenticated production source availability.
+Tests cover exact routes, no source fetch from static navigation, country URL
+selection, map synchronization, Back/Forward, source unmounting, missing
+countries and TIC opt-in. Existing page-level tests cover individual sources.
+Release QA exercised the actual components with synthetic responses at desktop
+and 390px widths: country/search/map/history, empty unsupported markets, optional
+TIC, participant selection and status variants passed with no horizontal overflow.
+No external provider calls were made by this fixture. This does not establish
+live source availability or physical mobile-device behavior.
 
-The FX increment activates the fifth navigation link and homepage card. Route
-existence, active state and no-fetch semantics pass automated tests. The new FX
-visual layout was not re-tested in a browser because the local Chromium runtime
-could not open its required socket; no bypass was attempted.
+See [country-owned evidence contract](global-own-market.md).

@@ -6,7 +6,7 @@ import {industries,industryLabel,signed,tpexMatrixGroups} from './matrix';
 import {INDUSTRY_REFERENCE} from '@/lib/tpex/industries';
 import s from './tpex.module.css';
 const timestamp=(t:string|null)=>t?t.replace('T',' ').replace('Z',' UTC'):'未提供';
-export default function TpexInstitutional(){
+export default function TpexInstitutional({embedded=false}:{embedded?:boolean}={}){
  const [data,setData]=useState<TpexReply|null>(null),[loading,setLoading]=useState(false),[failure,setFailure]=useState<'network'|'permission'|'invalid'|null>(null),[now,setNow]=useState(0),[participant,setParticipant]=useState<Participant>('total'),[industry,setIndustry]=useState<string|null>(null),[selectedCode,setSelectedCode]=useState<string|null>(null);
  const active=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false);
  const refresh=useCallback(async()=>{
@@ -36,9 +36,10 @@ const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):n
  const selected=snapshot?.rows.find(r=>r.code===selectedCode&&r.industry_code===industry)??null;
  const participantLabel=PARTICIPANTS.find(p=>p.id===participant)!.label;
  const matched=snapshot?.rows.filter(r=>r.flow!==null).length??0;
- return <div className={s.surface}><main className={s.root}>
-  <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/ashare">A 股热力图 ↗</a></header>
-  <section className={s.intro}><p className={s.eyebrow}>TAIWAN OTC / TPEX OPEN DATA</p><h1>台股上柜 · 法人行业矩阵</h1><p className={s.subtitle}>官方行业 → 公司下钻 · 免费开放数据 · 无需账户或密钥</p><p className={s.notice}>仅台湾 TPEx 上柜公司。三大法人买卖超是特定参与者的净交易股数，不是全市场资金净流入，也不含 TWSE 上市市场。不把股数换算成金额。</p></section>
+ const Container=embedded?'section':'main';
+ return <div className={`${s.surface} ${embedded?s.embedded:''}`}><Container className={s.root}>
+  {!embedded&&<header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/ashare">A 股热力图 ↗</a></header>}
+  <section className={s.intro}><p className={s.eyebrow}>TAIWAN OTC / TPEX OPEN DATA</p>{embedded?<h3>台股上柜 · 法人行业矩阵</h3>:<h1>台股上柜 · 法人行业矩阵</h1>}<p className={s.subtitle}>官方行业 → 公司下钻 · 免费开放数据 · 无需账户或密钥</p><p className={s.notice}>仅台湾 TPEx 上柜公司。三大法人买卖超是特定参与者的净交易股数，不是全市场资金净流入，也不含 TWSE 上市市场。不把股数换算成金额。</p></section>
   <section className={s.status} aria-live="polite"><div><strong>{failure==='permission'?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取 TPEx 官方报告':snapshot?stale?'已保留报告 · 请注意陈旧状态':'已取得可校验报告':'暂无可验证的法人行业报告'}</strong><p>{failure==='permission'?'已清空浏览器证据并停止检查。':failure==='invalid'?'响应未通过校验，已清空浏览器证据。':denied?'来源拒绝访问后停止自动请求，不切换路径。':failure==='network'?'连接失败，仅保留仍在展示期限内的已校验报告。':'每日源数据，每小时检查。获取时间不代表实时行情或官方发布时间。'}</p>{data?.status.error_code&&<small>{data.status.error_code}</small>}</div><button onClick={()=>void refresh()} disabled={loading||denied||failure==='permission'}>{loading?'正在检查…':'检查报告'}</button></section>
   <div className={s.times}><span>交易资料日期<b>{snapshot?.report_date??'暂无报告'}</b></span><span>行业分类出表日期<b>{snapshot?.classification_date??'暂无分类'}</b></span><span>来源实际发布时间<b>接口未提供</b></span><span>最近成功获取<b>{timestamp(snapshot?.fetched_at??data?.status.fetched_at??null)}</b></span></div>
   {snapshot&&<>
@@ -51,5 +52,5 @@ const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):n
   {selected&&<section className={s.detailSection} aria-label="选中公司详情" aria-live="polite"><article className={s.card}><div className={s.cardTitle}><div><p>{selected.code} · {industryLabel(selected.industry_code)}</p><h3>{selected.name}</h3></div><span>{snapshot?.report_date}</span></div><p>{participantLabel}</p>{selected.flow?<><div className={s.value}>{signed(selected.flow[participant].net)}<small>股</small></div><dl className={s.stats}><div><dt>买进</dt><dd>{selected.flow[participant].buy.toLocaleString('zh-CN')} 股</dd></div><div><dt>卖出</dt><dd>{selected.flow[participant].sell.toLocaleString('zh-CN')} 股</dd></div><div><dt>买卖超</dt><dd>{signed(selected.flow[participant].net)} 股</dd></div></dl></>:<p>公司在官方行业名册中，但当天法人报告没有匹配记录。数值未知，不视为零。</p>}</article></section>}
   {activeIndustry&&<details className={s.table}><summary>完整公司明细（包括缺失与零）</summary><table><thead><tr><th>公司</th><th>买进（股）</th><th>卖出（股）</th><th>净买卖超（股）</th></tr></thead><tbody>{activeIndustry.rows.map(r=><tr key={r.code}><td><button onClick={()=>setSelectedCode(r.code)}>{r.code} {r.name}</button></td><td>{r.flow?.[participant].buy.toLocaleString('zh-CN')??'缺失'}</td><td>{r.flow?.[participant].sell.toLocaleString('zh-CN')??'缺失'}</td><td>{r.flow?signed(r.flow[participant].net):'缺失'}</td></tr>)}</tbody></table></details>}
   <section className={s.sources}><h2>来源与计算口径</h2><ul><li>三大法人合计 = 外资及陆资（不含外资自营商）+ 投信 + 自营商。外资自营商已经包含在自营商，不能重复相加。</li><li>公司代号与官方行业名册精确连接。未匹配的证券不推断行业；名册中缺少交易记录的公司保留为未知。</li><li>股份数量不能衡量不同股价公司的资金规模。行业净股数与颜色是本应用计算的局部汇总，不是官方行业金额，不代表全球资金流或买卖建议。</li><li>这不是 TWSE 上市股票数据。TWSE T86 的开放再利用许可未核实，未自动抓取或混入。</li><li>报告超过 4 天标记陈旧；这是本应用的保守阈值。两份报告日期不同则暂不发布新快照，保留仍有效的旧快照。</li></ul><p>资料来源：金融监督管理委员会证券期货局／证券柜台买卖中心（TPEx），{snapshot?.report_date.slice(0,4)??'官方'} 上柜股票三大法人买卖明细资讯与上柜公司基本资料。此开放资料依政府资料开放授权条款第 1 版释出，本应用作行业连接与汇总；来源不背书本应用。</p><div className={s.links}><a href={FLOW_DATASET} target="_blank" rel="noreferrer">官方法人资料及授权 ↗</a><a href={COMPANY_DATASET} target="_blank" rel="noreferrer">官方公司行业资料及授权 ↗</a><a href={INDUSTRY_REFERENCE} target="_blank" rel="noreferrer">官方产业代码表 ↗</a><a href={LICENSE} target="_blank" rel="noreferrer">政府资料开放授权条款 ↗</a></div></section>
- </main></div>;
+ </Container></div>;
 }
