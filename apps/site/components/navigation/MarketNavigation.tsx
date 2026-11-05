@@ -14,7 +14,7 @@ export const marketLinks = [
   {href: '/crypto', label: '加密现货'},
   {href: '/polymarket', label: '预测市场矩阵'},
   {href: '/futures', label: '期货持仓'},
-  {href: '/forex', label: '外汇参考'},
+  {href: '/forex', label: '外汇行情'},
   {href: '/', label: '首页 / A 股'},
 ] as const;
 
