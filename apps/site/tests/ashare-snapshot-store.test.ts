@@ -135,3 +135,23 @@ test('future acquisition timestamps are invalid and acquisition older than max a
   if(offset>0)expect(read.code).toBe('snapshot_invalid');
  }
 });
+
+test('staged publication atomically removes partial acquisition and releases the same lease',async()=>{
+ const f=fixture();f.sqlite.exec(readFileSync(new URL('../drizzle/0014_ashare_staged_acquisitions.sql',import.meta.url),'utf8'));
+ const snapshot=evidence('BK1216');snapshot.collection_started_at=new Date(Date.now()-2000).toISOString();
+ const lease=await f.gate.acquire(snapshot.scope.fs);const store=new D1SnapshotStore(f.db,{staged:true});await store.commit(lease.token,snapshot);
+ expect((await store.read(snapshot.scope)).snapshot).toMatchObject({rows:snapshot.rows,collection_started_at:snapshot.collection_started_at});expect(await f.gate.inspect()).toBe('source_cooldown');
+});
+test.each([-181000,2000])('DB-clock publication guard rolls back snapshot and release for start offset %s',async offset=>{
+ const f=fixture();f.sqlite.exec(readFileSync(new URL('../drizzle/0014_ashare_staged_acquisitions.sql',import.meta.url),'utf8'));
+ const snapshot=evidence('BK1216');snapshot.collection_started_at=new Date(Date.now()+offset).toISOString();snapshot.fetched_at=new Date(Date.now()+offset+1).toISOString();
+ const lease=await f.gate.acquire(snapshot.scope.fs),store=new D1SnapshotStore(f.db,{staged:true});
+ await expect(store.commit(lease.token,snapshot)).rejects.toMatchObject({code:'source_gate_unavailable'});
+ expect(f.sqlite.prepare('SELECT COUNT(*) n FROM ashare_snapshot_cache').get()!.n).toBe(0);expect(f.sqlite.prepare('SELECT status FROM ashare_source_gate').get()!.status).toBe('busy');
+});
+test('freshness age begins at the first collected page, not final-page commit',async()=>{
+ const f=fixture();f.sqlite.exec(readFileSync(new URL('../drizzle/0014_ashare_staged_acquisitions.sql',import.meta.url),'utf8'));
+ const snapshot=evidence('BK1216');snapshot.collection_started_at=new Date(Date.now()-65000).toISOString();
+ const lease=await f.gate.acquire(snapshot.scope.fs),store=new D1SnapshotStore(f.db,{staged:true});await store.commit(lease.token,snapshot);
+ expect((await store.read(snapshot.scope)).ageMs).toBeGreaterThanOrEqual(65000);
+});

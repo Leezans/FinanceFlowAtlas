@@ -23,6 +23,6 @@ export default function SourceRecovery({state,scope,loading,onRetry}:{state:Evid
    <div><dt>数据来源</dt><dd>东方财富 · {scope.kind==='industry_rank'?'一级行业':`行业成分股 ${scope.fs.slice(2)}`}</dd></div>
    <div><dt>故障代码</dt><dd>{issue.code}{issue.httpStatus?` · HTTP ${issue.httpStatus}`:''}</dd></div>
    <div><dt>处理建议</dt><dd>{info.action}</dd></div>
-  </dl><p>{issue.mode==='stopped'?'已停止自动检查，不提供强制重试。':'冷却结束后可手动重试，页面也会按原有一分钟节奏检查。重试不跳过完整性校验或服务端限速。'}</p></details>
+  </dl><p>{issue.mode==='stopped'?'已停止自动检查，不提供强制重试。':issue.code==='collection_in_progress'?'冷却结束后自动续取剩余分页；超出采集窗口，或检测到数量、排序或代码不一致时，整次采集作废。':'冷却结束后可手动重试，页面也会按原有一分钟节奏检查。重试不跳过完整性校验或服务端限速。'}</p></details>
  </section>;
 }

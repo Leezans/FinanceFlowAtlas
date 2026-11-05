@@ -1,7 +1,7 @@
 import {type Scope,type ValidEvidence,scopeKey,validateEvidence} from './model';
 import {safeSourceCode,isSourceStopped,describeRecovery} from '@/lib/ashare/recovery';
 export type Recovery={code:string;mode:'retry'|'stopped';retryAt:number|null;httpStatus:number|null};
-export type EvidenceState={snapshot:ValidEvidence|null;etag:string|null;status:'ready'|'stale'|'blocked'|'error'|'empty';message:string;recovery?:Recovery;retainedAfterFailure?:boolean};
+export type EvidenceState={snapshot:ValidEvidence|null;etag:string|null;status:'ready'|'stale'|'blocked'|'error'|'empty';message:string;recovery?:Recovery;retainedAfterFailure?:boolean;retainedDuringCollection?:boolean};
 export type WireReply={status:number;etag?:string;payload?:unknown;errorCode?:string;recoveryMode?:string;retryAfter?:string};
 export type Transport=(request:{ifNoneMatch?:string;scope:Scope})=>Promise<WireReply>;
 export const emptyState=():EvidenceState=>({snapshot:null,etag:null,status:'empty',message:'尚未接入来源'});
@@ -22,7 +22,7 @@ function recoveryFor(reply:WireReply,now:number,fallback?:string):Recovery|undef
 function failure(previous:EvidenceState,scope:Scope,recovery:Recovery):EvidenceState {
  const message=describeRecovery(recovery.code).message;
  if(recovery.mode==='stopped')return {snapshot:null,etag:null,status:'blocked',message,recovery};
- if(previous.snapshot&&scopeKey(previous.snapshot.scope)===scopeKey(scope))return {...previous,status:'stale',message,recovery,retainedAfterFailure:true};
+ if(previous.snapshot&&scopeKey(previous.snapshot.scope)===scopeKey(scope))return {...previous,status:'stale',message,recovery,retainedAfterFailure:recovery.code!=='collection_in_progress',retainedDuringCollection:recovery.code==='collection_in_progress'};
  return {snapshot:null,etag:null,status:'error',message,recovery};
 }
 export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,now=Date.now()):EvidenceState {

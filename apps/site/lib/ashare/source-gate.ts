@@ -3,7 +3,7 @@
  * Pass the D1 binding directly, NOT a read-replica session.
  */
 export type SourceOutcome = { kind: 'success' | 'temporary_failure' | 'denied'; reason?: string };
-export type SourceLease = { token: string };
+export type SourceLease = { token: string; acquiredAtMs?:number };
 export interface SourceGate {
   acquire(scope: string, signal?: AbortSignal): Promise<SourceLease>;
   release(token: string, outcome: SourceOutcome): Promise<void>;
@@ -33,7 +33,7 @@ const TEMPORARY_FAILURE_QUIET_MS = 60_000;
 export const UNCONFIRMED_AFTER_MS = 180_000;
 export const SQL = {
   acquire: `UPDATE ashare_source_gate SET status='busy', lease_token=?, acquired_ms=${NOW}, updated_ms=${NOW}
-    WHERE id='single_upstream' AND status='idle' AND not_before_ms <= ${NOW} RETURNING status`,
+    WHERE id='single_upstream' AND status='idle' AND not_before_ms <= ${NOW} RETURNING status, acquired_ms`,
   inspect: `SELECT status, acquired_ms, not_before_ms, ${NOW} AS now_ms FROM ashare_source_gate WHERE id='single_upstream'`,
   finish: `UPDATE ashare_source_gate SET status=?, lease_token=NULL, reason_code=?,
     finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+?
@@ -66,7 +66,8 @@ export class D1SourceGate implements SourceGate {
         await this.release(token, { kind: 'temporary_failure' });
         throw new SourceGateError('source_aborted');
       }
-      return { token };
+      const acquiredAtMs=acquired.results?.[0]?.acquired_ms;
+      return {token,...(typeof acquiredAtMs==='number'&&Number.isSafeInteger(acquiredAtMs)&&acquiredAtMs>=0?{acquiredAtMs}:{})};
     }
     if (acquired.meta?.changes !== 0) throw new SourceGateError('source_gate_unavailable');
     throw new SourceGateError((await this.inspect()) ?? 'source_gate_unavailable');

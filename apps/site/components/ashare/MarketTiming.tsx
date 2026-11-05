@@ -23,6 +23,7 @@ export default function MarketTiming({state,loading=false}:{state:EvidenceState;
  const session = getAshareSession(now);
  const acquisition = getAcquisitionTiming(snapshot&&state.retainedAfterFailure?{...snapshot,stale:true,has_error:true}:snapshot,now);
  const age = acquisitionAgeLabel(acquisition.ageMs);
+ const collectionStart=snapshot?.collection_started_at?formatShanghaiTimestamp(snapshot.collection_started_at):null;
  const fetched = snapshot ? formatShanghaiTimestamp(snapshot.fetched_at) : null;
  return <section className="ashare-timing" aria-label="市场时段与数据时间">
   <div className="timing-session">
@@ -36,7 +37,8 @@ export default function MarketTiming({state,loading=false}:{state:EvidenceState;
    <div><dt>来源行情时点 / 延迟</dt><dd>均未知</dd><small>采集成功不等于实时行情</small></div>
    <div><dt>最近完整采集 · 北京时间</dt><dd>{fetched ? <time dateTime={snapshot!.fetched_at}>{fetched}</time> : '尚未取得'}</dd><small>{age ? `${age}（按设备时间）` : '采集时间不是行情时间'}</small></div>
   </dl>
-  <p className="timing-acquisition" data-acquisition-status={acquisition.status} role="status">{acquisition.label}{loading ? '；正在获取并核对完整分页' : ''}。</p>
+  {collectionStart&&<p>本次完整采集窗口 · 北京时间：{collectionStart} 至 {fetched}。分页不是同一时刻的原子快照；各页仍可能存在时差。</p>}
+  <p className="timing-acquisition" data-acquisition-status={acquisition.status} role="status">{state.retainedDuringCollection?'完整分页仍在核对，保留上次完整快照':acquisition.label}{loading ? '；正在获取并核对完整分页' : ''}。</p>
   <details><summary>时间口径与日历依据</summary>
    <p>休市不代表数据过期，处于交易时段也不代表数据实时。当前来源没有提供交易日期、行情观测时间或延迟，以上三项不会用抓取日期补齐。</p>
    <p>60 秒仅是应用检查间隔，缓存年龄依据设备时钟估算。采集超过间隔或服务器报告刷新失败时会单独提示，不把旧缓存标成最新行情。</p>
