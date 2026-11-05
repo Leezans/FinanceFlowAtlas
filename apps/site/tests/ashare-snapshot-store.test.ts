@@ -1,6 +1,7 @@
 import {test,expect} from 'vitest';
 import {DatabaseSync,type SQLInputValue} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
+import {createAshareHandler} from '../lib/ashare/ashare';
 import {D1SourceGate,SQL,type D1Result} from '../lib/ashare/source-gate';
 import {D1SnapshotStore,SNAPSHOT_SQL,type SnapshotD1} from '../lib/ashare/snapshot-store';
 import {FIELDS,parseScope,encodeSnapshot,decodeSnapshot,SNAPSHOT_MAX_AGE_MS,SNAPSHOT_MAX_SCOPES,type Snapshot} from '../lib/ashare/snapshot';
@@ -154,4 +155,26 @@ test('freshness age begins at the first collected page, not final-page commit',a
  const snapshot=evidence('BK1216');snapshot.collection_started_at=new Date(Date.now()-65000).toISOString();
  const lease=await f.gate.acquire(snapshot.scope.fs),store=new D1SnapshotStore(f.db,{staged:true});await store.commit(lease.token,snapshot);
  expect((await store.read(snapshot.scope)).ageMs).toBeGreaterThanOrEqual(65000);
+});
+test('successful pacing does not label an old-first-page staged snapshot as a failed refresh',async()=>{
+ const f=fixture();f.sqlite.exec(readFileSync(new URL('../drizzle/0014_ashare_staged_acquisitions.sql',import.meta.url),'utf8'));
+ const snapshot=evidence('BK1216');snapshot.collection_started_at=new Date(Date.now()-65000).toISOString();
+ const lease=await f.gate.acquire(snapshot.scope.fs),store=new D1SnapshotStore(f.db,{staged:true});await store.commit(lease.token,snapshot);
+ const read=await store.read(snapshot.scope);
+ expect(read.snapshot?.collection_started_at).toBe(snapshot.collection_started_at);
+ expect(read.ageMs).toBeGreaterThanOrEqual(65000);expect(read.code).toBeUndefined();
+ // Pacing still holds: classification changes never reset or bypass the gate.
+ expect(await f.gate.inspect()).toBe('source_cooldown');
+ let sourceCalls=0;
+ const handler=createAshareHandler({enabled:()=>true,isolatedForTests:true,sourceGate:f.gate,snapshotStore:store,
+  fetcher:async()=>{sourceCalls++;throw new Error('unexpected source call');}});
+ const response=await handler(new Request('https://private.invalid/api/v1/ashare/status?scope=BK1216'));
+ expect(await response.json()).toMatchObject({state:'ready',stale:true,has_error:false});
+ expect(response.headers.get('X-Ashare-Error-Code')).toBeNull();expect(sourceCalls).toBe(0);
+ // A later actual failed refresh must still survive a cold read as an error.
+ f.elapse();const failed=await f.gate.acquire('other');await f.gate.release(failed.token,{kind:'temporary_failure'});
+ const failure=await store.read(snapshot.scope);expect(failure.code).toBe('source_cooldown');expect(failure.canAcquire).toBe(false);
+ const failedResponse=await handler(new Request('https://private.invalid/api/v1/ashare/status?scope=BK1216'));
+ expect(await failedResponse.json()).toMatchObject({state:'ready',stale:true,has_error:true});
+ expect(failedResponse.headers.get('X-Ashare-Error-Code')).toBe('source_cooldown');expect(sourceCalls).toBe(0);
 });
