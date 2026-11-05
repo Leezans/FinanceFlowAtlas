@@ -22,3 +22,23 @@ export function validateEvidence(input:unknown,expectedScope?:Scope):ValidEviden
 }
 export function coverage(snapshot:ValidEvidence){const nonzero=snapshot.rows.filter(r=>numeric(r.f62)!==null&&r.f62!==0),zero=snapshot.rows.filter(r=>r.f62===0),missing=snapshot.rows.filter(r=>numeric(r.f62)===null);return {nonzero,zero,missing,denominator:nonzero.reduce((sum,r)=>sum+Math.abs(Number(r.f62)),0)}}
 export function signedCny(value:number|null){return value===null?'未提供':`${value>0?'+':''}${new Intl.NumberFormat('zh-CN',{notation:'compact',maximumFractionDigits:2}).format(value)} CNY`}
+
+export type FlowFilter='all'|'positive'|'negative'|'zero'|'missing';
+export type EvidenceSort='magnitude'|'net_desc'|'net_asc'|'name';
+/** Keep provider rows intact. Filtering never fills missing values or aggregates industries. */
+export function selectEvidenceRows(rows:readonly EvidenceRow[],query:string,filter:FlowFilter,sort:EvidenceSort):EvidenceRow[]{
+ const needle=query.trim().toLocaleLowerCase('zh-CN');
+ return rows.filter(row=>{
+  if(!`${row.f12} ${row.f14}`.toLocaleLowerCase('zh-CN').includes(needle))return false;
+  const amount=numeric(row.f62);
+  return filter==='all'||(filter==='missing'?amount===null:amount!==null&&(filter==='positive'?amount>0:filter==='negative'?amount<0:amount===0));
+ }).sort((a,b)=>{
+  const tie=()=>a.f12.localeCompare(b.f12,'en');
+  if(sort==='name')return a.f14.localeCompare(b.f14,'zh-CN')||tie();
+  const left=numeric(a.f62),right=numeric(b.f62);
+  // Unknown values always come last, including when sorting largest net sales first.
+  if(left===null||right===null)return left===right?tie():left===null?1:-1;
+  return (sort==='magnitude'?Math.abs(right)-Math.abs(left):sort==='net_asc'?left-right:right-left)||tie();
+ });
+}
+export function exactAmount(value:number|null){return value===null?'未提供':new Intl.NumberFormat('zh-CN',{signDisplay:'exceptZero',maximumSignificantDigits:21}).format(value)}
