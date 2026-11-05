@@ -1,6 +1,6 @@
 # Japan JPX investor trading: verified candidate, not enabled
 
-Checked 2026-11-06 UTC against the official website and one current workbook.
+Checked 2026-11-05 UTC against the official website and one current workbook.
 This assessment does not assert permission to run an automated dashboard feed.
 
 ## Result and current format

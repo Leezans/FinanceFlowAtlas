@@ -27,7 +27,7 @@ allocations are invented.
 
 ## Verified acquisition and layout
 
-Checked 2026-11-06 UTC. Two ordinary bounded reads of the fixed
+Checked 2026-11-05 UTC. Two ordinary bounded reads of the fixed
 [official historical weekly CSV](https://www.mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/week.csv)
 succeeded; the second persisted bytes for offline parser verification after
 the first inspection had not saved them. No alternate endpoint, identity or

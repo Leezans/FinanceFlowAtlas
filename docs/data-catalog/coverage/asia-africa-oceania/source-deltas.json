@@ -90,7 +90,7 @@
     "download_url": "https://www.mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/week.csv",
     "notes": "Official CP932 CSV verified: 257078 bytes, 1138 continuous weekly periods, latest 2026-10-18..24 and update 2026-10-29. Liabilities block is nonresident Japanese-issued securities sample; 100 million JPY; positive acquisition minus disposition with rounding. Three asset classes, not industries or whole Japan. Hosted latest-week adapter implemented/tested; production availability not inferred. See docs/source-jp-mof.md.",
     "production_readiness": "implemented_bounded_weekly_sample_not_full_market",
-    "checked_at": "2026-11-06",
+    "checked_at": "2026-11-05",
     "official_url_head_status": 200,
     "official_url_head_checked_at": "2026-11-04"
   },
@@ -107,9 +107,9 @@
     "public_display_rights": "jpx_permission_not_established",
     "rights_url": "https://www.jpx.co.jp/term-of-use/index.html",
     "download_url": "https://www.jpx.co.jp/english/markets/statistics-equities/investor-type/vk0khi000002thzf-att/stock_1_w_20261019_20261023.xlsx",
-    "notes": "2026-11-06 official workbook: 12924 bytes; combined volume/value single-sheet format since September 2026 week 3; 1000 shares/1000 JPY; 112 groups reconcile purchases-sales=balance. Four overlapping market sections, 14 leaf categories. Ordinary viewing and one-file inspection differ from hosted secondary display, whose permission is unconfirmed; not enabled. See docs/source-jp-jpx.md.",
+    "notes": "2026-11-05 UTC official workbook: 12924 bytes; combined volume/value single-sheet format since September 2026 week 3; 1000 shares/1000 JPY; 112 groups reconcile purchases-sales=balance. Four overlapping market sections, 14 leaf categories. Ordinary viewing and one-file inspection differ from hosted secondary display, whose permission is unconfirmed; not enabled. See docs/source-jp-jpx.md.",
     "production_readiness": "not_certified",
-    "checked_at": "2026-11-06",
+    "checked_at": "2026-11-05",
     "official_url_head_status": 200,
     "official_url_head_checked_at": "2026-11-04"
   },
