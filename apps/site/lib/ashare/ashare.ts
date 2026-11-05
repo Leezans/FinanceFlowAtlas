@@ -1,4 +1,5 @@
 import {strictJSON} from './strict-json';
+import {safeSourceCode} from './recovery';
 export const NUMERIC_FIELDS=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'] as const;
 export const FIELDS=['f12','f14',...NUMERIC_FIELDS] as const;
 const PATH='/api/qt/clist/get';
@@ -12,7 +13,7 @@ type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;re
 export type SourceOutcome={kind:'success'|'temporary_failure'|'denied';reason?:string};
 export interface SourceGate {acquire(scopeKey:string,signal:AbortSignal):Promise<{token:string}>;release(token:string,outcome:SourceOutcome):Promise<void>;}
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
-type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean};
+type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean;errorCode?:string};
 class SourceDenied extends Error {}
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
@@ -148,7 +149,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
   async function refresh(entry:Entry,scope:Scope,signal:AbortSignal){
     // Serialize entire acquisitions globally, so pages and redirects share pacing.
     const run=state.tail.catch(()=>{}).then(async()=>{
-      if(state.denied||now()<state.backoffUntil){entry.error=true;entry.retryAt=state.denied?Infinity:state.backoffUntil;return;}
+      if(state.denied||now()<state.backoffUntil){entry.error=true;entry.errorCode=state.errorCode??'source_cooldown';entry.retryAt=state.denied?Infinity:state.backoffUntil;return;}
       const acquisition=new AbortController();
       const abort=()=>acquisition.abort();
       signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
@@ -186,34 +187,51 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         catch{throw new SourceDenied('source_gate_release_unconfirmed');}
         if(collectionError)throw collectionError;
         if(!next)throw new Error('missing_snapshot');
-        entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;
+        entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
       }
-      catch(error){entry.errorCode=failureCode(error);console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
+      catch(error){entry.errorCode=failureCode(error);state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
       finally{clearTimeout(timer);signal.removeEventListener('abort',abort);acquisition.abort();}
     });state.tail=run;await run;
   }
-  function reply(status:number,payload?:unknown,etag?:string){const headers:Record<string,string>={'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};if(etag)headers.ETag=etag;if(status===503)headers['Retry-After']='60';return new Response(payload===undefined?null:JSON.stringify(payload),{status,headers});}
+  type Diagnostic={code:string;stopped:boolean;retrySeconds:number};
+  function diagnostic(entry?:Entry):Diagnostic|undefined {
+    const code=state.denied ? state.errorCode??'source_denial_latched' : entry?.errorCode??(now()<state.backoffUntil?state.errorCode??'source_cooldown':undefined);
+    if(!code)return;
+    return {code:safeSourceCode(code)??'collection_failed',stopped:state.denied,
+      retrySeconds:state.denied?0:Math.max(1,Math.ceil((Math.max(entry?.retryAt??0,state.backoffUntil)-now())/1000))};
+  }
+  function reply(status:number,payload?:unknown,etag?:string,issue?:Diagnostic){
+    const headers:Record<string,string>={'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
+    if(etag)headers.ETag=etag;
+    // These headers accompany stale 200 and 304 too. They do not alter snapshot
+    // bytes/ETags and never expose upstream bodies, URLs, credentials or leases.
+    if(issue){headers['X-Ashare-Error-Code']=issue.code;headers['X-Ashare-Recovery']=issue.stopped?'stopped':'retry';
+      if(!issue.stopped)headers['Retry-After']=String(issue.retrySeconds);
+    }else if(status===503)headers['Retry-After']='60';
+    return new Response(payload===undefined?null:JSON.stringify(payload),{status,headers});
+  }
   return async function handle(request:Request):Promise<Response>{
     if(request.method!=='GET')return reply(405,{error:'method_not_allowed'});
     const url=new URL(request.url);if(!['/api/v1/ashare/snapshot','/api/v1/ashare/status'].includes(url.pathname))return reply(404,{error:'not_found'});
     let scope:Scope;try{scope=parseScope(url);}catch{return reply(400,{error:'invalid_scope'});}
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     const key=scope.fs;let entry=state.entries.get(key);
-    if(url.pathname.endsWith('/status'))return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(state.denied||entry.error||now()-entry.published>=TTL),has_error:state.denied||(entry?.error??false),refresh_interval_seconds:60,acquisition_is_separate:false,...(entry?.errorCode?{error_code:entry.errorCode,message:failureMessage(entry.errorCode)}:{})});
+    if(url.pathname.endsWith('/status')){const issue=diagnostic(entry);return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue,refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);}
     if(!entry){
       // One level-1 plus one selected industry cache. Never evict in-flight work.
-      if(scope.kind==='industry_stocks'){for(const [k,v]of state.entries){if(k.startsWith('b:')){if(v.pending)return reply(503,{state:'unavailable',message:'行业采集进行中，请稍后重试。'});state.entries.delete(k);}}}
+      if(scope.kind==='industry_stocks'){for(const [k,v]of state.entries){if(k.startsWith('b:')){if(v.pending)return reply(503,{state:'unavailable',error_code:'source_busy',message:'行业采集进行中，请稍后重试。'},undefined,{code:'source_busy',stopped:false,retrySeconds:60});state.entries.delete(k);}}}
       entry={published:0,error:false,failures:0,retryAt:0};state.entries.set(key,entry);
     }
     const stale=()=>!!entry!.snapshot&&(state.denied||entry!.error||now()-entry!.published>=TTL);
     if(!state.denied&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=refresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
     if(entry.pending)await entry.pending;
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
-    if(!entry.snapshot)return reply(503,{state:'unavailable',error_code:entry.errorCode??'not_yet_acquired',message:failureMessage(entry.errorCode)});
-    const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:scope.kind==='industry_rank'?'index_points':'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale(),has_error:state.denied||entry.error};
+    const issue=diagnostic(entry);
+    if(!entry.snapshot)return reply(503,{state:'unavailable',error_code:issue?.code??'not_yet_acquired',message:failureMessage(issue?.code)},undefined,issue);
+    const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:scope.kind==='industry_rank'?'index_points':'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale()||!!issue,has_error:!!issue};
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload)));
     const etag='"'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')+'"';
-    if(request.headers.get('if-none-match')===etag)return reply(304,undefined,etag);
-    return reply(200,payload,etag);
+    if(request.headers.get('if-none-match')===etag)return reply(304,undefined,etag,issue);
+    return reply(200,payload,etag,issue);
   };
 }
