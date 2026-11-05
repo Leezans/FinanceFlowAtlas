@@ -119,16 +119,24 @@ Shared-lease contention and cooldown use the ordinary one-minute recheck; they
 do not compound genuine provider failures into an unnecessary 15-minute pause.
 Actual upstream failures still use exponential backoff and honor Retry-After.
 Every source request still requires the unchanged durable gate's permission.
-The quote/trade bundle remains isolate-local, so a cold worker during the shared
-cooldown can return unavailable rather than inventing or refreshing a timestamp.
+Validated quote/trade bundles now live in primary D1, so a cold worker can reuse
+the selected cohort during successful shared cooldown without refetching or
+changing its timestamps. Selection and window are canonical cache identities.
+A missing selected cohort can use the latest validated quotes, with no trades
+attached from another selection. Busy, denied, corrupt or unreadable permission
+states expose no shared evidence. Storage deduplicates the latest and selected
+references, retains at most 16 selections plus latest (17 bundles, 2 MB each),
+and prunes expired/unreferenced versions on successful atomic publication.
 Keep the existing owner-only boundary; code publication does not grant provider
 market-data redistribution rights. Apply `0003_brainy_donald_blake.sql` through
-the supported migration workflow before deployment. Run
+the supported migration workflow, then append `0017_kraken_shared_snapshots.sql`
+after existing migrations before deploying the shared-cache code. Run
 `npm run test:kraken-runtime` for offline native workerd/D1 checks, including
 request cancellation after response completion and shared cooldown across
 separate workers. The host retains cleanup before asynchronous inspection;
 missing lifetime registration prevents source admission. No existing busy or
-denied lease is reset, and this change requires no migration. See
+denied lease is reset. Publication and successful lease release are one transaction;
+all source limits and the original 15-minute fetched-time expiry remain. See
 [scope, licensing and verified limits](../../docs/source-kraken-spot.md).
 
 ### A-share recovery and diagnostics
@@ -417,7 +425,8 @@ feed. Rates, 24h VWAP, base-currency volume and trade counts use equal-area matr
 tiles. Rate color is explicitly last-price/VWAP deviation, not daily return.
 
 The view reuses `/api/v1/crypto/kraken/snapshot` with the existing explicit
-three-pair selection. There is no new provider endpoint, source gate, cache,
+three-pair selection. There is no new provider endpoint or source gate; the later
+shared Kraken cache also serves these fiat selections. This view adds no separate
 schema, database table or migration. The same retained 12-second acquisition,
 1.1-second request spacing, six trade-page maximum and shared 60-second cooldown
 apply. The common client lifecycle preserves original acquisition times,
