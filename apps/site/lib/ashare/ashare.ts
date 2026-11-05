@@ -1,18 +1,16 @@
 import {strictJSON} from './strict-json';
 import {safeSourceCode} from './recovery';
-import type {SourceGateCode} from './source-gate';
-export const NUMERIC_FIELDS=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'] as const;
-export const FIELDS=['f12','f14',...NUMERIC_FIELDS] as const;
+import {type SourceGateCode,type SourceGate,type SourceOutcome} from './source-gate';
+export type {SourceGate,SourceOutcome} from './source-gate';
+import {FIELDS,parseScope,validateRow,type Row,type Scope,type Snapshot,SNAPSHOT_FRESH_MS as TTL} from './snapshot';
+import type {SnapshotStore,SnapshotRead} from './snapshot-store';
+export {NUMERIC_FIELDS,FIELDS,parseScope} from './snapshot';
+export type {Row,Scope} from './snapshot';
 const PATH='/api/qt/clist/get';
 const ORIGIN='https://push2.eastmoney.com';
 const DELAY='https://push2delay.eastmoney.com';
-const TTL=60_000, INTERVAL=3_000, DEADLINE=90_000, MAX_BYTES=4_000_000, MAX_ROWS=2000, MAX_PAGES=20;
-export type Scope={kind:'industry_rank'|'industry_stocks';fs:string;classification_level:'eastmoney_level_1'|'unknown_may_mix_levels'};
-export type Row={f12:string;f14:string}&Record<typeof NUMERIC_FIELDS[number],number|null|'-'|'--'|''>;
-type Snapshot={rows:Row[];source_total:number;fetched_at:string;scope:Scope;page_count:number};
+const INTERVAL=3_000, DEADLINE=90_000, MAX_BYTES=4_000_000, MAX_ROWS=2000, MAX_PAGES=20;
 type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>;errorCode?:string};
-export type SourceOutcome={kind:'success'|'temporary_failure'|'denied';reason?:string};
-export interface SourceGate {acquire(scopeKey:string,signal:AbortSignal):Promise<{token:string}>;release(token:string,outcome:SourceOutcome):Promise<void>;inspect?():Promise<SourceGateCode|null>;}
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
 type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean;errorCode?:string};
 class SourceDenied extends Error {
@@ -30,7 +28,7 @@ async function discardDeniedResponse(response?:Response):Promise<void> {
 }
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
-const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','source_gate_unavailable','source_busy','source_outcome_unconfirmed','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
+const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','snapshot_store_required','snapshot_store_unavailable','snapshot_invalid','source_gate_unavailable','source_busy','source_outcome_unconfirmed','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
 function failureCode(error:unknown):string {
   if(error&&typeof error==='object'&&'code'in error&&typeof error.code==='string'&&ERROR_CODES.has(error.code))return error.code;
   if(error instanceof Error&&ERROR_CODES.has(error.message))return error.message;
@@ -40,7 +38,7 @@ function failureCode(error:unknown):string {
   return 'collection_failed';
 }
 function failureMessage(code?:string):string {
-  if(code==='source_gate_unavailable')return '数据协调存储尚未就绪，请检查数据库迁移。';
+  if(code==='source_gate_unavailable'||code==='snapshot_store_required'||code==='snapshot_store_unavailable')return '数据协调存储尚未就绪，请检查数据库迁移。';
   if(code==='source_outcome_unconfirmed')return '上次采集未能确认结果，已停止自动重试；需要核查请求结束记录。';
   if(code==='source_busy')return '已有采集占用，尚未确认完成。';
   if(code==='source_cooldown')return '来源限速等待中。';
@@ -54,26 +52,8 @@ const stateKey=Symbol.for('FinanceFlowAtlas.ashare.controlled.v1');
 const globals=globalThis as typeof globalThis & {[stateKey]?:State};
 function processState():State{return globals[stateKey]??=(freshState());}
 function freshState():State{return {entries:new Map(),tail:Promise.resolve(),lastRequest:-Infinity,backoffUntil:0,backoffFailures:0,denied:false};}
-export function parseScope(url:URL):Scope {
-  if([...url.searchParams.keys()].some(k=>k!=='scope')||url.searchParams.getAll('scope').length>1)throw new Error('invalid_scope');
-  const scope=url.searchParams.get('scope')??'level1';
-  if(scope==='level1')return {kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'};
-  if(/^BK[0-9]{4}$/.test(scope))return {kind:'industry_stocks',fs:`b:${scope}`,classification_level:'unknown_may_mix_levels'};
-  throw new Error('invalid_scope');
-}
 function abortCheck(signal:AbortSignal){if(signal.aborted)throw new Error('aborted');}
 function sleep(ms:number,signal:AbortSignal):Promise<void>{return new Promise((resolve,reject)=>{abortCheck(signal);const done=()=>{clearTimeout(timer);signal.removeEventListener('abort',cancel);};const cancel=()=>{done();reject(new Error('aborted'));};const timer=setTimeout(()=>{done();resolve();},ms);signal.addEventListener('abort',cancel,{once:true});});}
-function row(value:unknown,scope:Scope):Row {
-  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('invalid_row');
-  const obj=value as Record<string,unknown>;
-  if(!FIELDS.every(k=>Object.hasOwn(obj,k)))throw new Error('missing_fields');
-  if(typeof obj.f12!=='string'||!(scope.kind==='industry_stocks'?/^[0-9]{6}$/:/^BK[0-9]{4}$/).test(obj.f12))throw new Error('invalid_id');
-  if(typeof obj.f14!=='string'||!obj.f14.trim()||obj.f14.length>128)throw new Error('invalid_name');
-  for(const key of NUMERIC_FIELDS){const v=obj[key];if(v===null||v==='-'||v==='--'||v==='')continue;if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>Number.MAX_SAFE_INTEGER)throw new Error('invalid_numeric');}
-  if(typeof obj.f2==='number'&&obj.f2<0)throw new Error('negative_price');
-  if(typeof obj.f3==='number'&&obj.f3< -100)throw new Error('invalid_return');
-  return Object.fromEntries(FIELDS.map(k=>[k,obj[k]])) as Row;
-}
 function params(scope:Scope,page:number):URLSearchParams{return new URLSearchParams({pn:String(page),pz:'100',po:'1',np:'1',fltt:'2',invt:'2',fid:'f62',fs:scope.fs,fields:FIELDS.join(',')});}
 function redirect(current:string,location:string,query:URLSearchParams):string {
   if(!location||location.length>2048||/[^\x21-\x7e]/.test(location)||location.includes('#'))throw new Error('redirect_denied');
@@ -101,7 +81,7 @@ async function body(response:Response,budget:number,signal:AbortSignal):Promise<
   const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
 /** Server-only: no background worker; no network until an enabled snapshot GET. */
-export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetcher;now?:()=>number;isolatedForTests?:boolean;runtime?:'cloudflare-workers';sourceGate?:SourceGate;waitUntil?:(promise:Promise<unknown>)=>void}={}){
+export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetcher;now?:()=>number;isolatedForTests?:boolean;runtime?:'cloudflare-workers';sourceGate?:SourceGate;snapshotStore?:SnapshotStore;waitUntil?:(promise:Promise<unknown>)=>void}={}){
   const state=options.isolatedForTests?freshState():processState();
   const fetcher=options.fetcher??((url,init)=>fetch(url,init));
   const sourceGate:SourceGate|undefined=options.sourceGate??(options.isolatedForTests?{async acquire(){return {token:'synthetic-only'};},async release(){}}:undefined);
@@ -158,7 +138,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         const count=payload.data.total as number;if(count<=0||count>MAX_ROWS||Math.ceil(count/100)>MAX_PAGES)throw new Error('row_budget');
         if(total===undefined)total=count;if(count!==total)throw new Error('unstable_total');
         const items=payload.data.diff;if(items.length!==Math.min(100,total-rows.length))throw new Error('incomplete_page');
-        for(const item of items){const value=row(item,scope);if(ids.has(value.f12))throw new Error('duplicate_id');ids.add(value.f12);rows.push(value);}
+        for(const item of items){const value=validateRow(item,scope);if(ids.has(value.f12))throw new Error('duplicate_id');ids.add(value.f12);rows.push(value);}
         if(rows.length===total){abortCheck(signal);if(!enabled())throw new Error('disabled');return {rows,source_total:total,scope,page_count:page,fetched_at:new Date().toISOString()};}
       }
       throw new Error('incomplete_snapshot');
@@ -177,9 +157,20 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         // No lease takeover/expiry is permitted: unknown crashed work stays busy.
         if(!lifetimeReady())throw new Error('runtime_lifetime_unverified');
         if(!sourceGate)throw new Error('source_gate_required');
+        if(!options.snapshotStore&&!options.isolatedForTests)throw new Error('snapshot_store_required');
         if(!enabled())throw new Error('disabled');
         if(!routingAllowed())throw new Error('runtime_routing_unverified');
         abortCheck(acquisition.signal);
+        const reuseFresh=async()=>{
+          if(!options.snapshotStore)return false;
+          const current=await readShared(scope);hydrate(entry,current);
+          if(current?.snapshot&&(current.ageMs??Infinity)<TTL)return true;
+          if(current?.canAcquire===false)throw new Error(current.code??'snapshot_store_unavailable');
+          return false;
+        };
+        // A queued/cold request may be overtaken by another isolate's commit.
+        // Reuse that complete snapshot rather than acquire and fetch it again.
+        if(await reuseFresh())return;
         const acquire=async()=>{
           abortCheck(acquisition.signal);
           if(!enabled())throw new Error('disabled');
@@ -193,6 +184,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           // One bounded admission wait, NOT an upstream request retry. Busy,
           // denied and unavailable are never retried or taken over here.
           await sleep(3100,acquisition.signal);
+          if(await reuseFresh())return;
           lease=await acquire();
         }
         if(!lease||typeof lease.token!=='string'||!lease.token)throw new SourceDenied('invalid_source_lease');
@@ -203,7 +195,10 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         catch(error){collectionError=error;outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:'temporary_failure',reason:'collection_failed'};}
         // Release exactly once, including cancellation, and never silently ignore a
         // failed/uncertain write. No publication until persistence confirms release.
-        try{await sourceGate.release(lease.token,outcome);console.info('[ashare lifecycle]',JSON.stringify({event:'lease_released',scope:scope.kind,outcome:outcome.kind}));}
+        try{
+          if(next&&!collectionError&&options.snapshotStore)await options.snapshotStore.commit(lease.token,next);
+          else await sourceGate.release(lease.token,outcome);
+          console.info('[ashare lifecycle]',JSON.stringify({event:'lease_released',scope:scope.kind,outcome:outcome.kind}));}
         catch{throw new SourceDenied('source_gate_release_unconfirmed');}
         finally{if(collectionError instanceof SourceDenied)await discardDeniedResponse(collectionError.response);}
         if(collectionError)throw collectionError;
@@ -248,15 +243,39 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     }else if(status===503)headers['Retry-After']='60';
     return new Response(payload===undefined?null:JSON.stringify(payload),{status,headers});
   }
+  async function readShared(scope:Scope):Promise<SnapshotRead|undefined> {
+    if(!options.snapshotStore)return;
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    try{return await Promise.race([options.snapshotStore.read(scope),new Promise<SnapshotRead>(resolve=>{
+      timer=setTimeout(()=>resolve({code:'snapshot_store_unavailable',canAcquire:false}),2000);
+    })]);}catch{return {code:'snapshot_store_unavailable',canAcquire:false};}
+    finally{if(timer!==undefined)clearTimeout(timer);}
+  }
+  function hydrate(entry:Entry,shared:SnapshotRead|undefined) {
+    if(!shared)return;
+    if(shared.snapshot?.fetched_at!==entry.snapshot?.fetched_at){entry.error=false;entry.errorCode=undefined;}
+    entry.snapshot=shared.snapshot;
+    entry.published=now()-(shared.ageMs??0);
+    if(shared.code==='source_denied'||shared.code==='source_outcome_unconfirmed'){
+      state.denied=true;state.errorCode=shared.code;state.backoffUntil=Infinity;
+    }
+  }
+  function sharedDiagnostic(shared:SnapshotRead|undefined,entry?:Entry):Diagnostic|undefined {
+    const local=diagnostic(entry);
+    if(local?.stopped||!shared?.code||(shared.code==='source_cooldown'&&local))return local;
+    return {code:shared.code,stopped:shared.code==='source_denied'||shared.code==='source_outcome_unconfirmed',retrySeconds:60};
+  }
   return async function handle(request:Request):Promise<Response>{
     if(request.method!=='GET')return reply(405,{error:'method_not_allowed'});
     const url=new URL(request.url);if(!['/api/v1/ashare/snapshot','/api/v1/ashare/status'].includes(url.pathname))return reply(404,{error:'not_found'});
     let scope:Scope;try{scope=parseScope(url);}catch{return reply(400,{error:'invalid_scope'});}
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
-    const key=scope.fs;let entry=state.entries.get(key);
+    let shared=await readShared(scope);
+    const key=scope.fs;const entry:Entry=state.entries.get(key)??{published:0,error:false,failures:0,retryAt:0};
+    hydrate(entry,shared);
     if(url.pathname.endsWith('/status')){
-      let issue=diagnostic(entry);
-      if(sourceGate?.inspect){
+      let issue=sharedDiagnostic(shared,entry);
+      if(!options.snapshotStore&&sourceGate?.inspect){
         let timer:ReturnType<typeof setTimeout>|undefined;
         try{
           const shared=await Promise.race([sourceGate.inspect(),new Promise<SourceGateCode>(resolve=>{timer=setTimeout(()=>resolve('source_gate_unavailable'),2000);})]);
@@ -264,22 +283,38 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         }catch{if(!issue?.stopped)issue={code:'source_gate_unavailable',stopped:false,retrySeconds:60};}
         finally{if(timer!==undefined)clearTimeout(timer);}
       }
-      return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue,refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
+      return reply(200,{state:!state.denied&&entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue,refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
     }
-    if(!entry){
+    if(!state.entries.has(key)){
       // One level-1 plus one selected industry cache. Never evict in-flight work.
       if(scope.kind==='industry_stocks'){for(const [k,v]of state.entries){if(k.startsWith('b:')){if(v.pending)return reply(503,{state:'unavailable',error_code:'source_busy',message:'行业采集进行中，请稍后重试。'},undefined,{code:'source_busy',stopped:false,retrySeconds:60});state.entries.delete(k);}}}
-      entry={published:0,error:false,failures:0,retryAt:0};state.entries.set(key,entry);
+      state.entries.set(key,entry);
     }
     const stale=()=>!!entry!.snapshot&&(state.denied||entry!.error||now()-entry!.published>=TTL);
-    if(!state.denied&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
+    if(!state.denied&&shared?.canAcquire!==false&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
     if(entry.pending)await entry.pending;
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
-    const issue=diagnostic(entry);
-    if(!entry.snapshot)return reply(503,{state:'unavailable',error_code:issue?.code??'not_yet_acquired',message:failureMessage(issue?.code)},undefined,issue);
+    shared=await readShared(scope);hydrate(entry,shared);
+    const issue=sharedDiagnostic(shared,entry);
+    if(state.denied||!entry.snapshot)return reply(503,{state:'unavailable',error_code:issue?.code??'not_yet_acquired',message:failureMessage(issue?.code)},undefined,issue);
     const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:scope.kind==='industry_rank'?'index_points':'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale()||!!issue,has_error:!!issue};
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload)));
     const etag='"'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')+'"';
+    // The ETag digest yields. Recheck shared permission as the final async step
+    // so a denial observed while hashing cannot return warm evidence or a 304.
+    if(options.snapshotStore&&sourceGate?.inspect){
+      let code:SourceGateCode|null,timer:ReturnType<typeof setTimeout>|undefined;
+      try{code=await Promise.race([sourceGate.inspect(),new Promise<SourceGateCode>(resolve=>{
+        timer=setTimeout(()=>resolve('source_gate_unavailable'),2000);
+      })]);}catch{code='source_gate_unavailable';}finally{if(timer!==undefined)clearTimeout(timer);}
+      if(code&&code!=='source_cooldown'){
+        const stopped=code==='source_denied'||code==='source_outcome_unconfirmed';
+        if(stopped){state.denied=true;state.errorCode=code;state.backoffUntil=Infinity;}
+        return reply(503,{state:'unavailable',error_code:code,message:failureMessage(code)},undefined,{code,stopped,retrySeconds:60});
+      }
+    }
+    if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
+    if(state.denied){const stopped=diagnostic(entry)!;return reply(503,{state:'unavailable',error_code:stopped.code,message:failureMessage(stopped.code)},undefined,stopped);}
     if(request.headers.get('if-none-match')===etag)return reply(304,undefined,etag,issue);
     return reply(200,payload,etag,issue);
   };

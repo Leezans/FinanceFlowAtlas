@@ -24,7 +24,7 @@ validation, and duplicate-key JSON rejection remain in force.
 No new source host, proxy, account, retry route, or access method is introduced.
 HTTP denials, challenges, and off-policy redirects still stop source acquisition
 persistently. No denial gate is cleared by this change. Source payloads remain
-ephemeral; the database stores only acquisition metadata.
+shared privately through the bounded primary-D1 cache described below; the source gate still stores acquisition metadata only.
 
 ## Diagnostics and verification
 
@@ -191,3 +191,40 @@ The status endpoint also reads the shared gate without acquiring a lease or
 contacting the provider. This fixes the cold-isolate `has_error=false` response
 that previously hid a persistent busy/denied state. Status inspection has a
 two-second bound, reports storage failure truthfully, and never changes the gate.
+
+
+## Durable validated A-share snapshots (migration 0012)
+
+`snapshot.ts` owns the shared scope, row, complete-snapshot and byte validation.
+`snapshot-store.ts` owns primary-D1 reading and atomic publication; the existing
+source gate remains the sole admission authority. The handler owns request
+lifetime, source transport and responses. There is no second scheduler or gate.
+
+- One complete last-good version per scope. Industry ranking is retained ahead
+  of stock scopes; at most 32 scopes, 2 MB per snapshot, 64 MB payload total.
+- Fresh for 60 seconds. After a temporary failure, a cold worker may return
+  validated stale evidence for at most 24 hours from acquisition/commit,
+  whichever is older. Reads never renew timestamps or the expiry deadline.
+  Expired records are not served and are physically pruned on the next success.
+- Success transaction: owner-guarded snapshot upsert, expired-row deletion,
+  bounded scope pruning, then the existing 3-second quiet interval and lease
+  release. D1 rolls back the entire batch on failure. All statements require the
+  same current lease token; a stale token changes nothing.
+- A single joined read verifies gate state and snapshot. Busy, uncertain,
+  denied, malformed, missing-schema and unreadable state cannot expose rows.
+  A final metadata check after ETag calculation also suppresses evidence if a
+  denial/active operation was recorded while hashing. These checks never acquire,
+  reset, expire, release or bypass an operation.
+- Queued requests reread the shared cache before admission and after the one
+  bounded cooldown wait, avoiding a duplicate fetch when another isolate has
+  already committed fresh evidence.
+- `fetched_at` remains the actual acquisition timestamp. `source_observed_at`
+  and `trade_date` remain null. Commit time governs storage retention, not market
+  freshness or a claim about when the provider observed a trade.
+- Migration 0012 only adds the cache table. It does not seed observations, mutate
+  any gate, apply the legacy reconciliation again, or grant display permission.
+
+The native suites use synthetic interceptors with external networking disabled.
+They prove runtime behavior, not current provider availability. Deployment still
+requires authorized migration/release and a real permitted source acquisition;
+an empty cache cannot manufacture the first real snapshot.
