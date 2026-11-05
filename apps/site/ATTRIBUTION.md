@@ -20,3 +20,11 @@ documented in [the source contract](../../docs/source-ecb-fx.md) and linked in t
 ECB data and branding are not covered by the repository software licence.
 The namespace-aware XML parser uses saxes 6.0.0 (ISC) and its xmlchars dependency
 (MIT), with their package notices retained in installed dependencies.
+
+## Cboe Europe delayed trade-price supplement
+
+Cboe Europe delayed data are attributed to Cboe and remain subject to Cboe's
+market-data policy and source terms. This owner-private view uses internal,
+delayed trade prices only. Source data, instrument-reference files and source
+samples are not bundled or licensed by this repository. See the [source and
+private-use contract](docs/source-cboe-delayed.md) for official links and limits.

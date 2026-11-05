@@ -127,6 +127,13 @@
       "when": 1793899515138,
       "tag": "0017_kraken_shared_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793899800000,
+      "tag": "0018_cboe_delayed_quotes",
+      "breakpoints": true
     }
   ]
 }

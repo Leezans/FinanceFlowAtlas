@@ -42,6 +42,7 @@ export default function Markets() {
       <p>{markets.length} 个地理索引，{Object.keys(marketRoutes).length} 个已有独立来源入口。入口存在不代表当前数据可用；实际覆盖、时点与访问状态见下方。</p>
     </section>
     <div id="global-evidence" className={s.globalEvidence}>{selected?<CountryWorkspace key={selected.iso3} market={selected}/>:<p className={s.loading} role="status">正在选择本地市场…</p>}</div>
+    <p className={s.sourceScope}><a href="/europe">欧洲延迟成交价矩阵</a><span>Cboe BXE 股票及 ETF 的部分分钟窗口，至少延迟 15 分钟；单独查看价格，不填入各国净资金流。</span></p>
     <details className={s.geographyDisclosure} open={geographyOpen} onToggle={event => setGeographyOpen(event.currentTarget.open)}>
       <summary>地理导航与市场入口 <span>{markets.length} 个国家 / 地区索引，不代表数据覆盖</span></summary>
       {geographyOpen && <Suspense fallback={<p role="status">正在打开国家与地区导航…</p>}><GeographicNavigator/></Suspense>}

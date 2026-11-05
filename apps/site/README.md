@@ -436,3 +436,20 @@ Ticker observation time and latency remain unknown. Returned trade execution
 times are shown independently for the selected one/five-minute fixed window;
 they are not timestamps of the ticker rate and are not a guarantee of the latest
 venue trade. See [source and validation boundary](../../docs/source-kraken-fx.md).
+
+## European delayed trade-price supplement
+
+`/europe` adds a separate Cboe BXE delayed price matrix, using the shared matrix
+component and equal-width neutral cards. It is a bounded view of eligible
+BATE/BATD/BATP equities/ETF trades in the latest five published minute files,
+not national capital flows or complete European market coverage. Data are at
+least 15 minutes delayed; a visible tab checks for updates each minute within
+shared cooldown/backoff. Exact currencies, ISINs and original source/acquisition
+times are kept separate. No issuer-country, industry, daily return or net inflow
+is inferred, and an empty after-close window remains empty.
+
+The source is free and anonymous for this private internal use. Migration
+`0018_cboe_delayed_quotes.sql` adds an independent durable gate and shared cache;
+existing source stops are not reset. Deployment must remain owner-only. See the
+[source, usage and validation contract](docs/source-cboe-delayed.md) and
+`npm run test:cboe-runtime`. No provider observations are bundled in source.
