@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import React from 'react';
-import {afterEach,describe,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import Forex from '../components/forex/Forex';
-import {fxPayload} from './fx-fixture';
+import {CACHE_TTL_MS} from '../lib/fx/model';
+import {fxPayload,FX_NOW} from './fx-fixture';
 const ready=()=>({...fxPayload(),next_check_at:'2000-01-01T00:00:00.000Z'});
 const reply=(payload=ready(),status=200)=>new Response(JSON.stringify(payload),{status});
-afterEach(()=>{cleanup();vi.unstubAllGlobals()});
+beforeEach(()=>{vi.spyOn(Date,'now').mockReturnValue(FX_NOW)});
+afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks()});
 describe('daily FX reference UI',()=>{
  it('shows dated actual coverage, not flow/live claims, and supports conversion/search/swap',async()=>{
   vi.stubGlobal('fetch',vi.fn(async()=>reply()));render(<Forex/>);
@@ -32,6 +34,16 @@ describe('daily FX reference UI',()=>{
  it('clears invalid successful data rather than presenting unchecked quotes',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(reply()).mockResolvedValueOnce(new Response('{"snapshot":{"rates":[]}}')));render(<Forex/>);await screen.findByText('3 种报价币');
   fireEvent.click(screen.getByRole('button',{name:'检查 ECB 来源'}));await screen.findByText('响应校验失败，已清空数据。');expect(screen.queryByRole('table')).toBeNull();
+ });
+ it('clears conversion and rates when the shared cache has expired',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(reply()).mockResolvedValueOnce(reply({...ready(),snapshot:null,source_state:'unavailable',error_code:'cache_expired'},503)));
+  render(<Forex/>);await screen.findByText('3 种报价币');fireEvent.click(screen.getByRole('button',{name:'检查 ECB 来源'}));
+  await screen.findByText(/已验证参考数据超过七天/);expect(screen.queryByRole('table')).toBeNull();expect(screen.queryByLabelText('换算数量')).toBeNull();
+ });
+ it('hides expired browser-held values on focus even while disconnected',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(reply()).mockRejectedValue(new Error('offline')));
+  render(<Forex/>);await screen.findByText('3 种报价币');vi.spyOn(Date,'now').mockReturnValue(FX_NOW+CACHE_TTL_MS);
+  fireEvent.focus(window);await screen.findByText(/已验证参考数据超过七天/);expect(screen.queryByRole('table')).toBeNull();expect(screen.queryByLabelText('换算数量')).toBeNull();
  });
  it('uses safe allowlisted errors and no fabricated snapshot on initial failure',async()=>{
   vi.stubGlobal('fetch',vi.fn(async()=>reply({...ready(),snapshot:null,source_state:'unavailable',error_code:'network_error'},503)));render(<Forex/>);

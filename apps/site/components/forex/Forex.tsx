@@ -1,10 +1,10 @@
 'use client';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {CHECK_INTERVAL_MS,ECB_INFO,ECB_RIGHTS,ECB_URL,crossRate,fxPayloadSchema,referenceAgeDays,type FxPayload} from '@/lib/fx/model';
+import {CACHE_TTL_MS,CHECK_INTERVAL_MS,ECB_INFO,ECB_RIGHTS,ECB_URL,crossRate,fxPayloadSchema,referenceAgeDays,type FxPayload} from '@/lib/fx/model';
 import s from './forex.module.css';
 
 const names:Record<string,string>={EUR:'欧元',USD:'美元',CNY:'人民币',JPY:'日元',GBP:'英镑',HKD:'港元',CHF:'瑞士法郎',AUD:'澳元',CAD:'加拿大元',SGD:'新加坡元',KRW:'韩元',INR:'印度卢比',NZD:'新西兰元',BRL:'巴西雷亚尔',MXN:'墨西哥比索',ZAR:'南非兰特',SEK:'瑞典克朗',NOK:'挪威克朗',DKK:'丹麦克朗',CZK:'捷克克朗',PLN:'波兰兹罗提',HUF:'匈牙利福林',RON:'罗马尼亚列伊',ISK:'冰岛克朗',TRY:'土耳其里拉',IDR:'印尼卢比',ILS:'以色列新谢克尔',MYR:'马来西亚林吉特',PHP:'菲律宾比索',THB:'泰铢'};
-const errors:Record<string,string>={network_error:'来源连接失败。',source_unavailable:'ECB 来源暂时不可用。',invalid_source:'来源内容未通过完整性校验。',source_older:'来源返回了比已有记录更早的日期，未覆盖已有记录。',source_stopped:'来源拒绝、限流、重定向或返回非 XML 页面，共享检查已停止，重启不会解除限制。',source_busy:'共享来源检查正在进行或等待人工核验。',source_cooldown:'共享来源检查仍在冷却期。',source_gate_unavailable:'无法确认共享检查状态，已清空数据并安全停止。'};
+const errors:Record<string,string>={cache_expired:'已验证参考数据超过七天保留期，已停止展示；等待下一次允许的来源检查。',network_error:'来源连接失败。',source_unavailable:'ECB 来源暂时不可用。',invalid_source:'来源内容未通过完整性校验。',source_older:'来源返回了比已有记录更早的日期，未覆盖已有记录。',source_stopped:'来源拒绝、限流、重定向或返回非 XML 页面，共享检查已停止，重启不会解除限制。',source_busy:'共享来源检查正在进行或等待人工核验。',source_cooldown:'共享来源检查仍在冷却期。',source_gate_unavailable:'无法确认共享检查状态，已清空数据并安全停止。'};
 function time(value:string|null){return value?new Date(value).toISOString().replace('T',' ').replace(/\.\d+Z$/,' UTC'):'尚未检查'}
 function number(value:number){return new Intl.NumberFormat('zh-CN',{maximumSignificantDigits:8}).format(value)}
 
@@ -38,7 +38,15 @@ export default function Forex(){
   alive.current=true;const start=setTimeout(()=>void load(),0),timer=setInterval(()=>void load(),CHECK_INTERVAL_MS),clockTimer=setInterval(()=>setClock(Date.now()),60_000);
   return()=>{alive.current=false;clearTimeout(start);clearInterval(timer);clearInterval(clockTimer);abort.current?.abort();abort.current=null;busy.current=false};
  },[load]);
- const snapshot=payload?.snapshot??null;
+ useEffect(()=>{
+  const refreshClock=()=>setClock(Date.now());
+  const expires=payload?.snapshot?Date.parse(payload.snapshot.retrieved_at)+CACHE_TTL_MS:null;
+  const expiryTimer=expires!==null&&expires>Date.now()?setTimeout(refreshClock,expires-Date.now()+1):null;
+  window.addEventListener('focus',refreshClock);window.addEventListener('pageshow',refreshClock);document.addEventListener('visibilitychange',refreshClock);
+  return()=>{if(expiryTimer!==null)clearTimeout(expiryTimer);window.removeEventListener('focus',refreshClock);window.removeEventListener('pageshow',refreshClock);document.removeEventListener('visibilitychange',refreshClock)};
+ },[payload]);
+ const cacheExpired=!!payload?.snapshot&&clock>=Date.parse(payload.snapshot.retrieved_at)+CACHE_TTL_MS;
+ const snapshot=cacheExpired?null:payload?.snapshot??null;
  const currencies=snapshot?['EUR',...snapshot.rates.map(r=>r.currency)]:[];
  const selectedFrom=currencies.includes(from)?from:'EUR',selectedTo=currencies.includes(to)?to:currencies.find(c=>c!=='EUR')??'EUR';
  const rate=snapshot?crossRate(snapshot,selectedFrom,selectedTo):null;
@@ -57,6 +65,7 @@ export default function Forex(){
   <section className={s.facts} aria-label="数据日期与覆盖"><div><span>来源参考日期</span><strong>{snapshot?.reference_date??'暂无数据'}</strong><small>{age!==null?`距参考日期 ${age} 个日历日；不是延迟测量`:'不以抓取时间代替参考日期'}</small></div><div><span>本次实际覆盖</span><strong>{snapshot?`${snapshot.rates.length} 种报价币`:'尚未核验'}</strong><small>另含 EUR 基准；非所有国家或货币</small></div><div><span>来源检查状态</span><strong>{loading?'正在检查…':blocked?'检查已停止':!snapshot?'尚无可用值':stale?'保留旧参考值':'最近检查成功'}</strong><small>最近检查：{time(payload?.checked_at??null)}</small></div></section>
   <section className={s.status} aria-live="polite"><div>
    {browserError&&<p role="alert">{browserError}</p>}
+   {cacheExpired&&<p role="alert">{errors.cache_expired}</p>}
    {payload?.error_code&&<p role="alert">{errors[payload.error_code]}{snapshot?' 当前保留上次校验通过的参考值。':' 不展示替代或模拟数据。'}</p>}
    {age!==null&&age>7&&<p role="alert">参考日期已超过 7 个日历日，请谨慎使用。这是保守提醒，不是已核验的节假日发布日历。</p>}
    {overdue&&<p>最近来源检查距今超过 1 小时，请查看日期后使用。</p>}
@@ -73,6 +82,6 @@ export default function Forex(){
     <div className={s.tableScroll}><table><caption>欧洲央行 {snapshot.reference_date} 参考汇率 · 显示 {rows.length} / {snapshot.rates.length} 种报价币</caption><thead><tr><th scope="col">货币</th><th scope="col">名称</th><th scope="col">报价币 / EUR</th></tr></thead><tbody>{rows.map(r=><tr key={r.currency}><th scope="row">{r.currency}</th><td>{names[r.currency]??'来源新增币种'}</td><td>{r.per_eur}</td></tr>)}</tbody></table>{rows.length===0&&<p className={s.empty}>没有匹配的已覆盖货币；缺失不表示零。</p>}</div>
    </section>
   </div>:<section className={s.empty}>{loading?'正在读取 ECB 的公开每日 XML…':'尚无通过校验的参考汇率。检查成功后显示真实来源数据，不使用样例填补。'}</section>}
-  <footer className={s.footer}><p>来源：European Central Bank（欧洲央行）。<a href={ECB_INFO} target="_blank" rel="noreferrer">官方说明 ↗</a> · <a href={ECB_URL} target="_blank" rel="noreferrer">免费原始 XML ↗</a> · <a href={ECB_RIGHTS} target="_blank" rel="noreferrer">使用条件与免责声明 ↗</a></p><p>获取时间：{time(snapshot?.retrieved_at??null)}。这是本服务完整获取并校验的时间，不是发布时刻；XML 仅提供参考日期。</p><details><summary>来源、换算与使用边界</summary><p>个人研究视图，保留现有站点访问控制。仅展示当次来源列出的货币；EUR = 1 是基准恒等关系，不额外计入报价覆盖。未提供的货币不补零，也不接入其他来源拼接。</p><p>ECB 允许按其条件免费使用网站信息，要求准确呈现并注明来源，修改或换算须明确标注；付费分发还有免费来源告知要求。此处交叉汇率是本应用的计算结果，表格保持来源数字精度。软件开源许可不替代 ECB 数据条款，也不代表 ECB 背书。未改变访问权限或对外发布范围。</p><p>参考汇率仅缓存在服务进程和当前页面内存中。D1 只保存共享检查锁、冷却时间与停止状态，不保存报价或账户信息。拒绝状态跨进程重启保留；未完成或不确定的检查不会自动接管，须人工核验。新进程在共享冷却期可能暂时无值。未核验独立部署环境中的来源可达性。</p></details></footer>
+  <footer className={s.footer}><p>来源：European Central Bank（欧洲央行）。<a href={ECB_INFO} target="_blank" rel="noreferrer">官方说明 ↗</a> · <a href={ECB_URL} target="_blank" rel="noreferrer">免费原始 XML ↗</a> · <a href={ECB_RIGHTS} target="_blank" rel="noreferrer">使用条件与免责声明 ↗</a></p><p>获取时间：{time(snapshot?.retrieved_at??null)}。这是本服务完整获取并校验的时间，不是发布时刻；XML 仅提供参考日期。</p><details><summary>来源、换算与使用边界</summary><p>个人研究视图，保留现有站点访问控制。仅展示当次来源列出的货币；EUR = 1 是基准恒等关系，不额外计入报价覆盖。未提供的货币不补零，也不接入其他来源拼接。</p><p>ECB 允许按其条件免费使用网站信息，要求准确呈现并注明来源，修改或换算须明确标注；付费分发还有免费来源告知要求。此处交叉汇率是本应用的计算结果，表格保持来源数字精度。软件开源许可不替代 ECB 数据条款，也不代表 ECB 背书。未改变访问权限或对外发布范围。</p><p>已验证的公开 ECB 参考汇率与共享检查状态保存在 D1，供不同服务进程一致读取；不保存账户或凭证。获取超过七天的值停止展示，失败检查不会延长保留期。拒绝状态跨进程重启保留；缓存到期不解除限制，未完成或不确定的检查不会自动接管，须人工核验。未核验独立部署环境中的来源可达性。</p></details></footer>
  </main>;
 }

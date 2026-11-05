@@ -38,7 +38,7 @@ preserved for the source table. A same-day revision is accepted; a date regressi
 cannot overwrite a newer validated snapshot.
 
 HTTP redirects, already-redirected responses, 401/403/407/429/451 and HTML/XHTML
-responses clear the in-memory snapshot and persist a shared acquisition stop in D1. There are no alternate
+responses clear the shared snapshot and persist an acquisition stop in D1. There are no alternate
 hosts, authenticated routes, bypasses, retry overrides or reset controls. The latch survives process restarts and new isolates. Deployment operators must
 investigate a source stop; there is no application reset or lease takeover. The page also clears data and stops
 checks if its own access returns 401/403. This change does not alter site access
@@ -51,17 +51,43 @@ control, publish an existing private deployment, or establish new account access
   snapshot, with its original acquisition time and an explicit stale state.
 - Failure imposes a 15-minute source cooldown. No first snapshot means HTTP 503,
   not zero values or sample data. Stopped acquisition clears data.
-- Rate snapshots are memory-only, per process/isolate. Migration 0004 adds a
-  dedicated metadata-only ECB gate using the existing primary D1 binding. It
-  stores only status, an internal coordination token, and timestamps, never rates,
-  account information or credentials. Applied migrations 0000–0003 are unchanged.
+- Migration 0004 added the independent ECB acquisition gate. Migration 0006
+  extends that same primary D1 row with validated public reference rates and
+  check/error metadata. No raw XML, account information or credentials are stored.
+  Applied migrations are unchanged; existing busy/blocked states and cooldowns
+  are preserved. The cache is independent of A-share, Sina, Kraken and CFTC gates.
+- One lease-token-guarded SQL update atomically publishes the snapshot, check
+  result and cooldown. A source denial atomically clears the cache and blocks
+  acquisition. A stale owner or older reference date cannot overwrite newer data.
+- Every cold worker can read the same strictly validated snapshot and exact source
+  decimals during the shared one-hour cooldown. Transient failure metadata is
+  shared too, preserving acquisition time and displaying an explicit stale state.
+- Cached observations expire seven days after acquisition. Failed checks never
+  extend that deadline. Expired values are not returned or converted; expiry
+  does not reset the source gate, shorten cooldown, or grant acquisition permission.
+  The page applies the same bound to browser-held values, including after a
+  background tab resumes or a connection failure. This is a display-validity bound,
+  not a claim that old reference dates are current.
+- Cache reads reject malformed/oversized JSON, duplicate keys, wrong schema,
+  invalid rates, inconsistent expiry and implausibly future retrieval timestamps.
+  Only the validated public payload may be returned; no raw database error leaks.
 - Atomic acquisition serializes all isolates. Success enforces a shared one-hour
   cooldown; temporary failures enforce fifteen minutes. Busy leases never expire
   or admit takeover. A crash or uncertain DB write fails closed and requires
   operator investigation. Denial and lease release are one atomic transition.
 - Every cache read first inspects the shared gate. A blocked, busy or unavailable
-  gate clears local values; no DB confirmation means no provider request. A cold
-  isolate during cooldown may return no values because rates are not persisted.
+  gate suppresses cached values; no DB confirmation means no provider request.
+  Migration cannot recover pre-upgrade isolate-local values. If the previous
+  cooldown is still active with an empty cache, values remain unavailable until
+  the next already-permitted successful check, without overriding that cooldown.
+- The production host retains each started check with Workers `waitUntil` before
+  any lease or source request, including database writes still settling after an
+  HTTP response timeout. A delayed acquisition that subsequently confirms its own
+  token releases only that aborted token with a failure cooldown, without fetching.
+  An unknown or rejected commit is never retried. A client disconnect does not abandon its bounded
+  fetch and atomic publication. Failure to register retention fails closed before
+  acquisition. This does not schedule polling or guarantee recovery from a worker
+  crash or unknown database commit; those states still require investigation.
 - The API uses `Cache-Control: private, no-store`. The UI polls hourly and does not
   bypass source cooldown via its manual check button. Browser connection failures
   are marked separately; invalid successful payloads clear the display.
@@ -101,9 +127,13 @@ npm run test:fx-runtime
 
 Tests use synthetic rates only. Native-workerd checks disable real networking and
 exercise the actual route with plain/gzip/Brotli synthetic XML, malformed source,
-access denial, cross-isolate stops/cooldowns, DB failures and cached responses. UI tests cover filtering, cross-rate direction,
+access denial, cold-isolate cache sharing, stops/cooldowns, acquisition expiry, DB
+failures, publication after the original response ends, and atomic publication
+after a lost commit acknowledgement. SQLite tests also cover genuinely delayed
+commits after the two-second operation deadline and migration over existing
+busy/blocked/cooldown rows. UI tests cover filtering, cross-rate direction,
 swap, invalid amounts, stale preservation/recovery, schema rejection, access
-clearing, interrupted navigation and repeated clicks. Source availability remains
+clearing, cache expiry while disconnected, interrupted navigation and repeated clicks. Source availability remains
 a separate live check, not something inferred from passing mock tests.
 
 The implementation was also checked against the actual downloaded XML above:

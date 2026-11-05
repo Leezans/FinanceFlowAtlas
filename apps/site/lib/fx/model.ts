@@ -5,6 +5,8 @@ export const ECB_INFO='https://www.ecb.europa.eu/stats/policy_and_exchange_rates
 export const ECB_RIGHTS='https://www.ecb.europa.eu/services/disclaimer/html/index.en.html';
 export const CHECK_INTERVAL_MS=60*60_000;
 export const RETRY_INTERVAL_MS=15*60_000;
+// A failed refresh never renews this acquisition-age bound.
+export const CACHE_TTL_MS=7*24*60*60_000;
 export const MAX_SOURCE_BYTES=128*1024;
 export const dateOnly=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
 const timestamp=z.string().datetime({offset:true});
@@ -18,7 +20,7 @@ export const fxSnapshotSchema=z.object({
  if(Number.isFinite(Date.parse(v.retrieved_at))&&v.reference_date>berlinDate(Date.parse(v.retrieved_at)))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Future reference date'});
 });
 export type FxSnapshot=z.infer<typeof fxSnapshotSchema>;
-export const fxErrorCode=z.enum(['network_error','source_unavailable','invalid_source','source_older','source_stopped','source_busy','source_cooldown','source_gate_unavailable']);
+export const fxErrorCode=z.enum(['network_error','source_unavailable','invalid_source','source_older','source_stopped','source_busy','source_cooldown','source_gate_unavailable','cache_expired']);
 export type FxErrorCode=z.infer<typeof fxErrorCode>;
 export const fxPayloadSchema=z.object({snapshot:fxSnapshotSchema.nullable(),source_state:z.enum(['available','stale','unavailable','stopped']),checked_at:timestamp.nullable(),next_check_at:timestamp.nullable(),error_code:fxErrorCode.nullable()}).strict().superRefine((v,ctx)=>{
  if((v.source_state==='available'||v.source_state==='stale')&&!v.snapshot||v.source_state==='available'&&v.error_code!==null||v.source_state==='stopped'&&(v.next_check_at!==null||v.snapshot!==null))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Inconsistent source status'});
