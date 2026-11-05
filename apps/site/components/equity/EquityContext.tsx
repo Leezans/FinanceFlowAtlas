@@ -48,7 +48,7 @@ export default function EquityContext() {
     <section className={s.focus} aria-label="所选国家年度股市">
       <div className={s.focusHeader}><div><p className={s.eyebrow}>{selected} / ANNUAL EQUITY CONTEXT</p><h2>{equityCountryName(selected)}</h2></div><a href={`/markets?country=${selected}`}>返回国家证据 →</a></div>
       <MatrixHeatmap groups={countryGroups} title="所选国家年度指标矩阵" layout="readable-grid" stretchSmallGroups colorMode="neutral"
-        areaMeaning="指标等面积；市值是存量，成交额是全年累计"
+        areaMeaning="无可比较金额：指标等面积；市值是存量，成交额是全年累计"
         colorMeaning="中性色；不同指标、不同年份不共用大小或涨跌色标"
         emptyTitle="国家年度指标待核验" emptyMessage="当前没有可展示的来源快照。缺失不是零。" emptyNote="不将年度市场规模解释为资金净流入。"/>
       <p className={s.scope}>总市值覆盖上市本国公司，排除投资基金等。成交额含本国与外国股票，单边计数。两项范围不同，不相减推算流量。</p>

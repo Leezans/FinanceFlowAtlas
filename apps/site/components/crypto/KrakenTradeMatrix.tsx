@@ -9,7 +9,7 @@ import s from './crypto.module.css';
 type Props={snapshot:KrakenTradeSnapshot|null;selected?:readonly string[]};
 export default function KrakenTradeMatrix({snapshot,selected=TRADE_PAIRS}:Props){
  return <section className={s.tradeSection} aria-label="来源买卖标记成交额差矩阵工作区">
-  <MatrixHeatmap layout="readable-grid" stretchSmallGroups groups={tradeMatrixGroups(snapshot)} title="5 分钟来源买卖标记成交额差 · USD" description={`仅 Kraken 的 ${selected.join("、")}；按 REST b/s 买卖标记统计已执行 USD 成交额之差（b − s）。`} areaMeaning="交易对等面积，不代表市值或资金规模" colorMeaning="（买标记成交额 − 卖标记成交额）÷ 两者之和；固定 −100% 至 +100%，红=买标记成交额更多，绿=卖标记成交额更多；缺失或覆盖不完整不着色" colorMode="signed" colorMaxAbs={100} emptyTitle="逐笔成交证据暂不可用" emptyMessage="仅展示通过校验且未过期的成交快照；缺失、过期或覆盖不完整不填成零。" emptyNote="这是指定历史区间的返回成交，不保证覆盖完整市场或当前时刻。"/>
+  <MatrixHeatmap layout="treemap" stretchSmallGroups groups={tradeMatrixGroups(snapshot)} title="5 分钟来源买卖标记成交额差 · USD" description={`仅 Kraken 的 ${selected.join("、")}；按 REST b/s 买卖标记统计已执行 USD 成交额之差（b − s）。`} areaMeaning="面积按同一 5 分钟区间买卖标记成交额差的绝对值（USD）；覆盖不完整不参与面积" colorMeaning="（买标记成交额 − 卖标记成交额）÷ 两者之和；固定 −100% 至 +100%，红=买标记成交额更多，绿=卖标记成交额更多；缺失或覆盖不完整不着色" colorMode="signed" colorMaxAbs={100} emptyTitle="逐笔成交证据暂不可用" emptyMessage="仅展示通过校验且未过期的成交快照；缺失、过期或覆盖不完整不填成零。" emptyNote="这是指定历史区间的返回成交，不保证覆盖完整市场或当前时刻。"/>
   <p className={s.matrixNote}>每笔成交始终同时存在买方和卖方。REST b/s 的成交发起方约定未在本页所引 REST 文档中明确，不把它称为主动买卖资金流。这个差额不是全球资金净流入、交易所充值提现或跨境资金流；不跨币种合计，也不把重叠快照累加。</p>
   {snapshot&&<>
    <p className={s.matrixNote}>共同统计区间（5 分钟）：{tradeTimestamp(snapshot.window_started_at)}（含）至 {tradeTimestamp(snapshot.window_ended_at)}（不含）。快照获取：{tradeTimestamp(snapshot.fetched_at)}。这是固定区间证据，不随页面时钟滚动；上方陈旧状态同样适用于本矩阵。</p>

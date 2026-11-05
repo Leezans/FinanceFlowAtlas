@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,within} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import EvidenceHeatmap from '../components/ashare/EvidenceHeatmap';
-import {flowScaleMaximum,flowStrength,fitTileFont} from '../components/ashare/heatmap';
+import {evidenceMatrixGroup} from '../components/ashare/matrix';
+import {flowScaleMaximum} from '../components/ashare/heatmap';
 import {validateEvidence,type EvidenceRow,type EvidenceSnapshot} from '../components/ashare/model';
 import type {EvidenceState} from '../components/ashare/client';
 
@@ -21,85 +22,109 @@ function state(sourceRows:EvidenceRow[]=rows,stock=false):EvidenceState {
 const preview=()=>screen.getByRole('region',{name:'区块数值预览'});
 afterEach(cleanup);
 
+describe('A-share monetary projection',()=>{
+ it('retains signed CNY source amounts, missing and zero without using price returns for area',()=>{
+  const snapshot=state().snapshot!;
+  const group=evidenceMatrixGroup(snapshot,rows);
+  expect(group.items.map(item=>item.amount?.value)).toEqual([100,-100,60,-60,20,-20,0,null]);
+  expect(group.items.every(item=>item.amount?.currency==='CNY')).toBe(true);
+  expect(new Set(group.items.map(item=>item.amount?.comparisonKey)).size).toBe(1);
+  expect(group.items[0].colorValue).toBe(100);
+  expect(group.items[0].detail).toContain('涨跌幅 -2%');
+  expect(group.items[0].detail).toContain('当前面积占比 27.78%');
+  expect(evidenceMatrixGroup(state(rows,true).snapshot!,rows).items[0].amount?.comparisonKey).not.toBe(group.items[0].amount?.comparisonKey);
+ });
+});
+
 describe('scope-anchored visual scale',()=>{
- it('uses only reported values and symmetric equal-width bands',()=>{
+ it('anchors the scale to reported source values',()=>{
   expect(flowScaleMaximum(rows)).toBe(100);
   expect(flowScaleMaximum(rows.slice(6))).toBe(0);
-  expect(flowStrength(null,100)).toBe(0);expect(flowStrength(0,100)).toBe(0);
-  expect(flowStrength(Infinity,100)).toBe(0);expect(flowStrength(1,0)).toBe(0);
-  for(const sign of [-1,1]){
-   expect(flowStrength(sign*33,100)).toBe(1);expect(flowStrength(sign*60,100)).toBe(2);expect(flowStrength(sign*100,100)).toBe(3);
-   expect(flowStrength(sign/3,1)).toBe(1);expect(flowStrength(sign*2/3,1)).toBe(2);
-  }
  });
  it('keeps shades and legend stable through filtering and palette changes',()=>{
   const {container}=render(<EvidenceHeatmap state={state()}/>);
-  const tile=()=>container.querySelector('.tile[data-code="BK0005"]')!;
-  expect(tile().getAttribute('data-flow-strength')).toBe('1');
+  const tile=()=>container.querySelector('g[data-id="BK0005"]')!;
+  expect(tile().getAttribute('data-color')).toBe('positive-1');
   expect(screen.getByLabelText('主力净额颜色刻度').textContent).toContain('+100 元');
   fireEvent.change(screen.getByLabelText('搜索代码或名称'),{target:{value:'BK0005'}});
-  expect(tile().getAttribute('data-flow-strength')).toBe('1');
+  expect(tile().getAttribute('data-color')).toBe('positive-1');
   expect(screen.getByLabelText('主力净额颜色刻度').textContent).toContain('+100 元');
   fireEvent.change(screen.getByLabelText('正负配色'),{target:{value:'global'}});
-  expect(tile().getAttribute('data-flow-strength')).toBe('1');expect(container.querySelector('.palette-global')).not.toBeNull();
+  expect(tile().getAttribute('data-color')).toBe('positive-1');expect(container.querySelector('.palette-global')).not.toBeNull();
  });
  it('does not create tiles or a monetary color scale from only zero/missing data',()=>{
   const {container}=render(<EvidenceHeatmap state={state(rows.slice(6))}/>);
-  expect(container.querySelectorAll('.tile')).toHaveLength(0);expect(screen.queryByLabelText('主力净额颜色刻度')).toBeNull();
+  expect(container.querySelectorAll('g[data-id]')).toHaveLength(0);expect(screen.queryByLabelText('主力净额颜色刻度')).toBeNull();
  });
- it('fits Unicode labels conservatively rather than forcing oversized minimum text',()=>{
-  expect(fitTileFont('合成行业',100,27)).toBe(22);
-  expect(fitTileFont('000001',100,27)).toBeCloseTo(22.5641);
-  expect(fitTileFont('名称过长时不溢出区块边缘',42,27)).toBeLessThan(9);
+
+});
+
+describe('shared matrix zoom integration',()=>{
+ it('zooms with the wheel only when enabled, retains same-scope view and resets on industry change',()=>{
+  const view=render(<EvidenceHeatmap state={state()}/>);
+  const canvas=()=>screen.getByRole('group',{name:'当前筛选范围的主力净额矩形热力图可缩放画布'});
+  expect(canvas().getAttribute('data-zoom')).toBe('1');
+  fireEvent.wheel(canvas(),{deltaY:-200,clientX:100,clientY:100});
+  expect(canvas().getAttribute('data-zoom')).toBe('1');
+  fireEvent.click(screen.getByRole('button',{name:'开启滚轮缩放'}));
+  fireEvent.wheel(canvas(),{deltaY:-200,clientX:100,clientY:100});
+  const zoom=canvas().getAttribute('data-zoom');
+  expect(Number(zoom)).toBeGreaterThan(1);
+  view.rerender(<EvidenceHeatmap state={state(rows.map(row=>({...row,f62:row.f62===null?null:Number(row.f62)*2})))}/>);
+  expect(canvas().getAttribute('data-zoom')).toBe(zoom);
+  fireEvent.change(screen.getByLabelText('正负配色'),{target:{value:'global'}});
+  expect(canvas().getAttribute('data-zoom')).toBe(zoom);
+  view.rerender(<EvidenceHeatmap state={state(rows,true)}/>);
+  expect(canvas().getAttribute('data-zoom')).toBe('1');
  });
 });
 
 describe('heatmap value inspection',()=>{
  it('previews exact signed values, reported returns and current area shares without clicking',()=>{
   const {container}=render(<EvidenceHeatmap state={state()}/>);
-  const buy=container.querySelector('.tile[data-code="BK0001"]')!;
+  const buy=container.querySelector('g[data-id="BK0001"]')!;
   fireEvent.mouseEnter(buy);
-  expect(within(preview()).getByText('+100')).toBeTruthy();expect(within(preview()).getByText('-2%')).toBeTruthy();expect(within(preview()).getByText('27.78%')).toBeTruthy();
+  expect(preview().textContent).toContain('主力净额 +100 元');expect(preview().textContent).toContain('涨跌幅 -2%');expect(preview().textContent).toContain('当前面积占比 27.78%');
   expect(buy.getAttribute('aria-label')).toContain('主力净额 +100 元');
   fireEvent.mouseLeave(buy);expect(preview().textContent).toContain('指向区块');
  });
  it('allows keyboard inspection in a read-only embedding and does not invent absent returns',()=>{
   const {container}=render(<EvidenceHeatmap state={state()}/>);
-  const tile=container.querySelector('.tile[data-code="BK0005"]')!;
+  const tile=container.querySelector('g[data-id="BK0005"]')!;
   expect(tile.getAttribute('tabindex')).toBe('0');expect(tile.getAttribute('role')).toBe('img');
-  fireEvent.focus(tile);expect(within(preview()).getByText('未提供')).toBeTruthy();
-  const hovered=container.querySelector('.tile[data-code="BK0002"]')!;
-  fireEvent.mouseEnter(hovered);expect(within(preview()).getByText('-100')).toBeTruthy();
-  fireEvent.mouseLeave(hovered);expect(within(preview()).getByText('+20')).toBeTruthy();
+  fireEvent.focus(tile);expect(preview().textContent).toContain('涨跌幅 未提供');
+  const hovered=container.querySelector('g[data-id="BK0002"]')!;
+  fireEvent.mouseEnter(hovered);expect(preview().textContent).toContain('主力净额 -100 元');
+  fireEvent.mouseLeave(hovered);expect(preview().textContent).toContain('主力净额 +20 元');
   fireEvent.blur(tile);expect(preview().textContent).toContain('指向区块');
  });
  it('retains industry keyboard drilldown and updates inspection on source refresh',()=>{
   const select=vi.fn();const view=render(<EvidenceHeatmap state={state()} onIndustrySelect={select}/>);
-  const tile=view.container.querySelector('.tile[data-code="BK0001"]')!;
+  const tile=view.container.querySelector('g[data-id="BK0001"]')!;
   fireEvent.focus(tile);fireEvent.keyDown(tile,{key:'Enter'});expect(select).toHaveBeenCalledOnce();
   view.rerender(<EvidenceHeatmap state={state(rows.map((row,index)=>index===0?{...row,f62:75}:row))} onIndustrySelect={select}/>);
-  expect(within(preview()).getByText('+75')).toBeTruthy();
+  expect(preview().textContent).toContain('主力净额 +75 元');
   fireEvent.change(screen.getByLabelText('主力净额方向'),{target:{value:'negative'}});
   expect(preview().textContent).toContain('指向区块');
  });
  it('does not let a removed hover target hide keyboard or selected evidence after refresh',()=>{
   const view=render(<EvidenceHeatmap state={state(rows,true)}/>);
-  const selected=view.container.querySelector('.tile[data-code="000001"]')!;
+  const selected=view.container.querySelector('g[data-id="000001"]')!;
   fireEvent.click(selected);
-  fireEvent.mouseEnter(view.container.querySelector('.tile[data-code="000002"]')!);
+  fireEvent.mouseEnter(view.container.querySelector('g[data-id="000002"]')!);
   view.rerender(<EvidenceHeatmap state={state(rows.filter(row=>row.f12!=='BK0002'),true)}/>);
-  expect(within(preview()).getByText('+100')).toBeTruthy();
-  const focused=view.container.querySelector('.tile[data-code="000003"]')!;
-  fireEvent.focus(focused);expect(within(preview()).getByText('+60')).toBeTruthy();
+  expect(preview().textContent).toContain('主力净额 +100 元');
+  const focused=view.container.querySelector('g[data-id="000003"]')!;
+  fireEvent.focus(focused);expect(preview().textContent).toContain('主力净额 +60 元');
   view.rerender(<EvidenceHeatmap state={state(rows.map((row,index)=>index===2?{...row,f62:null}:row),true)}/>);
-  expect(within(preview()).getByText('+100')).toBeTruthy();
+  expect(preview().textContent).toContain('主力净额 +100 元');
  });
- it('keeps a clicked stock selected until evidence is closed and renders compact signed amounts',()=>{
+ it('keeps a clicked stock selected until evidence is closed and retains signed amounts',()=>{
   const {container}=render(<EvidenceHeatmap state={state(rows,true)}/>);
-  const tile=container.querySelector('.tile[data-code="000001"]')!;
-  expect(tile.querySelector('.tile-amount')?.textContent).toBe('+100');
+  const tile=container.querySelector('g[data-id="000001"]')!;
+  expect(tile.textContent).toContain('主力净额 +100 元');
   fireEvent.click(tile);expect(tile.getAttribute('data-selected')).toBe('true');
-  expect(within(preview()).getByText('+100')).toBeTruthy();
+  expect(preview().textContent).toContain('主力净额 +100 元');
   fireEvent.click(screen.getByRole('button',{name:'关闭原始证据'}));
   expect(tile.getAttribute('data-selected')).toBeNull();
  });

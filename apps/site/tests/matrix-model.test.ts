@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {describeMatrixItem,matrixColor,matrixColorMaximum,matrixEntries,matrixWeight,readableGridColumns,type MatrixGroup,type MatrixItem} from '../lib/matrix/model';
+import {describeMatrixItem,matrixColor,matrixColorMaximum,matrixEntries,readableGridColumns,type MatrixGroup,type MatrixItem} from '../lib/matrix/model';
 const item=(value?:number|null):MatrixItem=>({id:'row',label:'Synthetic',displayValue:'source precision',colorValue:value});
 const groups:MatrixGroup[]=[{id:'empty',label:'Empty',items:[]},{id:'scope',label:'Scope',items:[item(.2),{...item(-.9),id:'negative'}]}];
 describe('pure matrix presentation contract',()=>{
@@ -31,11 +31,6 @@ describe('pure matrix presentation contract',()=>{
   expect(matrixColor(item(1),'sequential',1)).toBe('magnitude-3');
   expect(matrixColor(item(0),'sequential',1)).toBe('zero');
   for(const value of [-1,null,undefined,NaN])expect(matrixColor(item(value),'sequential',1)).toBe('missing');
- });
- it('never converts signed color or formatted amount into geometry weight',()=>{
-  expect(matrixWeight({...item(-50),displayValue:'9,999,999 USD'})).toBe(1);
-  for(const weight of [undefined,null,0,-2,NaN,Infinity])expect(matrixWeight({...item(2),weight})).toBe(1);
-  expect(matrixWeight({...item(-2),weight:3.5})).toBe(3.5);
  });
  it('keeps accessible descriptions and readable layout independent of React',()=>{
   expect(describeMatrixItem({...item(),detail:'verified scope'},groups[1])).toBe('Scope · Synthetic · source precision · verified scope');

@@ -12,7 +12,8 @@ export function visibleTradeSnapshot(snapshot:KrakenTradeSnapshot|null|undefined
 }
 export function tradeMatrixGroups(snapshot:KrakenTradeSnapshot|null):MatrixGroup[]{
  if(!snapshot)return [];
- const items=snapshot.rows.map(row=>({id:row.pair,label:row.pair,weight:1,
+ const items=snapshot.rows.map(row=>({id:row.pair,label:row.pair,
+  amount:{value:row.coverage==='capped_response'||row.imbalance_usd===null?null:Number(row.imbalance_usd),currency:'USD',comparisonKey:`kraken:trade-imbalance:${snapshot.window_started_at}:${snapshot.window_ended_at}:usd-spot`},
   displayValue:row.coverage==='capped_response'?'覆盖不完整 · 金额不展示':`${formatCryptoNumber(row.imbalance_usd!)} USD`,
   colorValue:row.coverage==='capped_response'?null:row.imbalance_pct,
   detail:row.coverage==='capped_response'?`返回 ${row.returned_count} / ${snapshot.trade_limit} 笔，触及上限；不是零`:

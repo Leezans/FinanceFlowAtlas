@@ -103,6 +103,12 @@ responses. The quote matrix shows last price, rolling-24h base-coin volume,
 VWAP and trade count, not net capital flow, derivative open interest or global
 crypto totals. Quote observation time remains unknown; the separate trade matrix
 shows returned execution times independently of acquisition time.
+Quote cards stay equal-width: a price, base-coin quantity or trade count is not a
+comparable transaction amount. The separate trade treemap sizes each pair by the
+absolute USD buy-label minus sell-label notional over the same stored five-minute
+window. Capped responses receive no monetary area or directional color. Reported
+zero imbalance and missing evidence remain distinct in the full details panel;
+area does not imply net capital flow or complete interval coverage.
 One-minute caching, a 15-minute display expiry and a separate persistent
 metadata-only source gate protect freshness and stop after access denial.
 Keep the existing owner-only boundary; code publication does not grant provider
@@ -184,16 +190,28 @@ source verification does not establish deployed-host availability.
 amounts, in BRL, grouped by exact official company industry and ticker. Both
 source datasets use ODbL. Missing/confidential transactions remain unknown and
 are never allocated to sectors. This is partial fund activity, not all-market
-capital flow. See `../../docs/source-cvm-fund-equity.md`.
+capital flow. Security treemap area uses the absolute monthly net amount, with
+source BRL cents converted uniformly to BRL. Industry overview area sums the
+absolute nets of its reported securities, so opposing security flows do not
+cancel area; the displayed industry number remains the signed net subtotal,
+and color remains net/(buy+sell). It is not the absolute industry net or market capitalization. Unknown
+securities stay in details without fabricated area; industry coverage counts
+remain visible. See `../../docs/source-cvm-fund-equity.md`.
 
 ## Open annual global equity context
 
 `/equities` uses the shared matrix renderer for World Bank/WFE annual country
 market cap and stocks traded value, grouped by region then country. All 249
 geographic slots stay reachable, but only actual same-year source observations
-receive magnitude colors; coverage counts clearly distinguish the two. Selected
-country details use a separate two-metric matrix, initially USA. It never calls either measure net capital flow, mixes
-observation years in comparisons, or fills missing observations with zero.
+receive magnitude colors and USD-proportional area; coverage counts clearly
+distinguish the two. One selected metric and its latest available comparison year
+share an area scale. Region areas sum included reported country amounts, not a
+claimed complete global total. Missing or older-year observations and genuine
+zeros remain reachable in details without area. Selected country details use a
+separate equal-width two-metric matrix, initially USA, because year-end stock
+and annual turnover are different measures and may have different years. Neither
+measure is labeled net capital flow; comparison areas never mix observation
+years or fill missing observations with zero.
 Both specific indicators are CC BY 4.0, with source attribution and terms in the
 UI. No account or key is needed. The latest observation years, dataset update
 and retrieval time are distinct. Apply appended `0011_worldbank_equity_cache.sql`
@@ -201,6 +219,23 @@ after 0010; it adds a separate daily refresh/shared cache without modifying
 existing gates. Denial is durable; seven-day cache expiry also applies in the
 browser. Run `npm run test:equity-runtime` for native workerd/D1 tests with real
 network disabled. See [source evidence and limitations](../../docs/source-worldbank-equities.md).
+
+## ASEAN annual country-sector FDI
+
+The ASEAN view retains the full country × sector source-coordinate table and its
+reported, zero, n.a, missing and duplicate-isolated states. Selecting one host
+country adds a shared monetary treemap for that country's same-year specific
+sectors. Source USD millions are uniformly converted to USD before sizing;
+positive and negative values use absolute amounts for area and signed colors.
+No cross-country amount denominator or aggregate is constructed.
+
+The homogeneous subset excludes unspecified sector Z. Philippines sector area
+compares net equity capital only, not debt or reinvested earnings. Singapore M
+already includes N, so N is excluded from area to prevent overlapping coverage.
+The complete original table remains available in a collapsed disclosure,
+including excluded sectors and unknown/isolated records. Zero and unknown
+amounts receive no area but remain selectable in details. These areas are not a
+national FDI net total, stock-market flow or real-time investment measure.
 
 ## Private Polymarket informational matrix
 
@@ -305,3 +340,34 @@ cooldown, explicit-default/legacy reuse, failed refresh retention, strict client
 validation and global denial. The native workerd/D1 suite verifies custom
 selections and cross-worker cooldown with real networking disabled. No new
 provider, account, subscription, migration or standing collection process is added.
+
+## Shared monetary area and zoom
+
+All monetary heatmaps use one presentation contract and renderer. Source projections
+supply signed base-unit amounts, a currency and a comparison key identifying the
+metric and observation scope. The renderer accepts a common area scale only when
+all rows declare the same currency and key. It never parses display strings,
+converts currencies or uses color ratios, prices, percentages or legacy weights as
+money. Noncomparable observations remain explicit information cards.
+
+Treemap leaf area is strictly proportional to the absolute nonzero amount; group
+area is the sum of its included leaf magnitudes. Geometry uses no rounding,
+padding or minimum-area substitute. Reported zero and missing amounts have no
+area and remain reachable in the complete numeric details. Signed color scales
+remain independent. Annual stock-market capitalization and traded-value metrics
+are separate scopes, and the selected-country two-metric panel is not a shared
+amount scale.
+
+`lib/matrix/layout.ts` owns pure comparability and geometry;
+`lib/matrix/viewport.ts` owns pure bounded transforms;
+`components/matrix/MatrixViewport.tsx` owns pointer, wheel and keyboard interaction;
+`MatrixHeatmap` renders evidence and accessible details. A-share uses this same
+renderer while retaining its source-specific exploration and evidence panel.
+
+Wheel capture is explicit opt-in. The inactive chart preserves page scrolling and
+native touch gestures. Zoom controls and +/- work without a wheel; an activated
+chart supports drag/pinch and arrow-key panning. Escape returns page scrolling,
+Home or Reset restores the full view, and zoom limits release wheel events back
+to the page. Zoom survives same-scope refreshes and resets on a new scope or size.
+No source acquisition, polling, cache, permission gate or privacy boundary changes.
+Tests and browser QA use synthetic fixtures, never bundled production sample data.

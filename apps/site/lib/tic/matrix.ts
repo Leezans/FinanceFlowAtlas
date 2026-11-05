@@ -34,7 +34,7 @@ export function projectTicMatrix(snapshot: TicSnapshot | null, scope: TicMatrixS
       displayValue: `${signedMillions(row.net_foreign_purchases_usd)} USD millions`,
       detail: `${row.period} · ${row.foreign_economy_iso3} · ${flowDirection(row.net_foreign_purchases_usd)} · TIC`,
       colorValue: row.net_foreign_purchases_usd,
-      weight: 1,
+      amount: {value: row.net_foreign_purchases_usd, currency: 'USD', comparisonKey: `tic:equity:net-purchases:${row.period}:foreign-residences`},
     });
     grouped.set(id, group);
   }

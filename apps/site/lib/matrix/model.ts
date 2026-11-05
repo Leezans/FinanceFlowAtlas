@@ -9,7 +9,9 @@ export type MatrixItem = {
   displayValue: string;
   detail?: string;
   colorValue?: number | null;
-  /** Positive layout weight, not an inferred market-cap or flow amount. */
+  /** Source-declared monetary metric. Never infer it from formatted text or color. */
+  amount?: { value: number | null; currency: string; comparisonKey: string };
+  /** Legacy presentation-only metadata; ignored for area. */
   weight?: number | null;
 };
 export type MatrixGroup = { id: string; label: string; items: MatrixItem[] };
@@ -42,12 +44,6 @@ export function matrixColor(item: MatrixItem, mode: MatrixColorMode, maximum: nu
   const band = Math.min(3, Math.max(1, Math.ceil(Math.abs(value) / maximum * 3))) as 1 | 2 | 3;
   if (mode === 'sequential') return `magnitude-${band}`;
   return `${value > 0 ? 'positive' : 'negative'}-${band}`;
-}
-
-/** Omitted/invalid weights retain equal tiles; displayValue is never parsed. */
-export function matrixWeight(item: MatrixItem): number {
-  return typeof item.weight === 'number' && Number.isFinite(item.weight) && item.weight > 0
-    ? item.weight : 1;
 }
 
 export function describeMatrixItem(item: MatrixItem, group: MatrixGroup): string {

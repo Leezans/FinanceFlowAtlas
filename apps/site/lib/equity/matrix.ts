@@ -41,7 +41,7 @@ export function projectEquityMatrix(snapshot: EquitySnapshot | null, metric: Equ
         ? `${year} · ${country.iso3} · ${observation.usd.toLocaleString('zh-CN', {maximumFractionDigits: 20})} USD`
         : `${year ?? '—'} · ${country.iso3} · ${latest ? `最近观测为 ${latest.year} 年，未混入` : `${snapshot.window_start}–${snapshot.window_end} 窗口无该项观测`}`,
       colorValue: observation?.usd ?? null,
-      weight: 1,
+      amount: {value: observation?.usd ?? null, currency: 'USD', comparisonKey: `equity:${metric}:${year}:countries`},
     });
     groups.set(country.region, group);
   }
@@ -64,7 +64,7 @@ export function projectCountryEquity(snapshot: EquitySnapshot | null, iso3: stri
       detail: observation
         ? `${observation.year} ${metric.period} · ${observation.usd.toLocaleString('zh-CN', {maximumFractionDigits: 20})} USD`
         : `${snapshot.window_start}–${snapshot.window_end} 年窗口未提供`,
-      colorValue: null, weight: 1,
+      colorValue: null,
     };
   })}];
 }

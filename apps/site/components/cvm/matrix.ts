@@ -10,11 +10,31 @@ export function industries(snapshot:CvmSnapshot){
   return {industry,rows,known:known.length,missing:rows.length-known.length,totals};
  });
 }
+/** Industry area is additive over security magnitudes, not the absolute signed subtotal. */
 export function cvmMatrixGroups(snapshot:CvmSnapshot,industry:string|null):MatrixGroup[]{
  const groups=industries(snapshot);
- if(industry===null)return [{id:'industries',label:'CVM 官方行业分类 · 公开披露基金的股票月度交易',items:groups.map(g=>({id:g.industry,label:industryLabel(g.industry),displayValue:g.totals?compactMoney(g.totals.net):'未知',detail:`${g.industry} · ${g.known}/${g.rows.length} 只证券有报告`,colorValue:intensity(g.totals),weight:1}))}];
- const g=groups.find(g=>g.industry===industry);if(!g)return [];
- return [{id:g.industry,label:g.industry,items:g.rows.map(r=>({id:r.code,label:r.code,displayValue:r.flow?compactMoney(r.flow.net):'未知',detail:r.name,colorValue:intensity(r.flow),weight:1}))}];
+ const amount=(value:number|null,metric:string)=>({
+  value:value===null?null:value/100,
+  currency:'BRL',
+  comparisonKey:`cvm:${metric}:${snapshot.period}:public-funds`,
+ });
+ if(industry===null)return [{
+  id:'industries',label:'CVM 官方行业分类 · 公开披露基金的股票月度交易',
+  items:groups.map(group=>({
+   id:group.industry,label:industryLabel(group.industry),
+   displayValue:group.totals?compactMoney(group.totals.net):'未知',
+   detail:`${group.industry} · ${group.known}/${group.rows.length} 只证券有报告`,
+   colorValue:intensity(group.totals),
+   amount:amount(group.totals?group.rows.reduce((total,row)=>total+Math.abs(row.flow?.net??0),0):null,'sum-absolute-security-net'),
+  })),
+ }];
+ const group=groups.find(group=>group.industry===industry);
+ if(!group)return [];
+ return [{id:group.industry,label:group.industry,items:group.rows.map(row=>({
+  id:row.code,label:row.code,displayValue:row.flow?compactMoney(row.flow.net):'未知',
+  detail:row.name,colorValue:intensity(row.flow),
+  amount:amount(row.flow?.net??null,'security-net'),
+ }))}];
 }
 /** Display translations only; grouping keys always remain exact CVM categories. */
 const labels:Record<string,string>={

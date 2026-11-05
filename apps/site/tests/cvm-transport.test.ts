@@ -26,6 +26,21 @@ describe('CVM acquisition boundaries',()=>{
  it('retains no record after corrupt ZIP',async()=>{const t=setup();const broken=fixtureArchives().cda;broken[broken.length-1]=255;t.fetcher.mockImplementation(async()=>new Response(broken,{headers:{'content-type':'application/zip'}}));const b=await body(await t.handler(request()));expect(b.snapshot).toBeNull();expect(t.g.release).toHaveBeenCalledWith('synthetic-lease',expect.objectContaining({kind:'temporary_failure'}));});
 });
 describe('CVM matrix and expiration',()=>{
- it('keeps classifications separate, amounts exact, area equal and missing gray',async()=>{const s=await fixtureSnapshot(),groups=industries(s);expect(groups).toHaveLength(2);expect(groups.find(g=>g.industry==='Bancos')?.totals?.net).toBe(999);expect(groups.find(g=>g.industry==='Energia')?.totals).toBeNull();const overview=cvmMatrixGroups(s,null);expect(overview[0].items.every(x=>x.weight===1)).toBe(true);expect(cvmMatrixGroups(s,'Energia')[0].items[0].colorValue).toBeNull();expect(industryLabel('Emp. Adm. Part. - Bancos')).toBe('控股·银行');});
+ it('keeps classifications separate, amounts exact, monetary area and missing gray',async()=>{const s=await fixtureSnapshot(),groups=industries(s);expect(groups).toHaveLength(2);expect(groups.find(g=>g.industry==='Bancos')?.totals?.net).toBe(999);expect(groups.find(g=>g.industry==='Energia')?.totals).toBeNull();const overview=cvmMatrixGroups(s,null);expect(overview[0].items.find(x=>x.id==='Bancos')!.amount).toMatchObject({value:9.99,currency:'BRL'});expect(overview[0].items.find(x=>x.id==='Energia')!.amount?.value).toBeNull();expect(cvmMatrixGroups(s,'Energia')[0].items[0].colorValue).toBeNull();expect(industryLabel('Emp. Adm. Part. - Bancos')).toBe('控股·银行');});
  it('hides expired data separately from monthly observation age',async()=>{const snapshot=await fixtureSnapshot(),r={snapshot,status:{state:'available',fetched_at:snapshot.fetched_at}} as CvmReply;expect(visibleSnapshot(r,NOW)).not.toBeNull();expect(visibleSnapshot(r,NOW+MAX_CACHE_AGE_MS+1)).toBeNull();expect(visibleSnapshot(r,NOW-1)).toBeNull();snapshot.fetched_at='2027-05-01T00:00:00Z';expect(visibleSnapshot(r,Date.parse(snapshot.fetched_at))).toBeNull();});
+});
+
+
+describe('CVM monetary matrix sizing',()=>{
+ it('sums absolute security nets for industry area without signed cancellation',async()=>{
+  const snapshot=await fixtureSnapshot(),row=snapshot.rows.find(row=>row.flow)!;
+  snapshot.rows=[{...row,code:'POS',flow:{buy:10000,sell:0,net:10000}},{...row,code:'NEG',flow:{buy:0,sell:10000,net:-10000}},{...row,code:'ZERO',flow:{buy:0,sell:0,net:0}},{...row,code:'UNKNOWN',flow:null}];
+  const overview=cvmMatrixGroups(snapshot,null)[0].items[0];
+  expect(overview.amount).toMatchObject({value:200,currency:'BRL'});
+  expect(overview.colorValue).toBe(0);
+  const leaves=cvmMatrixGroups(snapshot,row.industry)[0].items;
+  expect(leaves.map(item=>item.amount?.value)).toEqual([100,-100,0,null]);
+  expect(leaves.reduce((sum,item)=>sum+Math.abs(item.amount?.value??0),0)).toBe(overview.amount!.value);
+  expect(new Set(leaves.map(item=>item.amount?.comparisonKey)).size).toBe(1);
+ });
 });

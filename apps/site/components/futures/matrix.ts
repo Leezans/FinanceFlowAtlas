@@ -34,7 +34,6 @@ export function futuresMatrixGroups(snapshot: CftcSnapshot, trader: TraderGroup)
         displayValue: `${ratio > 0 ? '+' : ''}${(ratio * 100).toFixed(1)}% OI`,
         detail: `${traderLabel}净持仓 ${signedContracts} 张`,
         colorValue: ratio,
-        weight: 1,
       }],
     }];
   });

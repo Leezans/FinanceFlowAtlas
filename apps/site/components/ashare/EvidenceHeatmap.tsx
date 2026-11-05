@@ -1,38 +1,21 @@
 "use client";
-import React,{useState,useId,useRef,useEffect} from 'react';
-import {hierarchy,treemap,treemapSquarify} from 'd3-hierarchy';
+import React,{useState} from 'react';
 import {type Scope,type EvidenceRow,type ValidEvidence,coverage,numeric,signedCny,scopeKey,selectEvidenceRows,exactAmount,type FlowFilter,type EvidenceSort} from './model';
 import type {EvidenceState} from './client';
-import {flowScaleMaximum,flowStrength,fitTileFont} from './heatmap';
+import {flowScaleMaximum} from './heatmap';
+import {evidenceMatrixGroup} from './matrix';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import './styles.css';
 export type Props={state:EvidenceState;onIndustrySelect?:(scope:Scope,row:EvidenceRow)=>void};
 export default function EvidenceHeatmap({state,onIndustrySelect}:Props){if(!state.snapshot||state.status==='error'||state.status==='blocked'||state.status==='empty')return <MatrixHeatmap groups={[]} title="A 股行业矩阵" description="行业 → 成分股 · 供应商订单分类主力净额" areaMeaning="可用时按主力净额绝对值" colorMeaning="可用时红色净买入 / 绿色净卖出；当前无数值" emptyTitle={state.recovery?.code==='collection_in_progress'?'A股完整分页核对中':state.recovery?.code==='source_outcome_unconfirmed'?'A股上次采集结果待核查':state.recovery?.mode==='stopped'?'A股来源检查已停止':'A股矩阵暂无可核验数据'} emptyMessage={state.message||'数据未接入；不会生成模拟区块。'}/>;const s=state.snapshot;// Preserve exploration across same-scope polling, but reset when the industry changes.
  const identity=scopeKey(s.scope);return <Heatmap key={identity} snapshot={s} retainedAfterFailure={state.retainedAfterFailure} retainedDuringCollection={state.retainedDuringCollection} onIndustrySelect={onIndustrySelect}/>}
 function Heatmap({snapshot:s,onIndustrySelect,retainedAfterFailure,retainedDuringCollection}:{snapshot:ValidEvidence;retainedAfterFailure?:boolean;retainedDuringCollection?:boolean;onIndustrySelect?:Props['onIndustrySelect']}){
- const clipPrefix=useId().replace(/:/g,'');
- const chartRef=useRef<HTMLDivElement>(null);
- const [chartWidth,setChartWidth]=useState(1000);
- useEffect(()=>{
-  const chart=chartRef.current;if(!chart)return;
-  const measure=()=>{const width=Math.round(chart.clientWidth);if(width>0)setChartWidth(width)};
-  measure();
-  if(typeof ResizeObserver==='undefined')return;
-  const observer=new ResizeObserver(measure);observer.observe(chart);
-  return()=>observer.disconnect();
- },[]);
- const chartHeight=Math.max(300,Math.min(540,Math.round(chartWidth*.55)));
  const [selected,setSelected]=useState<string|null>(null),[query,setQuery]=useState(''),[palette,setPalette]=useState<'china'|'global'>('china');
- const [hovered,setHovered]=useState<string|null>(null),[focused,setFocused]=useState<string|null>(null);
  const [filter,setFilter]=useState<FlowFilter>('all'),[sort,setSort]=useState<EvidenceSort>('magnitude');
  const scopeRows=selectEvidenceRows(s.rows,query,filter,sort);const stats=coverage({...s,rows:scopeRows});
  const chosen=s.rows.find(r=>r.f12===selected);
- const inspected=stats.nonzero.find(row=>row.f12===hovered)??stats.nonzero.find(row=>row.f12===focused)??scopeRows.find(row=>row.f12===selected);
  const scaleMaximum=flowScaleMaximum(s.rows);
- type Item={name:string;row?:EvidenceRow;children?:Item[]};
- const tree=treemap<Item>().tile(treemapSquarify).size([chartWidth,chartHeight]).padding(1).round(true)(hierarchy<Item>({name:'scope',children:stats.nonzero.map(row=>({name:row.f14,row}))}).sum(item=>Math.abs(Number(item.row?.f62||0))).sort((a,b)=>(b.value||0)-(a.value||0)));
  const industry=s.scope.kind==='industry_rank';
- const title=(row:EvidenceRow)=>`${row.f14} · ${row.f12} · 主力净额 ${exactAmount(numeric(row.f62))} 元 · 涨跌幅 ${numeric(row.f3)===null?'未提供':`${row.f3}%`} · 供应商订单分类代理，非真实新增资金`;
  const pick=(row:EvidenceRow)=>{if(industry){onIndustrySelect?.({kind:'industry_stocks',fs:`b:${row.f12}`,classification_level:'unknown_may_mix_levels'},row)}else setSelected(row.f12)};
  return <section className={`evidence-heatmap palette-${palette}`}><header><div><h2>{industry?'A 股行业矩阵':'行业成分股矩阵'} · 主力净额</h2><p>行情时间与延迟未提供</p></div><select aria-label="正负配色" value={palette} onChange={e=>setPalette(e.target.value as 'china'|'global')}><option value="china">红正 / 绿负</option><option value="global">绿正 / 红负</option></select></header>
  {retainedDuringCollection&&<p className="warning" role="status">新一轮完整分页仍在核对；暂时保留上次完整快照，不是最新行情。部分分页不进入矩阵。</p>}
@@ -45,28 +28,16 @@ function Heatmap({snapshot:s,onIndustrySelect,retainedAfterFailure,retainedDurin
   <div className="flow-legend-values"><span>{signedCny(-scaleMaximum).replace(' CNY',' 元')}</span><span>0</span><span>{signedCny(scaleMaximum).replace(' CNY',' 元')}</span></div>
   <p>正负各三档，按来源范围最大绝对净额的 1/3、2/3 分界；搜索与方向筛选不重标色阶。</p>
  </div>}
- <div className="chart" ref={chartRef}>{stats.nonzero.length?<svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="group" aria-label="当前筛选范围的主力净额矩形热力图">{tree.leaves().map(tile=>{
-  const row=tile.data.row!,w=tile.x1-tile.x0,h=tile.y1-tile.y0,canSelect=!industry||!!onIndustrySelect;
-  const large=w>=140&&h>=100,medium=w>=65&&h>=46;
-  const name=industry||large?row.f14:row.f12;
-  const amount=signedCny(Number(row.f62)).replace(' CNY','');
-  const nameFont=fitTileFont(name,w,large?27:15),amountFont=fitTileFont(amount,w,large?22:13);
-  const cx=(tile.x0+tile.x1)/2,cy=(tile.y0+tile.y1)/2,clipId=`${clipPrefix}-${row.f12}`;
-  return <g key={row.f12} clipPath={`url(#${clipId})`} className={`tile ${Number(row.f62)>0?'positive':'negative'}`} data-code={row.f12} data-flow-strength={flowStrength(Number(row.f62),scaleMaximum)} data-selected={selected===row.f12?'true':undefined} role={canSelect?'button':'img'} tabIndex={0} aria-label={title(row)} onMouseEnter={()=>setHovered(row.f12)} onMouseLeave={()=>setHovered(null)} onFocus={()=>{setHovered(null);setFocused(row.f12)}} onBlur={()=>setFocused(null)} onClick={canSelect?()=>pick(row):undefined} onKeyDown={canSelect?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(row)}}:undefined}>
-   <title>{title(row)}</title><defs><clipPath id={clipId}><rect x={tile.x0} y={tile.y0} width={w} height={h}/></clipPath></defs>
-   <rect className="tile-body" x={tile.x0} y={tile.y0} width={w} height={h}/>
-   {w>=42&&h>=25&&nameFont>=9&&<text className="tile-name" x={cx} y={cy-(large?20:medium?7:-4)} textAnchor="middle" fontSize={nameFont}>{name}</text>}
-   {medium&&amountFont>=9&&<text className="tile-amount" x={cx} y={cy+12} textAnchor="middle" fontSize={amountFont}>{amount}</text>}
-   {large&&<text className="tile-secondary" x={cx} y={cy+36} textAnchor="middle" fontSize={fitTileFont(`${row.f12} · 主力净额`,w,12)}>{row.f12} · 主力净额</text>}
-  </g>
- })}</svg>:<p className="no-area">{scopeRows.length?'没有已报告的非零面积；零值与缺失仍可在明细中查看。':'没有匹配的行业或股票。'}</p>}</div>
- <div className="tile-inspector" role="region" aria-label="区块数值预览">
-  {inspected?<><div className="inspection-identity"><strong>{inspected.f14}</strong><span>{inspected.f12}</span></div><dl>
-   <div><dt>主力净额（元）</dt><dd className={numeric(inspected.f62)===null||inspected.f62===0?'neutral':Number(inspected.f62)>0?'positive':'negative'}>{exactAmount(numeric(inspected.f62))}</dd></div>
-   <div><dt>涨跌幅</dt><dd>{numeric(inspected.f3)===null?'未提供':`${exactAmount(numeric(inspected.f3))}%`}</dd></div>
-   <div><dt>当前面积占比</dt><dd>{numeric(inspected.f62)===null?'—（缺失）':inspected.f62===0?'—（零值）':`${(Math.abs(Number(inspected.f62))/stats.denominator*100).toFixed(2)}%`}</dd></div>
-  </dl></>:<p>指向区块或用 Tab 聚焦，查看精确净额、涨跌幅与面积占比。{industry&&onIndustrySelect?'点击行业进入成分股。':!industry?'点击股票固定原始证据。':''}</p>}
- </div>
+ <MatrixHeatmap
+  title="当前筛选范围的主力净额矩形热力图"
+  groups={[evidenceMatrixGroup(s,scopeRows)]}
+  areaMeaning="主力净额绝对值（人民币），仅当前筛选范围"
+  colorMeaning={palette==='china'?'红色净买入 / 绿色净卖出':'绿色净买入 / 红色净卖出'}
+  scopeKey={scopeKey(s.scope)} colorPalette={palette} colorMaxAbs={scaleMaximum} showDetails={false} selectedItemId={selected??undefined}
+  emptyTitle={scopeRows.length?'没有已报告的非零面积':'没有匹配的行业或股票。'}
+  emptyMessage={scopeRows.length?'零值与缺失仍可在数值明细中查看。':'可清空搜索或选择全部方向。'}
+  onSelect={!industry||onIndustrySelect?(item)=>{const row=scopeRows.find(row=>row.f12===item.id);if(row)pick(row)}:undefined}
+ />
  <div className="coverage" aria-live="polite"><span>面积分母 {stats.nonzero.length?signedCny(stats.denominator).replace(/^\+/,''):'—'}，仅当前筛选行绝对值之和。</span><span>显示 {scopeRows.length} / 来源 {s.source_total}；非零 {stats.nonzero.length} / 零 {stats.zero.length} / 缺失 {stats.missing.length}</span></div>
  <details className="evidence-list" aria-label="完整数值明细">
   <summary>数值明细 · {scopeRows.length} 项（含零值与缺失）</summary>

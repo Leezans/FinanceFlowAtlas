@@ -6,20 +6,33 @@ import TicLayer from '../components/atlas/TicLayer';
 import {ticFixture} from './ticTestFixture';
 afterEach(() => {cleanup(); vi.unstubAllGlobals();});
 function dataFetch() {vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ok: true, status: 200, headers: new Headers(), json: async () => url.endsWith('/status') ? {state: 'available'} : ticFixture})));}
-const tiles = (container: HTMLElement) => container.querySelectorAll('.tic-matrix [data-id]');
+const tiles = (container: HTMLElement) => container.querySelectorAll('.tic-matrix details [data-id]');
 describe('shared global country matrix', () => {
- it('defaults to readable grouped tiles and supports regional/country drilldown and breadcrumb back', async () => {
+ it('defaults to monetary grouped tiles and supports regional/country drilldown and breadcrumb back', async () => {
   dataFetch(); const {container} = render(<TicLayer/>);
   await waitFor(() => expect(tiles(container)).toHaveLength(3));
   expect(screen.getByRole('tab', {name: '矩阵热力图'}).getAttribute('aria-selected')).toBe('true');
-  expect(container.querySelector('[data-layout=readable-grid]')).toBeTruthy();
+  expect(container.querySelector('[data-layout=treemap]')).toBeTruthy();
   expect(container.querySelectorAll('.tic-arc')).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', {name: '进入区域 欧洲'}));
   expect(tiles(container)).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', {name: /欧洲 · United Kingdom · -3 USD/}));
+  fireEvent.click(container.querySelector('g[data-id=GBR]')!);
   expect(screen.getByRole('article', {name: 'TIC country evidence'}).textContent).toContain('-3 USD millions');
   fireEvent.click(screen.getByRole('button', {name: '全部已报告国家'}));
   expect(tiles(container)).toHaveLength(3);
+ });
+ it('resets zoom on region, country, breadcrumb and sign changes, but preserves palette changes', async () => {
+  dataFetch(); const {container} = render(<TicLayer/>);
+  await waitFor(() => expect(tiles(container)).toHaveLength(3));
+  const zoom = () => fireEvent.click(screen.getByRole('button', {name: '放大矩阵'}));
+  const scale = () => container.querySelector('.tic-matrix [data-zoom]')?.getAttribute('data-zoom');
+  zoom(); expect(scale()).toBe('1.5');
+  fireEvent.change(screen.getByLabelText('净交易正负配色'), {target: {value: 'global'}});
+  expect(scale()).toBe('1.5');
+  fireEvent.click(screen.getByRole('button', {name: '进入区域 欧洲'})); expect(scale()).toBe('1');
+  zoom(); fireEvent.click(container.querySelector('g[data-id=GBR]')!); expect(scale()).toBe('1');
+  zoom(); fireEvent.click(screen.getByRole('button', {name: '全部已报告国家'})); expect(scale()).toBe('1');
+  zoom(); fireEvent.click(screen.getByRole('button', {name: '净卖出'})); expect(scale()).toBe('1');
  });
  it('switches palettes without changing values, signs or scale and keeps geography secondary', async () => {
   dataFetch(); const {container} = render(<TicLayer/>);
@@ -58,7 +71,9 @@ describe('shared global country matrix', () => {
   expect(tiles(container)).toHaveLength(1);
   const zero = container.querySelector('[data-id=CAN]')!;
   expect(zero.getAttribute('data-color')).toBe('zero');
-  fireEvent.keyDown(zero, {key: 'Enter'});
+  expect(container.querySelector('g[data-id=CAN]')).toBeNull();
+  fireEvent.click(screen.getByText(/数值明细 · 全部 1 项/));
+  fireEvent.click(zero);
   expect(screen.getByRole('article', {name: 'TIC country evidence'}).textContent).toContain('0 USD millions');
  });
  it('keeps issuer-total history lazy and independent of the primary matrix', async () => {
