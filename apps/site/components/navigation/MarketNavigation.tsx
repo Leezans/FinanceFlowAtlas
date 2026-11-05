@@ -7,6 +7,7 @@ import s from './navigation.module.css';
 export const marketLinks = [
   {href: '/ashare', label: 'A 股热力图'},
   {href: '/markets', label: '全球市场'},
+  {href: '/asean', label: '东盟 FDI 行业'},
   {href: '/crypto', label: '加密现货'},
   {href: '/futures', label: '期货持仓'},
   {href: '/forex', label: '外汇参考'},

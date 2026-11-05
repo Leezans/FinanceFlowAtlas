@@ -50,6 +50,13 @@
       "when": 1793859243966,
       "tag": "0006_ecb_fx_shared_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793863500000,
+      "tag": "0010_asean_fdi_gate",
+      "breakpoints": true
     }
   ]
 }

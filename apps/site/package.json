@@ -17,7 +17,8 @@
     "test:ashare-runtime": "node scripts/test-ashare-runtime.mjs",
     "test:fx-runtime": "node scripts/test-fx-runtime.mjs",
     "test:kraken-runtime": "node scripts/test-kraken-runtime.mjs",
-    "test:cftc-runtime": "node scripts/test-cftc-runtime.mjs"
+    "test:cftc-runtime": "node scripts/test-cftc-runtime.mjs",
+    "test:asean-runtime": "node scripts/test-asean-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
