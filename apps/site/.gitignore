@@ -43,3 +43,6 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# A local shared dependency symlink is also generated state.
+/node_modules

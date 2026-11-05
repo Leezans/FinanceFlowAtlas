@@ -25,7 +25,8 @@
     "test:equity-runtime": "node scripts/test-equity-runtime.mjs",
     "test:ashare-snapshots-runtime": "node scripts/test-ashare-snapshots-runtime.mjs",
     "test:ashare-staged-runtime": "node scripts/test-ashare-staged-runtime.mjs",
-    "test:polymarket-runtime": "node scripts/test-polymarket-runtime.mjs"
+    "test:polymarket-runtime": "node scripts/test-polymarket-runtime.mjs",
+    "test:cboe-runtime": "node scripts/test-cboe-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

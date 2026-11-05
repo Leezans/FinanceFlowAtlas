@@ -188,3 +188,13 @@ export const krakenSnapshotCache=sqliteTable('kraken_snapshot_cache',{
 export const krakenSnapshotRefs=sqliteTable('kraken_snapshot_refs',{
  cacheKey:text('cache_key').primaryKey(),snapshotId:text('snapshot_id').notNull().references(()=>krakenSnapshotCache.snapshotId),
 },t=>[check('kraken_snapshot_key',sql`${t.cacheKey} = 'latest' OR (length(${t.cacheKey}) BETWEEN 8 AND 113 AND (substr(${t.cacheKey},1,3) = '1m:' OR substr(${t.cacheKey},1,3) = '5m:'))`)]);
+
+/** Private owner-only 15-minute-delayed Cboe evidence and persistent acquisition gate. */
+export const cboeDelayedSourceGate=sqliteTable('cboe_delayed_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('cboe_delayed_gate_id',sql`${t.id} = 'bxe_equities'`),
+ check('cboe_delayed_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('cboe_delayed_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);

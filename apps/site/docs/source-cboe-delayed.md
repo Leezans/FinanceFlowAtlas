@@ -1,0 +1,55 @@
+# Cboe Europe delayed trade-price supplement
+
+## What this view is
+
+`/europe` is an owner-private, price-only supplement to the country-owned capital-flow views. It displays the most recent eligible reported trade per ISIN/currency in at most five recently published BXE minute files. The official feed covers equities and ETFs traded/reported through Cboe; the application accepts only BATE, BATD and BATP on-exchange executions. It is **not** complete European, national, exchange, company or industry coverage, and not a current bid/ask quote feed.
+
+Source publications are at least 15 minutes old at acquisition start. Minute files can have gaps; five files do not mean five continuous minutes. The UI checks once per minute while visible, subject to the shared gate, cooldown and backoff. More delay can arise from source publication, network and cache. Trade time, publication time and acquisition time are different fields. A successful download does not mean that a trade just occurred.
+
+The matrix uses neutral, equal-width information cards grouped by exact source currency. It shows ISIN and unscaled source price as exact decimal text, up to the specified 18-character maximum. Large integers, tiny decimals and trailing zeros are never passed through floating-point conversion or rounded for display. It does not infer issuer/listing country from ISIN, combine currencies, infer industry, calculate daily returns without a reference close, allocate money-flow areas, or imply buy/sell pressure. `netCapitalFlow` is explicitly null. Source instrument names, exchange-reference files and Reuters identifiers are not downloaded at runtime.
+
+## Official sources and usage boundary
+
+Reviewed 5 November 2026:
+
+- [Cboe Europe transparency data](https://www.cboe.com/markets/eu/equities/transparency-data/) describes free 15-minute delayed data, per-minute CSV files and anonymous access. It links the current format and disclaimer.
+- [Aggregated depth and last-trade specification](https://cdn.cboe.com/resources/participant_resources/Cboe_Titanium_Europe_Aggregated_Depth_Feed_Specification.pdf) defines delayed-file records and trade flags.
+- [Cboe Europe Market Data Policy, effective 1 August 2026](https://cdn.cboe.com/resources/participant_resources/Cboe_Europe_Data_Policy_August_2026.pdf), section 6, printed page 11: “Internal use of Delayed and Historical Data … is not subject to Fees and does not require a Data Agreement to be executed.” Examples include portfolio valuation, pre/post-trade analysis, risk management and research. This policy covers Cboe Europe Limited and Cboe Europe B.V. equities data, not every Cboe exchange. Display-fee exemptions do not establish general public redistribution rights.
+- [Cboe website terms](https://www.cboe.com/terms/) and [use of content](https://www.cboe.com/use-of-content/) retain the general restrictions. The more specific market-data policy is the basis for this bounded internal use, not an assertion that Cboe data are open source or public domain.
+
+**Deploy only behind the existing verified owner-only host.** The routes inherit host authentication rather than implementing an independent login system. Do not make these routes or the shared cache publicly readable, publish source observations in Git, export a data feed or redistribute a reference dataset without establishing the applicable additional rights. The repository's source-code license does not license Cboe data or marks. Retain the source and policy links and Cboe attribution in the view. No Cboe data or samples are bundled in this repository; tests are synthetic.
+
+This source was independently reachable by ordinary unauthenticated requests. It does not use a denied quote provider's endpoint, cookies, browser challenge, alternate IP, forged browser headers or credentials. Other European candidates that returned an access denial were stopped rather than added as fallbacks. This addition does not fix or reset any existing provider's denial latch, and does not claim new US or mainland-China coverage.
+
+## Transport and parsing contract
+
+The application uses the public endpoint advertised by Cboe's own transparency-data UI:
+
+`https://www-api.cboe.com/europe/equities/transparency_data/get_file_map?category=equities&venue=bxe&trade_type=trade&date=YYYY-MM-DD`
+
+Only the current UTC day's latest five exact minute-file URLs returned by that map can be fetched. The map is capped at 1 MB, each CSV at 2 MB and the cohort at 10 MB. Requests are sequential, credential-free and redirect-disabled. The CDN host and precise path/filename are allowlisted; there is no generated download URL, daily bulk fallback or cross-host redirect. Headers are ordinary content negotiation only.
+
+The 12-field CSV contract is:
+
+`UpdateTime,InstrumentID,Price,PriceCurrency,PriceNotation,Quantity,VenueOfExecution,TradingSystem,PublicationTime,VenueOfPublication,TransactionID,Flags`
+
+A header is optional, but only this exact first record can be skipped. UTC timestamps retain six fractional digits. Monetary notation, positive exact decimal-string prices, positive finite quantities, supported venue/system and no flags other than ALGO are required for a displayed price. Valid but ineligible reports remain in coverage counts. Unknown flags are excluded. Cancellation/amendment records suppress their whole ISIN in the sampled cohort rather than guessing a replacement chain. Conflicting duplicate trade identities do the same. Exact duplicates are deduplicated, then latest **trade** time determines the displayed price, with publication time as a tie-breaker. Malformed records fail the whole cohort because silently dropping one could miss a cancellation. Every event's publication must match its declared file minute and be at least 900 seconds old, preserving submillisecond precision at the boundary.
+
+An empty eligible cohort is a valid empty view. After-close off-book or non-price-forming reports are not converted into zero prices, older prices or apparent real-time observations. Counts can differ because eligible records are deduplicated and collapsed, while cancellation/conflict suppression can remove an otherwise eligible instrument.
+
+## Runtime and persistence
+
+Migration `0018_cboe_delayed_quotes.sql` creates a new, independent `cboe_delayed_source_gate` table. The `bxe_equities` row stores admission state and an atomically committed snapshot. Existing source gates/tables are preserved. Production deployment must apply the migration before testing the new route; missing/malformed gate state fails closed.
+
+Only one shared cohort can run. The entire collection and pending D1 writes are retained with `waitUntil`. The absolute acquisition budget starts at handler entry, including inspection: abort source work at 18 seconds and allow terminal D1 cleanup until the 20-second response ceiling. The whole lifecycle is retained before its first await; it does not depend on a disconnected-client signal. An unknown non-cooperative source request is never raced into unlocking the gate. Busy/blocked or uncertain writes are not taken over. A success is visible only after the owner's atomic release stores the validated snapshot and a final authoritative read confirms that the source is neither busy nor blocked and the shared cache remains valid. An admission-busy race hides previous cached rows. Shared cooldown is 60 seconds. Transient failures back off and respect Retry-After; a previous snapshot may remain for at most 24 hours from its original acquisition, visibly stale with the original publication/acquisition times. A regressing file window is rejected. After UTC midnight the collector does not reconstruct yesterday's download path.
+
+HTTP 401/403/406/407/429/451, redirects and HTML challenges permanently latch the independent source gate and remove cached observations. There is no automatic unlatch or provider retry. The client stops polling after a denied reply. Unknown/uncertain gate outcomes, corrupt cache, missing table or busy lease hide data. Client visibility/unmount aborts and controller identity prevent late responses from changing the active view.
+
+## Reproduction and release checks
+
+- `npm test`: synthetic parser, snapshot, source, handler, matrix, navigation and UI regressions.
+- `npm run test:cboe-runtime`: native workerd/D1 tests with outbound networking disabled, proving shared cold-start cache, atomic release, cooldown, durable denial, malformed-row rejection and preservation of existing tables. Native stalled-map and late-file cases omit client-disconnect signal support and verify abort settlement and durable release in approximately 18 seconds, before the 27-second safety limit.
+- `npx tsc --noEmit --incremental false`, `npm run lint`, `npm run build`.
+- Before release: verify owner-only host access, apply only the additive migration, and verify `/europe` and `/api/v1/europe/cboe/status` without resetting any gate. Test the new snapshot route only while the independent Cboe gate permits it. A file window with no eligible prices is an honest valid result, not a reason to bypass the filters.
+
+Read-only research on 5 November found eligible on-exchange records in an intraday file and no eligible records in a later after-close file. This demonstrates parser applicability, not full coverage, ongoing source availability, real-time latency or a production rollout. No live-source data were retained in the public source tree.
