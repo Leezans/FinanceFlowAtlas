@@ -54,15 +54,19 @@ function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
  return Promise.race([operation,deadline]).finally(()=>signal.removeEventListener('abort',cancel));
 }
 function retryAfter(value:string|null,now:number){if(value===null)return 0;if(/^\d+$/.test(value))return Math.min(Number.MAX_SAFE_INTEGER,Number(value)*1000);const date=Date.parse(value);return Number.isFinite(date)?Math.max(0,date-now):0;}
-export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fetch;now?:()=>number}){
+export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean}){
  const now=options.now??Date.now,fetcher=options.fetcher??fetch;
  let snapshot:KrakenSnapshot|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
- async function refresh(){
+ async function refresh(requestSignal:AbortSignal,lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),DEADLINE_MS);let token:string|undefined,releasing=false;
+  const abort=()=>controller.abort();requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
+  const abortCheck=()=>{if(controller.signal.aborted)fail(requestSignal.aborted?'aborted':'timeout');};
   const started=now();lastAttempt=started;
   try{
-   const lease=await settleGate(options.gate.acquire(controller.signal),controller.signal);token=lease.token;
-   if(!token)fail('source_gate_unavailable');if(controller.signal.aborted)fail('timeout');
+   if(!lifetimeReady())fail('runtime_lifetime_unverified');
+   abortCheck();
+   const lease=await settleGate(track(options.gate.acquire(controller.signal)),controller.signal);token=lease.token;
+   if(!token)fail('source_gate_unavailable');abortCheck();
    const response=await fetcher(KRAKEN_URL,{method:'GET',headers:{Accept:'application/json'},credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal});
    let candidate:KrakenSnapshot;
    try{
@@ -72,19 +76,35 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
     if(response.status!==200)throw new KrakenError('upstream_http',false,retryAfter(response.headers.get('retry-after'),now()));
     candidate=parseKrakenTicker(await readJSON(response,controller.signal),new Date(started).toISOString(),new Date(now()).toISOString());
    }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
-   releasing=true;await settleGate(options.gate.release(token,{kind:'success'}),controller.signal);token=undefined;
+   abortCheck();
+   // Cleanup has its own budget: request cancellation must not interrupt the
+   // single owner-token release, or publish a candidate before it is confirmed.
+   releasing=true;await settleGate(track(options.gate.release(token,{kind:'success'})),AbortSignal.timeout(2_000));token=undefined;releasing=false;
+   abortCheck();
    snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
-   const code=caught instanceof KrakenError?caught.code:typeof (caught as {code?:unknown})?.code==='string'?(caught as {code:string}).code:controller.signal.aborted?'timeout':'source_unavailable';
+   const code=caught instanceof KrakenError?(caught.code==='timeout'&&requestSignal.aborted?'aborted':caught.code):typeof (caught as {code?:unknown})?.code==='string'?(caught as {code:string}).code:controller.signal.aborted?(requestSignal.aborted?'aborted':'timeout'):'source_unavailable';
    denied=denied||(caught instanceof KrakenError&&caught.denied)||code==='source_denied';error=code;
    failures++;const pause=Math.max(Math.min(REFRESH_MS*2**Math.min(failures-1,4),MAX_CACHE_AGE_MS),caught instanceof KrakenError?caught.retryAfterMs:0);
    retryAt=now()+pause;
    if(token&&!releasing){
-    try{await settleGate(options.gate.release(token,{kind:denied?'denied':'temporary_failure',retryAfterMs:pause}),AbortSignal.timeout(2_000));}
+    try{await settleGate(track(options.gate.release(token,{kind:denied?'denied':'temporary_failure',retryAfterMs:pause})),AbortSignal.timeout(2_000));}
     catch{denied=true;error='source_gate_outcome_unconfirmed';}
    }else if(releasing){denied=true;error='source_gate_outcome_unconfirmed';}
    if(denied)snapshot=null;
-  }finally{clearTimeout(timer);}
+  }finally{clearTimeout(timer);requestSignal.removeEventListener('abort',abort);controller.abort();}
+ }
+ function retainedRequest<T>(run:(lifetimeReady:()=>boolean,track:<Value>(operation:Promise<Value>)=>Promise<Value>)=>Promise<T>):Promise<T>{
+  let retained=options.isolatedForTests===true&&!options.waitUntil;
+  const operations:Promise<unknown>[]=[];
+  const track=<T>(operation:Promise<T>)=>{operations.push(operation);return operation;};
+  // Defer admission until registration succeeds. Retain actual DB mutations
+  // too: a bounded wait can finish before D1 confirms its result. Late acquire
+  // cleanup stays inside D1KrakenGate and never starts a provider request.
+  const work=Promise.resolve().then(()=>run(()=>retained,track));
+  const lifetime=work.finally(async()=>{await Promise.allSettled(operations);});
+  try{if(options.waitUntil){options.waitUntil(lifetime);retained=true;}}catch{/* No acquisition without retained cleanup. */}
+  return work;
  }
  function reply():KrakenReply{
   const at=now(),age=snapshot?at-Date.parse(snapshot.fetched_at):null;
@@ -95,9 +115,14 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
   const url=new URL(request.url),mode=url.pathname.split('/').at(-1);
   if(request.method!=='GET')return Response.json({error:'method_not_allowed'},{status:405,headers:{Allow:'GET'}});
   if(!['snapshot','status'].includes(mode??'')||url.search)return Response.json({error:'invalid_request'},{status:400});
+  const run=async(lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>)=>{
   try{if(await settleGate(options.gate.inspect(),AbortSignal.timeout(2_000))==='blocked'){denied=true;snapshot=null;error='source_denied';}}
   catch{error='source_gate_unavailable';const status={...reply().status,state:'unavailable'};return Response.json(mode==='status'?status:{status,snapshot:null},{status:503,headers:{'Cache-Control':'no-store'}});}
-  if(mode==='snapshot'&&!denied&&now()>=retryAt){pending??=refresh().finally(()=>{pending=undefined;});await pending;}
+  if(mode==='snapshot'&&!denied&&now()>=retryAt){pending??=refresh(request.signal,lifetimeReady,track).finally(()=>{pending=undefined;});await pending;}
   const result=reply();return Response.json(mode==='status'?result.status:result,{status:mode==='status'||result.snapshot?200:503,headers:{'Cache-Control':'no-store','X-Data-Status':result.status.state}});
+  };
+  // Register before even the first asynchronous inspection, so an early
+  // response/disconnect cannot end the request before cleanup is retained.
+  return mode==='snapshot'?retainedRequest(run):run(()=>false,operation=>operation);
  };
 }

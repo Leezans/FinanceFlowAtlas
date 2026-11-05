@@ -98,7 +98,11 @@ metadata-only source gate protect freshness and stop after access denial.
 Keep the existing owner-only boundary; code publication does not grant provider
 market-data redistribution rights. Apply `0003_brainy_donald_blake.sql` through
 the supported migration workflow before deployment. Run
-`npm run test:kraken-runtime` for offline native workerd/D1 checks. See
+`npm run test:kraken-runtime` for offline native workerd/D1 checks, including
+request cancellation after response completion and shared cooldown across
+separate workers. The host retains cleanup before asynchronous inspection;
+missing lifetime registration prevents source admission. No existing busy or
+denied lease is reset, and this change requires no migration. See
 [scope, licensing and verified limits](../../docs/source-kraken-spot.md).
 
 ### A-share recovery and diagnostics

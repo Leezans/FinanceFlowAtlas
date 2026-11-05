@@ -6,7 +6,7 @@ function gate():KrakenGate{return {inspect:vi.fn(async()=> 'idle' as const),acqu
 function response(data:unknown=ticker(),status=200,headers:Record<string,string>={}){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json',...headers}});}
 async function readReply(r:Response):Promise<KrakenReply>{return await r.json() as KrakenReply;}
 const request=(mode='snapshot')=>new Request(`https://test.invalid/api/v1/crypto/kraken/${mode}`);
-function setup(){let time=start;const g=gate(),fetcher=vi.fn<typeof fetch>(async()=>response()),handler=createKrakenHandler({gate:g,fetcher,now:()=>time});return {g,fetcher,handler,advance:(ms:number)=>{time+=ms;}};}
+function setup(options:Partial<Parameters<typeof createKrakenHandler>[0]>={}){let time=start;const g=gate(),fetcher=vi.fn<typeof fetch>(async()=>response()),handler=createKrakenHandler({gate:g,fetcher,now:()=>time,isolatedForTests:true,...options});return {g,fetcher,handler,advance:(ms:number)=>{time+=ms;}};}
 afterEach(()=>vi.useRealTimers());
 describe('Kraken single-venue spot semantics',()=>{
  it('keeps exact decimal units, rolling windows and unknown fields separate',()=>{const result=parseKrakenTicker(ticker(),iso,iso);expect(result.rows[0]).toEqual({pair:'BTC/USD',base:'BTC',quote:'USD',last_price_usd:'12.34567890',volume_base_24h:'3.12500000',vwap_usd_24h:'12.10000000',trades_24h:8,net_capital_flow:null,open_interest:null});expect(result.rows[1].volume_base_24h).toBe('0.00000000');expect(result.source_observed_at).toBeNull();expect(result.delay_status).toBe('not_provided');expect(result.coverage).toBe('two_selected_spot_pairs_one_venue');});
@@ -27,4 +27,99 @@ describe('bounded acquisition and ephemeral cache',()=>{
  it('bounds unresolved gate acquisition without starting a source request',async()=>{vi.useFakeTimers();const t=setup();vi.mocked(t.g.acquire).mockImplementation(()=>new Promise(()=>{}));const pending=t.handler(request());await vi.advanceTimersByTimeAsync(12_001);const result=await readReply(await pending);expect(result.status.state).toBe('denied');expect(result.status.error_code).toBe('source_gate_outcome_unconfirmed');expect(t.fetcher).not.toHaveBeenCalled();});
  it('bounds unresolved gate inspection before acquisition',async()=>{vi.useFakeTimers();const t=setup();vi.mocked(t.g.inspect).mockImplementation(()=>new Promise(()=>{}));const pending=t.handler(request());await vi.advanceTimersByTimeAsync(2_001);expect((await pending).status).toBe(503);expect(t.g.acquire).not.toHaveBeenCalled();expect(t.fetcher).not.toHaveBeenCalled();});
  it('cancels an idle body at the deadline',async()=>{vi.useFakeTimers();const t=setup();t.fetcher.mockImplementation(async()=>new Response(new ReadableStream({start(){}}),{headers:{'content-type':'application/json'}}));const pending=t.handler(request());await vi.advanceTimersByTimeAsync(12_001);expect((await readReply(await pending)).status.error_code).toBe('timeout');expect(t.g.release).toHaveBeenLastCalledWith('synthetic-lease',expect.objectContaining({kind:'temporary_failure'}));});
+});
+
+describe('request lifetime retention',()=>{
+ it('registers the complete lifecycle before gate acquisition',async()=>{
+  const order:string[]=[],retained:Promise<unknown>[]=[];
+  const g={...gate(),acquire:vi.fn(async()=>{order.push('acquire');return {token:'one'};}),release:vi.fn(async()=>{order.push('release');})};
+  const t=setup({gate:g,fetcher:async()=>{order.push('fetch');return response();},waitUntil:work=>{order.push('retain');retained.push(work);}});
+  expect((await t.handler(request())).status).toBe(200);await Promise.all(retained);
+  expect(order).toEqual(['retain','acquire','fetch','release']);expect(retained).toHaveLength(1);
+ });
+ it.each(['missing','throws'])('fails closed when retention %s',async mode=>{
+  const t=setup({isolatedForTests:false,...(mode==='throws'?{waitUntil:()=>{throw new Error('unavailable');}}:{})});
+  expect(await readReply(await t.handler(request()))).toMatchObject({snapshot:null,status:{state:'unavailable',error_code:'runtime_lifetime_unverified'}});
+  expect(t.g.acquire).not.toHaveBeenCalled();expect(t.g.release).not.toHaveBeenCalled();expect(t.fetcher).not.toHaveBeenCalled();
+ });
+ it('does not acquire for an already canceled request',async()=>{
+  const t=setup(),controller=new AbortController();controller.abort();
+  expect(await readReply(await t.handler(new Request(request(),{signal:controller.signal})))).toMatchObject({snapshot:null,status:{state:'unavailable',error_code:'aborted'}});
+  expect(t.g.acquire).not.toHaveBeenCalled();expect(t.fetcher).not.toHaveBeenCalled();
+ });
+ it('retains independent cleanup after request cancellation and releases once',async()=>{
+  const retained:Promise<unknown>[]=[],controller=new AbortController();let finish!:()=>void;
+  const barrier=new Promise<void>(resolve=>{finish=resolve;}),t=setup({waitUntil:work=>retained.push(work)});
+  vi.mocked(t.g.release).mockImplementation(()=>barrier);
+  t.fetcher.mockImplementation(async(_url,init)=>new Promise<Response>((_resolve,reject)=>init?.signal?.addEventListener('abort',()=>reject(new Error('cancelled')),{once:true})));
+  const result=t.handler(new Request(request(),{signal:controller.signal}));
+  await vi.waitFor(()=>expect(t.fetcher).toHaveBeenCalledTimes(1));controller.abort();
+  await vi.waitFor(()=>expect(t.g.release).toHaveBeenCalledWith('synthetic-lease',{kind:'temporary_failure',retryAfterMs:REFRESH_MS}));
+  let settled=false;void retained[0].then(()=>{settled=true;});await Promise.resolve();expect(settled).toBe(false);
+  finish();expect(await readReply(await result)).toMatchObject({snapshot:null,status:{state:'unavailable',error_code:'aborted'}});
+  await Promise.all(retained);expect(settled).toBe(true);expect(t.g.release).toHaveBeenCalledTimes(1);
+  await t.handler(request());expect(t.fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('does not interrupt a success release or publish after cancellation',async()=>{
+  const retained:Promise<unknown>[]=[],controller=new AbortController();let finish!:()=>void;
+  const barrier=new Promise<void>(resolve=>{finish=resolve;}),t=setup({waitUntil:work=>retained.push(work)});
+  vi.mocked(t.g.release).mockImplementation(()=>barrier);
+  const result=t.handler(new Request(request(),{signal:controller.signal}));
+  await vi.waitFor(()=>expect(t.g.release).toHaveBeenCalledWith('synthetic-lease',{kind:'success'}));controller.abort();finish();
+  expect(await readReply(await result)).toMatchObject({snapshot:null,status:{state:'unavailable',error_code:'aborted'}});
+  await Promise.all(retained);expect(t.g.release).toHaveBeenCalledTimes(1);
+ });
+ it('cancels an idle body and preserves only the previous stale snapshot',async()=>{
+  const retained:Promise<unknown>[]=[],controller=new AbortController(),t=setup({waitUntil:work=>retained.push(work)});
+  await t.handler(request());t.advance(REFRESH_MS);const cancel=vi.fn();
+  t.fetcher.mockImplementation(async()=>new Response(new ReadableStream({cancel}),{headers:{'content-type':'application/json'}}));
+  const result=t.handler(new Request(request(),{signal:controller.signal}));await vi.waitFor(()=>expect(t.fetcher).toHaveBeenCalledTimes(2));controller.abort();
+  expect(await readReply(await result)).toMatchObject({snapshot:{fetched_at:iso},status:{state:'stale',error_code:'aborted'}});
+  await Promise.all(retained);expect(cancel).toHaveBeenCalledTimes(1);expect(t.g.release).toHaveBeenLastCalledWith('synthetic-lease',{kind:'temporary_failure',retryAfterMs:REFRESH_MS});
+ });
+ it('retains late acquisition cleanup without retrying or starting a source call',async()=>{
+  const retained:Promise<unknown>[]=[],controller=new AbortController();let acquired!:()=>void;
+  const barrier=new Promise<void>(resolve=>{acquired=resolve;}),t=setup({waitUntil:work=>retained.push(work)});
+  vi.mocked(t.g.acquire).mockImplementation(async signal=>{
+   await barrier;
+   // D1KrakenGate cleans up its own late lease when its acquire confirms after
+   // cancellation. Retain its actual promise, not only the bounded wait.
+   if(signal?.aborted){await t.g.release('late-lease',{kind:'temporary_failure'});throw new Error('source_aborted');}
+   return {token:'late-lease'};
+  });
+  const result=t.handler(new Request(request(),{signal:controller.signal}));await vi.waitFor(()=>expect(t.g.acquire).toHaveBeenCalledTimes(1));controller.abort();
+  expect(await readReply(await result)).toMatchObject({snapshot:null,status:{state:'denied',error_code:'source_gate_outcome_unconfirmed'}});
+  let settled=false;void retained[0].then(()=>{settled=true;});await Promise.resolve();expect(settled).toBe(false);
+  acquired();await Promise.all(retained);expect(settled).toBe(true);expect(t.g.release).toHaveBeenCalledExactlyOnceWith('late-lease',{kind:'temporary_failure'});
+  t.advance(MAX_CACHE_AGE_MS);await t.handler(request());expect(t.g.acquire).toHaveBeenCalledTimes(1);expect(t.fetcher).not.toHaveBeenCalled();
+ });
+ it('retains a late release even after the response fails closed at its deadline',async()=>{
+  vi.useFakeTimers();const retained:Promise<unknown>[]=[];let released!:()=>void;
+  const barrier=new Promise<void>(resolve=>{released=resolve;}),t=setup({waitUntil:work=>retained.push(work)});
+  vi.mocked(t.g.release).mockImplementation(()=>barrier);const result=t.handler(request());await vi.advanceTimersByTimeAsync(2_001);
+  expect(await readReply(await result)).toMatchObject({snapshot:null,status:{state:'denied',error_code:'source_gate_outcome_unconfirmed'}});
+  let settled=false;void retained[0].then(()=>{settled=true;});await Promise.resolve();expect(settled).toBe(false);
+  released();await Promise.all(retained);expect(settled).toBe(true);expect(t.g.release).toHaveBeenCalledTimes(1);
+  t.advance(MAX_CACHE_AGE_MS);expect((await readReply(await t.handler(request()))).status.state).toBe('denied');expect(t.fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('a canceled coalesced reader does not abort the originating acquisition',async()=>{
+  const retained:Promise<unknown>[]=[],t=setup({waitUntil:work=>retained.push(work)});let respond!:(value:Response)=>void;
+  t.fetcher.mockImplementation(()=>new Promise(resolve=>{respond=resolve;}));
+  const first=t.handler(request());await vi.waitFor(()=>expect(t.fetcher).toHaveBeenCalledTimes(1));
+  const controller=new AbortController(),second=t.handler(new Request(request(),{signal:controller.signal}));controller.abort();respond(response());
+  expect((await first).status).toBe(200);expect((await second).status).toBe(200);await Promise.all(retained);expect(retained).toHaveLength(2);expect(t.g.release).toHaveBeenCalledTimes(1);
+ });
+ it('persists an observed denial despite a rejecting or hung body cancellation',async()=>{
+  for(const cancel of [()=>Promise.reject(new Error('cancel failed')),()=>new Promise<void>(()=>{})]){
+   const t=setup();t.fetcher.mockImplementation(async()=>new Response(new ReadableStream({cancel}),{status:403}));
+   expect((await readReply(await t.handler(request()))).status.state).toBe('denied');
+   expect(t.g.release).toHaveBeenCalledExactlyOnceWith('synthetic-lease',expect.objectContaining({kind:'denied'}));
+  }
+ });
+ it('preserves a gate denial racing cancellation and clears prior evidence',async()=>{
+  const t=setup(),controller=new AbortController();await t.handler(request());t.advance(REFRESH_MS);
+  vi.mocked(t.g.acquire).mockImplementation(()=>{queueMicrotask(()=>controller.abort());return Promise.reject({code:'source_denied'});});
+  expect(await readReply(await t.handler(new Request(request(),{signal:controller.signal})))).toMatchObject({snapshot:null,status:{state:'denied',error_code:'source_denied',next_retry_at:null}});
+  t.advance(MAX_CACHE_AGE_MS);await t.handler(request());expect(t.fetcher).toHaveBeenCalledTimes(1);expect(t.g.acquire).toHaveBeenCalledTimes(2);expect(t.g.release).toHaveBeenCalledTimes(1);
+ });
 });

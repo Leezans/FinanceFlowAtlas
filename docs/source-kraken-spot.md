@@ -69,7 +69,11 @@ The public API returns no per-ticker observation time: `source_observed_at` is
   trade counts. Duplicate JSON keys, excessive nesting, HTML and incomplete
   snapshots cannot be published. Zero volume/trade count remain valid zeroes.
 - Transport is bounded to 32 KiB and a 12-second acquisition deadline, with
-  bounded DB coordination waits. Native Workers decoding handles gzip/Brotli;
+  bounded DB coordination waits and an independent two-second release wait.
+  The host retains the request lifecycle before asynchronous inspection. Client
+  cancellation aborts upstream work while its owner-token cleanup remains alive;
+  late DB mutations remain retained after bounded response waits. Missing or
+  failed lifetime registration prevents source admission. Native Workers decoding handles gzip/Brotli;
   the parser also caps decompressed bytes. Source bodies and cookies are not
   logged, forwarded, persisted or checked in.
 - Successful snapshots are fresh **as acquisitions** for 60 seconds. A failed
@@ -103,7 +107,9 @@ migration. Keep the existing authentication boundary.
 Checks: `npm test`, `npx tsc --noEmit`, `npm run build`, and
 `npm run test:kraken-runtime` from `apps/site`. The native workerd test exercises
 the checked-in host, compression, D1 cooldown, Retry-After and persistent denial
-across cold workers, while disabling all real network access. Unit/UI tests cover
+across separate native workers sharing D1. An explicit request cancellation after
+its outer response verifies retained cleanup, no publication and cold-worker
+cooldown. All real network access is disabled. Unit/UI tests cover
 semantics, malformed data, missing evidence, stale/expiry, concurrent requests,
 network failure, unmount and denied-state polling. These offline checks do not
 claim live deployed-source verification.
