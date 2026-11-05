@@ -276,3 +276,37 @@ then stall the primary request or an allowed redirect. They verify native abort
 and a confirmed D1 release/cooldown before 27 seconds, with no partial cache and
 no cold-isolate source retry. This tests the missing-signal case absent from the
 previous explicit-abort test; it is not a live-source restoration proof.
+
+
+## One-time terminal invocation reconciliation (migration 0013)
+
+After the separate 20-second prevention release was deployed as private version
+28, a fresh read still showed the exact terminal 09:35 lease described above.
+Migration 0013 is an explicit operator reconciliation of that single invocation,
+not an expiry rule or a retry of a source denial. It requires the original busy
+status, lease token, all six remaining gate fields, no denial reason, an unused
+operation audit id, and a lower time bound beyond the recorded terminal event.
+Any changed field, different owner, idle state, or any blocked reason is a no-op.
+
+The original row is preserved in the existing audit table in the same SQLite
+statement as release. The fixed gate id is included explicitly in audit evidence.
+If audit insertion fails, release is rolled back. The primary 302, exact request
+and trace ids, terminal runtime cancellation, and **unknown redirected response**
+remain explicit. No claim is made that the source succeeded or that an unobserved
+response could not have been a denial. A fresh 60-second quiet period is retained.
+Interrupted application and replay cannot apply the operation twice. The prior
+audit and all snapshots remain untouched; no financial observations are seeded.
+
+This operation is permissible only through the normal reviewed deployment path,
+with fresh evidence and a still-matching row. An observed denial, challenge, rate
+limit, tool denial, or unexpected state must stop the operation rather than cause
+an alternate reset or access route. A new worker deployment follows the migration
+so old in-memory stopped flags are not reused. A subsequent live source request
+must wait for cooldown and fresh admission; it may still time out safely under
+the 20-second limit. Reconciliation alone does not prove source availability.
+
+SQLite tests cover every changed field, all six denied reasons, audit failure,
+prior evidence preservation, replay and interruption. An offline native workerd
+fixture verifies the same SQL, the shared cooldown, and a synthetic cold-worker
+acquisition after test-only cooldown advancement. Live deployment and source
+verification remain separate from those synthetic checks.
