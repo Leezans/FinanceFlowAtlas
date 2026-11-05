@@ -1,25 +1,18 @@
 /** Public spot evidence from one exchange. No accounts, orders or net-flow model. */
+import type {KrakenSnapshotStore} from './snapshot-store';
+import {sharedKrakenReply} from './shared-reply';
 import {strictJSON} from '../ashare/strict-json';
 import {KrakenError, krakenResult} from './protocol';
-import {readTradeSelection, tradeWindowMilliseconds, type TradeSelection, type TradeTimeframe} from './selection';
+import {readTradeSelection, tradeWindowMilliseconds, type TradeSelection} from './selection';
 import {KrakenTradeCollection, selectedTradePairs, tradeSnapshot, TRADE_PAGE_LIMIT, MAX_TRADE_REQUESTS, type KrakenTradeSnapshot} from './trades';
 export {KrakenError} from './protocol';
 export const KRAKEN_URL='https://api.kraken.com/0/public/Ticker?asset_class=forex';
 export const KRAKEN_PAIRS_URL='https://api.kraken.com/0/public/AssetPairs?aclass_base=currency';
 export const KRAKEN_PAIRS_DOCS='https://docs.kraken.com/api-reference/market-data/get-tradable-asset-pairs';
 export const KRAKEN_DOCS='https://docs.kraken.com/api-reference/market-data/get-ticker-information';
-export const REFRESH_MS=60_000, MAX_CACHE_AGE_MS=900_000;
-export const MAX_PAIRS=2_000,MAX_SOURCE_PAIRS=10_000,UNIVERSE_REFRESH_MS=900_000;
+export * from './contract';
+import {KrakenSnapshotValidationError,REFRESH_MS,MAX_CACHE_AGE_MS,MAX_PAIRS,MAX_SOURCE_PAIRS,UNIVERSE_REFRESH_MS,type KrakenPair,type KrakenUniverse,type KrakenRow,type KrakenMissing,type KrakenSnapshot,type KrakenReply,type KrakenGate} from './contract';
 const MAX_BYTES=8_388_608, DEADLINE_MS=12_000, REQUEST_SPACING_MS=1_100;
-export type KrakenPair={source_pair:string;pair:string;base:string;quote:'USD'};
-export type KrakenUniverse={pairs:KrakenPair[];source_pair_count:number;fetched_at:string};
-export type KrakenRow=KrakenPair&{last_price_usd:string;volume_base_24h:string;vwap_usd_24h:string;trades_24h:number;net_capital_flow:null;open_interest:null};
-export type KrakenMissing={pair:string;reason:'missing_ticker'|'invalid_ticker'};
-export type KrakenSnapshot={schema:'kraken-spot/2';venue:'Kraken';coverage:'online_usd_spot_pairs_one_venue';rows:KrakenRow[];missing:KrakenMissing[];universe_pair_count:number;catalog_pair_count:number;catalog_fetched_at:string;quality:'complete'|'partial';acquisition_started_at:string;fetched_at:string;source_observed_at:null;delay_status:'not_provided';window:'rolling_24h';monetary_encoding:'decimal_string'};
-export type KrakenStatus={state:'available'|'stale'|'unavailable'|'denied';error_code:string|null;last_attempt_at:string|null;fetched_at:string|null;cache_age_ms:number|null;refresh_ms:number;max_cache_age_ms:number;next_retry_at:string|null};
-export type KrakenReply={requested_pairs?:string[];requested_window?:TradeTimeframe;status:KrakenStatus;snapshot:KrakenSnapshot|null;trade_snapshot?:KrakenTradeSnapshot|null};
-export type KrakenOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number};
-export interface KrakenGate {inspect():Promise<'idle'|'busy'|'blocked'>;acquire(signal?:AbortSignal):Promise<{token:string}>;release(token:string,outcome:KrakenOutcome):Promise<void>}
 function fail(code:string):never{throw new KrakenError(code);}
 function object(value:unknown):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))fail('invalid_schema');return value as Record<string,unknown>;}
 function decimal(value:unknown,positive=false):string{
@@ -87,7 +80,7 @@ function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
  return Promise.race([operation,deadline]).finally(()=>signal.removeEventListener('abort',cancel));
 }
 function retryAfter(value:string|null,now:number){if(value===null)return 0;if(/^\d+$/.test(value))return Math.min(Number.MAX_SAFE_INTEGER,Number(value)*1000);const date=Date.parse(value);return Number.isFinite(date)?Math.max(0,date-now):0;}
-export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean;includeTradeImbalance?:boolean}){
+export function createKrakenHandler(options:{gate:KrakenGate;snapshotStore?:KrakenSnapshotStore;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean;includeTradeImbalance?:boolean}){
  const now=options.now??Date.now,fetcher=options.fetcher??fetch;
  let universe:KrakenUniverse|null=null;
  let tradeEvidence:KrakenTradeSnapshot|null=null, tradeEvidenceKey:string|null=null;
@@ -146,10 +139,17 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
    abortCheck();
    // Cleanup has its own budget: request cancellation must not interrupt the
    // single owner-token release, or publish a candidate before it is confirmed.
-   releasing=true;await settleGate(track(options.gate.release(token,{kind:'success'})),AbortSignal.timeout(2_000));token=undefined;releasing=false;
+   releasing=true;
+   const publication=options.snapshotStore
+    ?options.snapshotStore.commit(token,{snapshot:candidate,universe:nextUniverse,trades:candidateTrades,key:candidateTrades?selection.key:null})
+    :options.gate.release(token,{kind:'success'});
+   await settleGate(track(publication),AbortSignal.timeout(2_000));token=undefined;releasing=false;
    abortCheck();
    snapshot=candidate;tradeEvidence=candidateTrades;tradeEvidenceKey=selection.key;universe=nextUniverse;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
+   // Input rejection is known to precede the transaction. It can safely use
+   // ordinary owner cleanup; an uncertain submitted batch cannot be retried.
+   if(caught instanceof KrakenSnapshotValidationError)releasing=false;
    const code=caught instanceof KrakenError?(caught.code==='timeout'&&requestSignal.aborted?'aborted':caught.code):typeof (caught as {code?:unknown})?.code==='string'?(caught as {code:string}).code:controller.signal.aborted?(requestSignal.aborted?'aborted':'timeout'):'source_unavailable';
    denied=denied||(caught instanceof KrakenError&&caught.denied)||code==='source_denied';error=code;
    // Another reader owning the shared lease or using its cooldown is normal
@@ -194,6 +194,30 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
   let selection:TradeSelection;
   try{selection=readTradeSelection(url,options.includeTradeImbalance===true);}catch{return Response.json({error:'invalid_request'},{status:400,headers:{'Cache-Control':'no-store'}});}
   const run=async(lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>)=>{
+  if(options.snapshotStore){
+   const read=async()=>{
+    try{return await settleGate(options.snapshotStore!.read(selection),AbortSignal.timeout(2_000));}
+    catch{return {canAcquire:false,code:'snapshot_store_unavailable'};}
+   };
+   let stored=await read();
+   if(stored.code==='source_denied')denied=true;
+   // The durable read is authoritative, including cold selection cohorts and
+   // fresh successful cooldowns. Never hydrate from or acquire through a block.
+   if(mode==='snapshot'&&!denied){
+    if(pending){await pending;stored=await read();}
+    else if(stored.canAcquire&&now()>=retryAt){
+     if(stored.bundle)universe=stored.bundle.universe;
+     pending=refresh(selection,request.signal,lifetimeReady,track).finally(()=>{pending=undefined;});
+     await pending;stored=await read();
+    }
+   }
+   if(stored.code==='source_denied')denied=true;
+   const result=sharedKrakenReply(stored,selection,options.includeTradeImbalance===true,{
+    denied,error,lastAttempt,retryAt,aborted:request.signal.aborted,
+   });
+   const unreadable=['source_gate_unavailable','snapshot_store_unavailable','snapshot_invalid'].includes(stored.code??'');
+   return Response.json(mode==='status'?result.status:result,{status:mode==='status'?!unreadable?200:503:result.snapshot?200:503,headers:{'Cache-Control':'no-store','X-Data-Status':result.status.state}});
+  }
   try{if(await settleGate(options.gate.inspect(),AbortSignal.timeout(2_000))==='blocked'){denied=true;snapshot=null;tradeEvidence=null;tradeEvidenceKey=null;universe=null;error='source_denied';}}
   catch{error='source_gate_unavailable';const status={...reply(selection).status,state:'unavailable'};return Response.json(mode==='status'?status:{...(selection.explicit?{requested_pairs:[...selection.pairs]}:{}),...(selection.windowExplicit?{requested_window:selection.timeframe}:{}),status,snapshot:null,...(options.includeTradeImbalance?{trade_snapshot:null}:{})},{status:503,headers:{'Cache-Control':'no-store'}});}
   if(mode==='snapshot'&&!denied&&now()>=retryAt){pending??=refresh(selection,request.signal,lifetimeReady,track).finally(()=>{pending=undefined;});await pending;}

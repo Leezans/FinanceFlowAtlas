@@ -120,6 +120,13 @@
       "when": 1793893600000,
       "tag": "0016_tpex_summary_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1793899515138,
+      "tag": "0017_kraken_shared_snapshots",
+      "breakpoints": true
     }
   ]
 }

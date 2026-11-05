@@ -1,5 +1,5 @@
 import {SourceGateError,type GateD1,type D1Result} from '../ashare/source-gate';
-import {REFRESH_MS,type KrakenGate,type KrakenOutcome} from './kraken';
+import {REFRESH_MS,type KrakenGate,type KrakenOutcome} from './contract';
 const NOW="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 /** Independent metadata-only gate. Denied/busy states never expire or reset. */
 export const KRAKEN_SQL={

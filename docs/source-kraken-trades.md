@@ -122,10 +122,13 @@ validated as a unit; it cannot turn a capped terminal page into a numeric total.
   both matrices; original acquisition/window times never move during failure.
 - HTTP/API access denials, challenges and rate denials stop the whole shared
   Kraken source persistently. No alternate path, gate reset, extra credentials
-  or lease takeover is introduced. No database migration is needed.
+  or lease takeover is introduced. Shared storage requires appended migration
+  `0017_kraken_shared_snapshots.sql`, without modifying the admission gate.
 
-A busy/cold worker may have no usable in-memory snapshot during shared cooldown;
-this iteration does not introduce shared observation storage. Neither source
+A cold worker can now reuse the validated selected quote/trade cohort from
+primary D1 during shared cooldown. Busy/denied/unknown permission states suppress
+evidence. At most 16 selections plus the latest fallback are retained; original
+window/fetched timestamps and the 15-minute expiry never change on a cache read. Neither source
 latency nor absence of trades is used as a freshness guarantee.
 
 ## Architecture and verification

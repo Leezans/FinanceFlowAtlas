@@ -174,3 +174,17 @@ export const tpexSummaryGate=sqliteTable('tpex_summary_gate',{
  check('tpex_summary_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
  check('tpex_summary_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
+
+/** Owner-only public Kraken evidence. Immutable bundles deduplicated by refs. */
+export const krakenSnapshotCache=sqliteTable('kraken_snapshot_cache',{
+ snapshotId:text('snapshot_id').primaryKey(),formatVersion:integer('format_version').notNull(),
+ payload:text('payload').notNull(),fetchedMs:integer('fetched_ms').notNull(),expiresMs:integer('expires_ms').notNull(),
+},t=>[
+ check('kraken_snapshot_id',sql`length(${t.snapshotId}) = 36`),
+ check('kraken_snapshot_version',sql`${t.formatVersion} = 1`),
+ check('kraken_snapshot_payload',sql`json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000`),
+ check('kraken_snapshot_retention',sql`${t.fetchedMs} >= 0 AND ${t.expiresMs} = ${t.fetchedMs} + 900000`),
+]);
+export const krakenSnapshotRefs=sqliteTable('kraken_snapshot_refs',{
+ cacheKey:text('cache_key').primaryKey(),snapshotId:text('snapshot_id').notNull().references(()=>krakenSnapshotCache.snapshotId),
+},t=>[check('kraken_snapshot_key',sql`${t.cacheKey} = 'latest' OR (length(${t.cacheKey}) BETWEEN 8 AND 113 AND (substr(${t.cacheKey},1,3) = '1m:' OR substr(${t.cacheKey},1,3) = '5m:'))`)]);

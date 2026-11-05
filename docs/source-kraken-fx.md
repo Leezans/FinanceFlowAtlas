@@ -31,15 +31,16 @@ This is a typed projection, not an independent acquisition adapter. The existing
 Kraken universe already contains these USD-quoted spot pairs. The new view uses
 the same singleton handler and source admission as the crypto view with
 `pairs=AUD/USD,EUR/USD,GBP/USD` and the existing one/five-minute trade window.
-There is no new upstream endpoint, source request path, migration or database
-schema. `lib/fx/venue.ts` selects the bounded identity-checked fiat slice only
+The fiat view adds no upstream endpoint or source request path. The later
+shared Kraken cache uses appended migration `0017_kraken_shared_snapshots.sql`. `lib/fx/venue.ts` selects the bounded identity-checked fiat slice only
 after the common browser validator/expiry boundary. No raw source snapshots are
 committed.
 
 The extracted `useKrakenEvidence` hook serves both views. All previous crypto
-protocol defaults, validation, races and expiry behavior remain. Source data is
-shared process-locally; cross-worker D1 admission and denial remain shared. This
-change does not introduce durable shared quote storage or a second gate.
+protocol defaults, validation, races and expiry behavior remain. Validated quote/trade cohorts are now shared in primary D1 by canonical pair
+selection and one/five-minute window. The latest fallback and its selection
+reference share a single immutable bundle. There is no second gate. Cold workers
+reuse the original times, while busy/denied/unknown permission suppresses data.
 
 A cold admitted acquisition may request one catalog, one ticker, and at most six
 trade pages total, not six pages per currency. The existing 12-second deadline,

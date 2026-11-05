@@ -44,8 +44,8 @@ Official references, reviewed 2026-11-05:
   unrestricted data license.
 
 The existing owner-only hosted boundary remains unchanged. Only application code
-and synthetic fixtures are published. Observations live in process memory, never
-in Git, D1 or the public HTTP cache. A public/commercial deployment must separately
+and synthetic fixtures are published. Validated observations live in the owner-only primary D1 cache for bounded
+reuse across workers, never in Git or the public HTTP cache. A public/commercial deployment must separately
 review and obtain applicable provider rights. This increment does not accept new
 agreements, remove authentication, or claim a data redistribution license.
 
@@ -71,11 +71,12 @@ The public API returns no per-ticker observation time: `source_observed_at` is
 ## Acquisition, stale data and denial
 
 - `/api/v1/crypto/kraken/status` inspects metadata but never fetches the provider.
-- `/api/v1/crypto/kraken/snapshot` reads through process-local caches. Catalog
+- `/api/v1/crypto/kraken/snapshot` reads through the shared primary-D1 cache. Catalog
   identities refresh every 15 minutes; tickers refresh after a 60-second quiet
   interval. Both use the same pre-existing `kraken_source_gate` D1 row, owner
   token and retained cleanup. Metadata success alone is not published or cached
-  until ticker validation and the gate release also succeed.
+  until the full quote/trade bundle validates and its atomic cache publication
+  and owner-token gate release succeed.
 - Each top-level response has at most 10,000 pairs; the eligible USD universe has
   at most 2,000. Breaching a bound rejects the acquisition rather than silently
   truncating to a top-N sample. Exact decimal strings remain unchanged.
@@ -106,9 +107,10 @@ The public API returns no per-ticker observation time: `source_observed_at` is
   is no geographic workaround, host rotation, login, automatic reset or retry.
   An uncertain gate release fails closed. A crashed busy lease has no automatic
   expiry/takeover; review is required before changing it.
-- Cold workers cannot access another worker's ephemeral snapshot. During the
-  shared quiet interval they truthfully return unavailable, rather than refetch
-  early or invent a distributed market cache. HTTP responses use `no-store`.
+- Cold workers reuse the same validated selection/window cohort during a
+  successful quiet interval. Missing cohorts may use latest quotes without
+  mismatched trades. Busy, denied, corrupt or unreadable permission/cache state
+  returns no evidence. HTTP responses use `no-store`.
 
 ## Interface and deployment
 
@@ -121,8 +123,9 @@ source time separately, and never includes production sample prices. A readable,
 scrollable equal-area matrix and local pair search expose all validated pairs,
 with explicit coverage/omissions instead of unreadably tiny top-N tiles.
 
-Before deployment, apply `apps/site/drizzle/0003_brainy_donald_blake.sql` through
-the supported migration workflow. Missing storage fails closed without contacting
+Before deployment, apply existing migrations and append
+`apps/site/drizzle/0017_kraken_shared_snapshots.sql` through the supported workflow.
+It creates cache tables only and does not reset any existing source gate. Missing storage fails closed without contacting
 the source. Merely committing this increment does not deploy it or apply a remote
 migration. Keep the existing authentication boundary.
 
@@ -136,3 +139,29 @@ semantics, 700-pair synthetic coverage, metadata TTL/discovery, pacing, partial
 coverage, client count validation, malformed data, missing evidence, stale/expiry, concurrent requests,
 network failure, unmount and denied-state polling. These offline checks do not
 claim live deployed-source verification.
+
+## Shared snapshot boundary
+
+`contract.ts` keeps transport-independent types/limits out of the acquisition
+module. `validation.ts` is the shared response schema, `snapshot.ts` validates persisted
+quote/catalog/trade identity and decimal/time contracts, and `snapshot-store.ts`
+owns primary-D1 transactions. `shared-reply.ts` formats permission-checked reads;
+the acquisition handler continues to own provider requests, pacing and lifetime.
+
+An immutable bundle has one canonical selection/timeframe reference and may also
+be the latest-quote fallback. References deduplicate that bundle; replacement
+does not append history. At most 16 selected references plus latest retain at
+most 17 bundles of 2 MB each. The original fetched time controls the 15-minute
+expiry, never commit/read time. Successful publication lazily removes expired
+references and orphaned bundles in the same owner-token transaction as release.
+A stale owner cannot publish, prune, or release. Known pre-publication
+validation failures release their exact owner as temporary failures. A submitted
+batch with uncertain outcome stays retained and fail-closed, never retried. There is no raw API body, cookie,
+account identifier, credential, or lease token in the persisted evidence.
+
+Each read joins the durable permission row and the chosen evidence in one DB
+statement. A selected cohort keeps its own original quotes and trade window,
+even if another selection was acquired later. A missing/expired selected cohort
+can use the latest valid quote bundle without attaching mismatched trades.
+Cold status reads do not invent a last attempt time. No check claims quote
+observation time or source latency is known.
