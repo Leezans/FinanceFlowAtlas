@@ -8,6 +8,16 @@ const root={schema:'ashare-provider-evidence/1',rows:[row],source_total:1,fetche
 const stock={...root,rows:[{...row,f12:'000001',f14:'合成股票'}],scope:{kind:'industry_stocks',fs:'b:BK0001',classification_level:'unknown_may_mix_levels'}};
 afterEach(()=>{cleanup();vi.unstubAllGlobals()});
 describe('private A-share page integration',()=>{
+ it('shows known source failure while ignoring untrusted error message text',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error_code:'compressed_body_denied',message:'do not display private source text'}),{status:503})));
+  render(<Page/>);await screen.findByText('来源返回压缩内容，传输兼容性校验未通过。');
+  expect(screen.queryByText('do not display private source text')).toBeNull();
+ });
+ it('uses generic error for unknown source codes',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error_code:'untrusted',message:'do not display private source text'}),{status:503})));
+  render(<Page/>);await screen.findByText('来源响应失败（HTTP 503），不沿用旧数据');
+  expect(screen.queryByText('do not display private source text')).toBeNull();
+ });
  it('requests industry then selected stock scope and returns to root',async()=>{
   const mock=vi.fn(async(url:string)=>new Response(JSON.stringify(url.includes('BK0001')?stock:root),{status:200,headers:{etag:'test'}}));vi.stubGlobal('fetch',mock);
   render(<Page/>);const tile=await screen.findByRole('button',{name:/合成行业.*BK0001/});fireEvent.click(tile);

@@ -10,7 +10,7 @@ function createSession(){
   abort?.abort();const controller=new AbortController();abort=controller;
   const key=requested.kind==='industry_rank'?'level1':requested.fs.slice(2);
   const response=await fetch(`/api/v1/ashare/snapshot?scope=${encodeURIComponent(key)}`,{signal:controller.signal,cache:'no-store',headers:ifNoneMatch?{'If-None-Match':ifNoneMatch}:{}});
-  return {status:response.status,etag:response.headers.get('etag')||undefined,payload:response.status===200?await response.json():undefined};
+  return {status:response.status,etag:response.headers.get('etag')||undefined,payload:response.status===304?undefined:await response.json().catch(()=>undefined)};
  });
  return {client,cancel:()=>abort?.abort()};
 }
