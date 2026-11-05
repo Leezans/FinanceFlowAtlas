@@ -152,7 +152,13 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
   }catch(caught){
    const code=caught instanceof KrakenError?(caught.code==='timeout'&&requestSignal.aborted?'aborted':caught.code):typeof (caught as {code?:unknown})?.code==='string'?(caught as {code:string}).code:controller.signal.aborted?(requestSignal.aborted?'aborted':'timeout'):'source_unavailable';
    denied=denied||(caught instanceof KrakenError&&caught.denied)||code==='source_denied';error=code;
-   failures++;const pause=Math.max(Math.min(REFRESH_MS*2**Math.min(failures-1,4),MAX_CACHE_AGE_MS),caught instanceof KrakenError?caught.retryAfterMs:0);
+   // Another reader owning the shared lease or using its cooldown is normal
+   // coordination, not a failed upstream request. Counting it as a failure can
+   // starve a healthy crypto/FX reader for up to fifteen minutes. Keep genuine
+   // failure history intact, and always let the durable gate enforce admission.
+   const coordinating=code==='source_busy'||code==='source_cooldown';
+   if(!coordinating)failures++;
+   const pause=coordinating?REFRESH_MS:Math.max(Math.min(REFRESH_MS*2**Math.min(failures-1,4),MAX_CACHE_AGE_MS),caught instanceof KrakenError?caught.retryAfterMs:0);
    retryAt=now()+pause;
    if(token&&!releasing){
     try{await settleGate(track(options.gate.release(token,{kind:denied?'denied':'temporary_failure',retryAfterMs:pause})),AbortSignal.timeout(2_000));}
