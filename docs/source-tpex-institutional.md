@@ -92,7 +92,9 @@ claimed full market.
   Securities without a company industry are counted but not assigned a class.
 - Initial tiles are equal-area industries. Selecting an industry shows equal-area
   company tiles, including missing rows, with keyboard access and complete exact
-  numeric details. Participant changes and refreshes preserve current selection.
+  numeric details. The opt-in readable grid keeps labels at 14–15px and every
+  row available in a bounded scrolling canvas instead of squeezing dense reports
+  into a fixed-height treemap. Participant changes and refreshes preserve selection.
 - Color is net shares / (buy shares + sell shares), fixed from −100% to +100%.
   Reported zero activity is neutral; missing is gray. Industry quantities are
   simple sums over reported companies and disclose partial coverage. They are
@@ -135,5 +137,8 @@ backfill/date-query support is inferred from the latest-snapshot endpoints.
   all external network disabled, synthetic plain/gzip/Brotli payloads, distinct
   warm/cold workers, cooldown, stale cache clearing after denial, cancellation
   settlement, and unchanged prior gates.
+- Dense local browser QA verifies 28 industry labels at 320px, 200 company
+  labels at 375px, desktop wrapping without horizontal overflow, final-row
+  keyboard selection, industry drilldown and Back. All rows remain available.
 - Live response validation above is from the coding runtime, not the deployed
   website. Deployment, migration and authenticated browser QA are separate steps.

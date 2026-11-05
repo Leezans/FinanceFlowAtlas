@@ -160,7 +160,9 @@ Official company industries support industry→company drilldown and four
 participant selections. Values are **shares**, not currency or all-market net
 capital flows. TWSE-listed stocks are not included. Missing company observations
 remain null and unmatched securities are excluded with visible coverage counts.
-Equal-area tiles use fixed ±100% net/(buy+sell) color intensity.
+Equal-area tiles use fixed ±100% net/(buy+sell) color intensity. Dense industry
+and company matrices keep full readable labels in a bounded scroll canvas; no
+rows are omitted to fit mobile screens.
 
 Apply appended `0007_tpex_institutional_gate.sql` through the authorized deployment
 workflow. The independent source gate preserves all existing gates. It shares the
