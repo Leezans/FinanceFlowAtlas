@@ -1,6 +1,6 @@
 import {strictJSON} from '../ashare/strict-json';
 import {PolymarketError} from './adapter';
-import {SOURCE_URL,PAGE_SIZE,MAX_PAGES} from './model';
+import {SOURCE_URL,HOT_SOURCE_URL,HOT_MARKETS,PAGE_SIZE,MAX_PAGES} from './model';
 export const MAX_BYTES=4_000_000,MAX_TOTAL_BYTES=8_000_000;
 export const PAGE_INTERVAL_MS=250,COLLECTION_BUDGET_MS=8_000;
 export type PolymarketCoverage={pageSizes:number[];stopReason:'source_exhausted'|'page_limit'|'time_budget';hasMore:boolean};
@@ -68,4 +68,18 @@ export async function fetchPolymarket(fetcher:typeof fetch,signal:AbortSignal,no
   cursor=next as string;cursors.add(cursor);await pause(signal);
  }
  throw new PolymarketError('invalid_page');
+}
+
+/** One official ranked-window request under the same lease. This is a separate
+ * discovery mode, not a retry/fallback for keyset, denied access or empty data. */
+export async function fetchHotPolymarket(fetcher:typeof fetch,signal:AbortSignal,now:()=>number):Promise<unknown[]>{
+ const payload=await fetchPage(HOT_SOURCE_URL,fetcher,signal,now,{bytes:0});
+ if(!Array.isArray(payload)||payload.length===0||payload.length>HOT_MARKETS)fail('invalid_market_sample');
+ const seen=new Set<string>();
+ for(const value of payload){
+  const id=value&&typeof value==='object'&&!Array.isArray(value)?(value as Record<string,unknown>).id:null;
+  if(typeof id!=='string'||! /^(?:0|[1-9]\d{0,23})$/.test(id))fail('invalid_market_id');
+  if(seen.has(id))fail('duplicate_market');seen.add(id);
+ }
+ return payload;
 }

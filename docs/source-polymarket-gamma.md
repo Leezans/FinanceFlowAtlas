@@ -2,8 +2,10 @@
 
 ## Current version and historical contract
 
-The current v2 collector uses bounded ID-ordered keyset paging, at most five
-pages of 100 records, with explicit partial coverage and unknown total size.
+The current collector exposes two separate modes: a one-page 100-record
+volume-ranked hot sample and an ID-ordered keyset sample of up to five pages
+of 100 records. Their caches, clocks, and coverage remain distinct while
+sharing one durable source gate. Both expose partial coverage and unknown total size.
 See the [current implementation and compatibility contract](../apps/site/README.md#bounded-keyset-coverage)
 and [official keyset evidence](../apps/site/docs/polymarket-coverage-contract.md).
 The fixed single-page request and first-tag grouping described below document

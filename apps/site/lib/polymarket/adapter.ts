@@ -1,6 +1,6 @@
 import type {PolymarketCoverage} from './transport';
 import {strictJSON} from '../ashare/strict-json';
-import {marketSchema,keysetSnapshotSchema,MAX_MARKETS,type PolymarketMarket,type PolymarketKeysetSnapshot} from './model';
+import {marketSchema,keysetSnapshotSchema,hotSnapshotSchema,MAX_MARKETS,HOT_MARKETS,type PolymarketMarket,type PolymarketKeysetSnapshot,type PolymarketHotSnapshot} from './model';
 export class PolymarketError extends Error {
  constructor(readonly code:string,readonly denied=false,readonly retryAfterMs=0){super(code);}
 }
@@ -50,5 +50,20 @@ export function parsePolymarket(payload:unknown,started:string,fetched:string,co
   if(seen.has(row.id))fail('duplicate_market');seen.add(row.id);rows.push(row);
  }
  const candidate=keysetSnapshotSchema.safeParse({schema:'polymarket-gamma/2',source:'Polymarket Gamma',coverage:'bounded_active_market_sample',sample_limit:MAX_MARKETS,source_market_count:payload.length,excluded_market_count:excluded,ordering:'source_id_descending',complete_universe:false,total_market_count:null,pagination:'keyset',source_page_count:coverage?.pageSizes.length??1,source_page_sizes:coverage?.pageSizes??[payload.length],stop_reason:coverage?.stopReason??'source_exhausted',has_more:coverage?.hasMore??false,grouping:'source_category_else_smallest_tag_slug',acquisition_started_at:started,fetched_at:fetched,source_observed_at:null,net_capital_flow:null,rows});
+ if(!candidate.success)fail('invalid_snapshot');return candidate.data;
+}
+
+/** The official volume-ranked endpoint is deliberately a single bounded window.
+ * Mutable 24h volume is not safe for exhaustive offset traversal. */
+export function parseHotPolymarket(payload:unknown,started:string,fetched:string):PolymarketHotSnapshot{
+ if(!Array.isArray(payload)||payload.length===0||payload.length>HOT_MARKETS)fail('invalid_market_sample');
+ const rows:PolymarketMarket[]=[],seen=new Set<string>();let excluded=0;
+ for(const value of payload){
+  let row:PolymarketMarket|null;
+  try{row=parseMarket(value,fetched);}catch(error){if(!(error instanceof PolymarketError))throw error;excluded++;continue;}
+  if(!row){excluded++;continue;}
+  if(seen.has(row.id))fail('duplicate_market');seen.add(row.id);rows.push(row);
+ }
+ const candidate=hotSnapshotSchema.safeParse({schema:'polymarket-gamma/hot/1',source:'Polymarket Gamma',coverage:'bounded_active_market_sample',sample_limit:HOT_MARKETS,source_market_count:payload.length,excluded_market_count:excluded,ordering:'source_volume24hr_descending',complete_universe:false,total_market_count:null,pagination:'single_page',source_page_count:1,source_page_sizes:[payload.length],stop_reason:payload.length===HOT_MARKETS?'sample_limit':'source_short_page',has_more:null,grouping:'source_category_else_smallest_tag_slug',acquisition_started_at:started,fetched_at:fetched,source_observed_at:null,net_capital_flow:null,rows});
  if(!candidate.success)fail('invalid_snapshot');return candidate.data;
 }

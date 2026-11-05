@@ -232,3 +232,33 @@ The UI/API report actual page sizes, distinct source records, eligible displayed
 The strict cache/browser schema accepts both v2 keyset and validated legacy v1 snapshots. A transient keyset failure preserves age-valid v1 rows with their original single-page, volume-ranked, 200-record coverage and grouping semantics, visibly labeled as a previous sample. No timestamp or field is relabeled to v2. Compatibility never resets a lease, alters a denial, or clears cooldown. No new SQL migration is needed. Keyset availability and ID ordering require a normal gated production verification. The docs allow 503 when keyset is not configured: report this honestly, with no automatic alternate endpoint.
 
 Official [rate limits](https://docs.polymarket.com/api-reference/rate-limits) list Gamma `/markets` at 300 requests per 10 seconds and may queue excess requests. They are an upper bound, not a target or freshness guarantee. Our maximum five calls per completed refresh plus at least 30 seconds of shared cooldown is deliberately much lower. No order, wallet, account, trading, or flow-inference endpoints are used.
+
+### Independent hot and newer-ID discovery
+
+The default Polymarket page now opens **热门 · 24 小时成交量**, showing complete
+market questions directly. The separate **较新 · 市场 ID** mode retains bounded
+keyset coverage. Higher market IDs are only a recency proxy, not verified creation
+chronology. Group browsing remains optional, with search, metric choice, and
+selection retained independently for each mode. The page reports the actual
+selected-price and 24-hour-volume availability, including missing and zero values.
+It never substitutes cumulative, CLOB-specific, or event-level volume.
+
+`GET /api/v1/polymarket/snapshot?view=hot` reads one official `/markets` window of
+at most 100 records, requested by descending `volume24hr`; known numeric volumes
+must be nonincreasing. Missing volume remains null. No cursor/total is provided,
+so even a short response does not establish exhaustion or full ranking coverage.
+`?view=newest` retains the existing five-page/500-record keyset collection. The
+unqualified route remains newest for compatibility; both `status` views are
+read-only. This is not endpoint fallback: each requested view uses only its own
+fixed official path, and source denial stops both modes.
+
+Both modes share the existing single `polymarket_source_gate` lease and at least
+30-second durable cooldown. A new strict payload envelope can hold each mode's
+last successful snapshot and original acquisition timestamps, still within the
+existing 2 MB combined cache bound. One-mode and legacy v1 payloads remain valid.
+A failed or oversized refresh preserves the previous payload exactly; a denied
+source clears both modes. Each mode independently expires after five minutes.
+The visible page checks only its selected mode, and switching does not bypass
+shared cooldown or reset the permissions boundary. No SQL migration or source
+gate reset is required. Neither synthetic tests nor public documentation establish
+current provider availability; verify only through the application's normal gate.
