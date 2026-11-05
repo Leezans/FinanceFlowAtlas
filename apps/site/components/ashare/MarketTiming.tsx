@@ -7,8 +7,11 @@ import './timing.css';
 /** Local clock updates do not fetch data or invent provider timestamps. */
 export default function MarketTiming({state,loading=false}:{state:EvidenceState;loading?:boolean}) {
  const [now,setNow] = useState<number | null>(null);
+ const snapshot = state.status === 'ready' || state.status === 'stale' ? state.snapshot : null;
  useEffect(()=>{
   const update = ()=>setNow(Date.now());
+  // A newly fetched snapshot can postdate the previous 15-second clock sample.
+  // Resample on replacement; do not clamp a genuinely future timestamp to now.
   const start = setTimeout(update,0);
   const timer = setInterval(update,15_000);
   // A suspended/background tab must not keep displaying an old session clock.
@@ -16,8 +19,7 @@ export default function MarketTiming({state,loading=false}:{state:EvidenceState;
   window.addEventListener('focus',update);
   document.addEventListener('visibilitychange',visible);
   return ()=>{clearTimeout(start);clearInterval(timer);window.removeEventListener('focus',update);document.removeEventListener('visibilitychange',visible);};
- },[]);
- const snapshot = state.status === 'ready' || state.status === 'stale' ? state.snapshot : null;
+ },[snapshot?.fetched_at]);
  const session = getAshareSession(now);
  const acquisition = getAcquisitionTiming(snapshot,now);
  const age = acquisitionAgeLabel(acquisition.ageMs);

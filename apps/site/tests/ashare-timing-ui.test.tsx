@@ -51,6 +51,22 @@ describe('session and source time stay distinct in the owner view',()=>{
   expect(screen.getByText('下午连续竞价时段')).toBeTruthy();
   view.unmount();expect(vi.getTimerCount()).toBe(0);
  });
+ it('resamples when snapshots arrive between clock ticks without masking a real future timestamp',()=>{
+  const view = render(<MarketTiming state={state()}/>);tick();
+  // Changing wall time without running interval timers reproduces a response
+  // arriving after the last clock sample and before the next 15-second tick.
+  for(const seconds of ['05','10']){
+   const fetched_at = `2026-11-05T02:00:${seconds}Z`;
+   vi.setSystemTime(new Date(fetched_at));
+   view.rerender(<MarketTiming state={state({fetched_at})}/>);tick();
+   expect(screen.getByRole('status').getAttribute('data-acquisition-status')).toBe('recent');
+   expect(screen.queryByText(/设备时间早于采集时间/)).toBeNull();
+   expect(vi.getTimerCount()).toBe(1);
+  }
+  view.rerender(<MarketTiming state={state({fetched_at:'2026-11-05T02:01:00Z'})}/>);tick();
+  expect(screen.getByRole('status').getAttribute('data-acquisition-status')).toBe('clock_mismatch');
+  view.unmount();expect(vi.getTimerCount()).toBe(0);
+ });
  it('shows exchange closure while source is unavailable, without inventing a last trading date',()=>{
   vi.setSystemTime(new Date('2026-10-01T02:00:00Z'));
   render(<MarketTiming state={emptyState()}/>);tick();
