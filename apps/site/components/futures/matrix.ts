@@ -1,4 +1,4 @@
-import type { MatrixGroup } from '@/components/matrix/MatrixHeatmap';
+import type { MatrixGroup } from '@/lib/matrix/model';
 import { CONTRACTS, net, type CftcSnapshot } from '@/lib/futures/model';
 
 export const TRADER_GROUPS = [

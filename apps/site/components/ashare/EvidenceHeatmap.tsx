@@ -7,7 +7,7 @@ import {flowScaleMaximum,flowStrength,fitTileFont} from './heatmap';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import './styles.css';
 export type Props={state:EvidenceState;onIndustrySelect?:(scope:Scope,row:EvidenceRow)=>void};
-export default function EvidenceHeatmap({state,onIndustrySelect}:Props){if(!state.snapshot||state.status==='error'||state.status==='blocked'||state.status==='empty')return <MatrixHeatmap groups={[]} title="A 股行业矩阵" description="行业 → 成分股 · 供应商订单分类主力净额" areaMeaning="可用时按主力净额绝对值" colorMeaning="可用时红色净买入 / 绿色净卖出；当前无数值" emptyMessage={state.message||'数据未接入；不会生成模拟区块。'}/>;const s=state.snapshot;// Preserve exploration across same-scope polling, but reset when the industry changes.
+export default function EvidenceHeatmap({state,onIndustrySelect}:Props){if(!state.snapshot||state.status==='error'||state.status==='blocked'||state.status==='empty')return <MatrixHeatmap groups={[]} title="A 股行业矩阵" description="行业 → 成分股 · 供应商订单分类主力净额" areaMeaning="可用时按主力净额绝对值" colorMeaning="可用时红色净买入 / 绿色净卖出；当前无数值" emptyTitle={state.recovery?.code==='source_outcome_unconfirmed'?'A股上次采集结果待核查':state.recovery?.mode==='stopped'?'A股来源检查已停止':'A股矩阵暂无可核验数据'} emptyMessage={state.message||'数据未接入；不会生成模拟区块。'}/>;const s=state.snapshot;// Preserve exploration across same-scope polling, but reset when the industry changes.
  const identity=scopeKey(s.scope);return <Heatmap key={identity} snapshot={s} retainedAfterFailure={state.retainedAfterFailure} onIndustrySelect={onIndustrySelect}/>}
 function Heatmap({snapshot:s,onIndustrySelect,retainedAfterFailure}:{snapshot:ValidEvidence;retainedAfterFailure?:boolean;onIndustrySelect?:Props['onIndustrySelect']}){
  const clipPrefix=useId().replace(/:/g,'');

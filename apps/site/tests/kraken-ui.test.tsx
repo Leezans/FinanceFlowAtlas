@@ -10,9 +10,9 @@ beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(at);});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();});
 async function start(){render(<KrakenSpot/>);await act(()=>vi.advanceTimersByTimeAsync(1));}
 describe('Kraken view',()=>{
- it('shows venue, base-volume units and missing flow/OI without a fabricated aggregate',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json(reply())));await start();expect(screen.getByRole('heading',{name:'BTC/USD'})).toBeTruthy();expect(screen.getByText('12.3456789')).toBeTruthy();expect(screen.getAllByText('此来源不提供')).toHaveLength(2);expect(screen.getAllByText('现货不适用')).toHaveLength(2);expect(screen.getByText(/接口未提供 · 延迟未知/)).toBeTruthy();expect(screen.getByRole('link',{name:'A 股优先入口'}).getAttribute('href')).toBe('/ashare');expect(screen.getByText(/不是全球虚拟货币市场总量/)).toBeTruthy();});
- it('shows empty state on initial 503, not zeroes or examples',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json({snapshot:null,status:{...reply().status,state:'unavailable',error_code:'upstream_http'}},{status:503})));await start();expect(screen.queryByRole('heading',{name:'BTC/USD'})).toBeNull();expect(screen.getByText('没有数据时，就留空。')).toBeTruthy();});
- it('keeps a network failure visibly stale, then hides expired rows while hidden',async()=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();fetcher.mockRejectedValue(new Error('offline'));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByText('上次有效快照 · 已陈旧')).toBeTruthy();Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});await act(()=>vi.advanceTimersByTimeAsync(MAX_CACHE_AGE_MS+10_000));expect(screen.queryByRole('heading',{name:'BTC/USD'})).toBeNull();expect(screen.getByText('没有数据时，就留空。')).toBeTruthy();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
+ it('shows venue, base-volume units and missing flow/OI without a fabricated aggregate',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json(reply())));await start();expect(screen.getByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();expect(screen.getByText('12.3456789 USD')).toBeTruthy();expect(screen.getByText(/资金净流入：此来源不提供/)).toBeTruthy();expect(screen.getByText(/未平仓量（OI）：现货不适用/)).toBeTruthy();expect(screen.getByText(/接口未提供 · 延迟未知/)).toBeTruthy();expect(screen.getByRole('link',{name:'A 股优先入口'}).getAttribute('href')).toBe('/ashare');expect(screen.getByText(/不是全球虚拟货币市场总量/)).toBeTruthy();});
+ it('shows empty state on initial 503, not zeroes or examples',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json({snapshot:null,status:{...reply().status,state:'unavailable',error_code:'upstream_http'}},{status:503})));await start();expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeNull();expect(screen.getByText(/只有两组交易对均通过校验才展示/)).toBeTruthy();});
+ it('keeps a network failure visibly stale, then hides expired rows while hidden',async()=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();fetcher.mockRejectedValue(new Error('offline'));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByText('上次有效快照 · 已陈旧')).toBeTruthy();Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});await act(()=>vi.advanceTimersByTimeAsync(MAX_CACHE_AGE_MS+10_000));expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeNull();expect(screen.getByText(/只有两组交易对均通过校验才展示/)).toBeTruthy();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
  it('prevents repeated concurrent clicks, stops polling on denial, and clears rows',async()=>{const denied={snapshot:null,status:{...reply().status,state:'denied',error_code:'source_denied'}};let resolve:(r:Response)=>void=()=>{};const fetcher=vi.fn(()=>new Promise<Response>(r=>{resolve=r;}));vi.stubGlobal('fetch',fetcher);await start();fireEvent.click(screen.getByRole('button',{name:'正在检查…'}));expect(fetcher).toHaveBeenCalledTimes(1);await act(async()=>resolve(Response.json(denied,{status:503})));expect(screen.getByText('来源访问已停止')).toBeTruthy();expect((screen.getByRole('button',{name:'检查更新'}) as HTMLButtonElement).disabled).toBe(true);await act(()=>vi.advanceTimersByTimeAsync(180_000));expect(fetcher).toHaveBeenCalledTimes(1);});
  it('aborts requests on unmount',async()=>{const fetcher=vi.fn(()=>new Promise<Response>(()=>{}));vi.stubGlobal('fetch',fetcher);const result=render(<KrakenSpot/>);await act(()=>vi.advanceTimersByTimeAsync(1));const init=(fetcher.mock.calls as unknown as [string,RequestInit][])[0][1];result.unmount();expect(init.signal?.aborted).toBe(true);});
  it('rejects future and expired observation cache, independently of server status',()=>{expect(visibleSnapshot(reply(),at-1)).toBeNull();expect(visibleSnapshot(reply(),at+MAX_CACHE_AGE_MS+1)).toBeNull();expect(visibleSnapshot(reply(),at+1)).not.toBeNull();});
@@ -21,10 +21,10 @@ describe('Kraken view',()=>{
 describe('Kraken response trust boundary',()=>{
  it.each([401,403])('clears evidence and stops checks after HTTP %s',async status=>{
   const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();
-  expect(screen.getByRole('heading',{name:'BTC/USD'})).toBeTruthy();
+  expect(screen.getByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();
   fetcher.mockImplementation(async()=>new Response('<html>Sign in</html>',{status}));
   fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));
-  expect(screen.queryByRole('heading',{name:'BTC/USD'})).toBeNull();expect(screen.getByText('展示权限已失效')).toBeTruthy();
+  expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeNull();expect(screen.getByText('展示权限已失效')).toBeTruthy();
   expect((screen.getByRole('button',{name:'检查更新'}) as HTMLButtonElement).disabled).toBe(true);
   await act(()=>vi.advanceTimersByTimeAsync(180_000));fireEvent(document,new Event('visibilitychange'));expect(fetcher).toHaveBeenCalledTimes(2);
  });
@@ -32,12 +32,12 @@ describe('Kraken response trust boundary',()=>{
   const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();
   fetcher.mockImplementation(async()=>kind==='html'?new Response('<html>not evidence</html>'):Response.json({...reply(),snapshot:{...reply().snapshot,rows:[]}}));
   fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));
-  expect(screen.queryByRole('heading',{name:'BTC/USD'})).toBeNull();expect(screen.getByText('响应数据未通过校验，已清空浏览器行情。')).toBeTruthy();
-  fetcher.mockImplementation(async()=>Response.json(reply()));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByRole('heading',{name:'BTC/USD'})).toBeTruthy();
+  expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeNull();expect(screen.getByText('响应数据未通过校验，已清空浏览器行情。')).toBeTruthy();
+  fetcher.mockImplementation(async()=>Response.json(reply()));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();
  });
  it('retains validated evidence on a temporary non-JSON 502',async()=>{
   const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();fetcher.mockImplementation(async()=>new Response('Temporary gateway error',{status:502}));
-  fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByRole('heading',{name:'BTC/USD'})).toBeTruthy();expect(screen.getByText('上次有效快照 · 已陈旧')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();expect(screen.getByText('上次有效快照 · 已陈旧')).toBeTruthy();
  });
  it('validates pair evidence, semantics, precision and status consistency',()=>{
   expect(validateKrakenReply(reply())).toEqual(reply());

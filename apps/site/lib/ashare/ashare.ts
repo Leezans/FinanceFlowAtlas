@@ -30,7 +30,7 @@ async function discardDeniedResponse(response?:Response):Promise<void> {
 }
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
-const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','source_gate_unavailable','source_busy','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
+const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','source_gate_unavailable','source_busy','source_outcome_unconfirmed','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
 function failureCode(error:unknown):string {
   if(error&&typeof error==='object'&&'code'in error&&typeof error.code==='string'&&ERROR_CODES.has(error.code))return error.code;
   if(error instanceof Error&&ERROR_CODES.has(error.message))return error.message;
@@ -41,7 +41,9 @@ function failureCode(error:unknown):string {
 }
 function failureMessage(code?:string):string {
   if(code==='source_gate_unavailable')return '数据协调存储尚未就绪，请检查数据库迁移。';
-  if(code==='source_busy'||code==='source_cooldown')return '另一项数据采集仍在进行或限速等待中。';
+  if(code==='source_outcome_unconfirmed')return '上次采集未能确认结果，已停止自动重试；需要核查请求结束记录。';
+  if(code==='source_busy')return '已有采集占用，尚未确认完成。';
+  if(code==='source_cooldown')return '来源限速等待中。';
   if(code==='unsupported_content_encoding')return '来源返回不支持的内容编码，传输校验未通过。';
   if(code==='source_access_denied'||code==='persistent_source_denial'||code==='source_denied'||code==='source_denial_latched')return '来源限制访问，已停止采集，不会绕过限制。';
   if(code==='runtime_routing_unverified')return '当前运行环境的来源连接未通过校验。';
@@ -205,7 +207,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         if(!next)throw new Error('missing_snapshot');
         entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
       }
-      catch(error){entry.errorCode=failureCode(error);state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
+      catch(error){entry.errorCode=failureCode(error);state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied||entry.errorCode==='source_outcome_unconfirmed'){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
       finally{clearTimeout(timer);signal.removeEventListener('abort',abort);acquisition.abort();}
     });state.tail=run;await run;
   }

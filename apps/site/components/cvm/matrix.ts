@@ -1,4 +1,4 @@
-import type {MatrixGroup} from '@/components/matrix/MatrixHeatmap';
+import type {MatrixGroup} from '@/lib/matrix/model';
 import {intensity,type CvmSnapshot} from '@/lib/cvm/model';
 export const money=(cents:number)=>new Intl.NumberFormat('zh-CN',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:2}).format(cents/100);
 export const signedMoney=(cents:number)=>`${cents>0?'+':''}${money(cents)}`;
