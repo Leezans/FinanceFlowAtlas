@@ -62,7 +62,7 @@ async function scenario(mode,fn){
  try{
   const db=await mf.getD1Database('DB','warm');
   for(const sql of priorMigrations)for(const statement of sql.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();
-  await db.prepare("UPDATE ashare_source_gate SET status='blocked',reason_code='http_403' WHERE id='single_upstream'").run();
+  await db.prepare("UPDATE ashare_source_gate SET status='busy',lease_token='synthetic-existing-owner',reason_code=NULL WHERE id='single_upstream'").run();
   for(const table of priorGates.slice(1))await db.prepare(`UPDATE ${table} SET status='blocked'`).run();
   const previous=await Promise.all(priorGates.map(table=>db.prepare(`SELECT * FROM ${table}`).all()));
   for(const statement of migration.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();
