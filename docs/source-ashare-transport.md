@@ -5,6 +5,23 @@ order-flow fields through bounded Cloudflare Workers native fetch. It needs no
 Tushare account, source login, user identity, or API key. The source fields are
 provider order-classified estimates, not market-wide newly created money.
 
+## Stable acquisition order
+
+Paginated clist requests use `fid=f12` (provider code) with the existing descending
+order and 100-row page size. Sorting by live `f62` can move a record between pages
+during collection, causing duplicate or omitted IDs even when the total is
+unchanged. The [efinance implementation](https://github.com/Micro-sheep/efinance/blob/c8fd370a3109b2d14a121e3a32a86e9c8354b01b/efinance/common/getter.py)
+uses code ordering for this reason. The UI still independently sorts the exact
+collected flow amounts, including negative, zero and missing values.
+
+This is a transport-order improvement, not an atomic source snapshot or a fix
+for upstream HTTP failures. Membership changes may still affect pagination;
+existing unique-ID, stable-total and exact-page-count validation remain mandatory.
+The source date and delay remain unknown. Synthetic tests exercise rank drift,
+both industry and stock codes, rejection of duplicate/truncated/changed-total
+pages, and independent UI ordering. No live provider request or gate mutation was
+part of this change. See [collector review](open-source-flow-collectors.md).
+
 ## Native content decoding
 
 Cloudflare's [Fetch documentation](https://developers.cloudflare.com/workers/runtime-apis/fetch/)

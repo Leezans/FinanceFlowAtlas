@@ -58,7 +58,10 @@ function processState():State{return globals[stateKey]??=(freshState());}
 function freshState():State{return {entries:new Map(),tail:Promise.resolve(),lastRequest:-Infinity,backoffUntil:0,backoffFailures:0,denied:false};}
 function abortCheck(signal:AbortSignal){if(signal.aborted)throw new Error(signal.reason instanceof Error&&signal.reason.message==='deadline'?'deadline':'aborted');}
 function sleep(ms:number,signal:AbortSignal):Promise<void>{return new Promise((resolve,reject)=>{abortCheck(signal);const done=()=>{clearTimeout(timer);signal.removeEventListener('abort',cancel);};const cancel=()=>{done();reject(new Error('aborted'));};const timer=setTimeout(()=>{done();resolve();},ms);signal.addEventListener('abort',cancel,{once:true});});}
-function params(scope:Scope,page:number):URLSearchParams{return new URLSearchParams({pn:String(page),pz:'100',po:'1',np:'1',fltt:'2',invt:'2',fid:'f62',fs:scope.fs,fields:FIELDS.join(',')});}
+// Page by immutable provider code, not live flow rank: f62 can move a row
+// across page boundaries mid-acquisition. The UI sorts the collected f62 values
+// independently. Stable code order does not make separate pages atomic.
+function params(scope:Scope,page:number):URLSearchParams{return new URLSearchParams({pn:String(page),pz:'100',po:'1',np:'1',fltt:'2',invt:'2',fid:'f12',fs:scope.fs,fields:FIELDS.join(',')});}
 function redirect(current:string,location:string,query:URLSearchParams):string {
   if(!location||location.length>2048||/[^\x21-\x7e]/.test(location)||location.includes('#'))throw new Error('redirect_denied');
   // Inspect raw authority/path before URL normalization can hide :443, dot segments or encoded hosts.
