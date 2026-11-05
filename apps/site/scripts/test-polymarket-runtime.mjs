@@ -32,9 +32,12 @@ const {MAX_CACHE_AGE_MS,fixture,market,snapshot}=await import('data:text/javascr
 const url='https://test.invalid/api/v1/polymarket/snapshot';
 async function scenario(mode,fn){
  let calls=0;const mock=createFetchMock();mock.disableNetConnect();
- const interception=mock.get('https://gamma-api.polymarket.com').intercept({method:'GET',path:/^\/markets\/keyset\?/}).reply(()=>{
+ const interception=mock.get('https://gamma-api.polymarket.com').intercept({method:'GET',path:/^\/markets(?:\/keyset)?\?/}).reply(request=>{
+  const hot=request.path.startsWith('/markets?');
   calls++;
   if(mode==='paged_denied'&&calls===2)return {statusCode:403,data:''};
+  if(mode==='hot_denied'&&hot)return {statusCode:403,data:''};
+  if(mode==='hot_temporary'&&hot)return {statusCode:503,data:'{}',responseOptions:{headers:{'content-type':'application/json','retry-after':'3600'}}};
   if(mode==='denied')return {statusCode:403,data:''};
   if(mode==='rate_denied')return {statusCode:429,data:''};
   if(mode==='challenge')return {statusCode:200,data:'<html>challenge</html>',responseOptions:{headers:{'content-type':'application/json'}}};
@@ -42,12 +45,12 @@ async function scenario(mode,fn){
   const paged=mode.startsWith('paged');
   const tags=Array.from({length:20},(_,i)=>({slug:`tag-${String(i).padStart(2,'0')}`,label:'x'.repeat(190)}));
   const data=paged?Array.from({length:100},(_,i)=>market(String(1000-(calls-1)*100-i),mode==='paged_oversize'?{tags}:{})):fixture();for(const market of data)if(market.updatedAt)market.updatedAt=new Date(Date.now()-60_000).toISOString();
-  const raw=Buffer.from(JSON.stringify({markets:data,...(paged?{next_cursor:`cursor-${calls}`}:{})})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
+  const raw=Buffer.from(JSON.stringify(hot?data:{markets:data,...(paged?{next_cursor:`cursor-${calls}`}:{})})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
   return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json','content-length':String(encoded.length),...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};
  }).persist();
  if(mode==='disconnect')interception.delay(5000);
  const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-shared-polymarket-gate'},fetchMock:mock});
- const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('virgin')]});
+ const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('virgin'),worker('fresh')]});
  try{
   const db=await mf.getD1Database('DB','warm');
   // Independent sentinel proves the append-only migration never changes an
@@ -127,5 +130,22 @@ await scenario('disconnect',async(mf,db,calls)=>{
  const gate=await db.prepare('SELECT status,lease_token,payload,not_before_ms-updated_ms AS cooldown_ms FROM polymarket_source_gate').first();
  assert.equal(gate.lease_token,null);assert.equal(gate.payload,null);assert.equal(gate.cooldown_ms,30_000);assert.equal(calls(),1);
  const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,503);assert.equal(calls(),1);console.log('PASS cancellation after response retains exact lease cleanup and cold-worker cooldown');
+});
+await scenario('plain',async(mf,db,calls,setMode)=>{
+ const newest=await (await mf.dispatchFetch(url+'?view=newest')).json();
+ const waiting=await (await mf.getWorker('cold')).fetch(url+'?view=hot');assert.equal(waiting.status,503);assert.equal((await waiting.json()).status.error_code,'source_cooldown');assert.equal(calls(),1);
+ await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();
+ const hot=await (await (await mf.getWorker('virgin')).fetch(url+'?view=hot')).json();assert.equal(hot.snapshot.schema,'polymarket-gamma/hot/1');assert.equal(hot.snapshot.source_market_count,3);assert.equal(hot.snapshot.has_more,null);assert.equal(calls(),2);
+ const cachedNewest=await (await (await mf.getWorker('cold')).fetch(url+'?view=newest')).json();assert.deepEqual(cachedNewest.snapshot,newest.snapshot);assert.equal(calls(),2);
+ const raw=(await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload;assert.equal(JSON.parse(raw).schema,'polymarket-discovery/1');
+ await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();setMode('hot_temporary');
+ const failed=await (await (await mf.getWorker('fresh')).fetch(url+'?view=hot')).json();assert.equal(failed.status.state,'stale');assert.deepEqual(failed.snapshot,hot.snapshot);assert.equal((await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload,raw);assert.equal(calls(),3);
+ console.log('PASS native hot/newest share one cooldown, retain separate timestamps and cold-cache evidence after hot503');
+});
+await scenario('plain',async(mf,db,calls,setMode)=>{
+ await (await mf.dispatchFetch(url+'?view=newest')).json();await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();
+ await (await (await mf.getWorker('cold')).fetch(url+'?view=hot')).json();await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();setMode('hot_denied');
+ const denied=await (await (await mf.getWorker('virgin')).fetch(url+'?view=hot')).json();assert.equal(denied.status.state,'denied');assert.equal((await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload,null);
+ const warm=await (await mf.dispatchFetch(url+'?view=newest')).json();assert.equal(warm.snapshot,null);assert.equal(warm.status.state,'denied');assert.equal(calls(),3);console.log('PASS hot denial removes both modes and suppresses warm newest without any fallback');
 });
 console.log('PASS no real provider network calls or captured observations');

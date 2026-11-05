@@ -1,9 +1,9 @@
-import {PolymarketError,parsePolymarket} from './adapter';
-import {fetchPolymarket} from './transport';
-import {REFRESH_MS,MAX_CACHE_AGE_MS,MAX_CACHE_BYTES,type PolymarketSnapshot,type PolymarketReply} from './model';
+import {PolymarketError,parsePolymarket,parseHotPolymarket} from './adapter';
+import {fetchPolymarket,fetchHotPolymarket} from './transport';
+import {REFRESH_MS,MAX_CACHE_AGE_MS,MAX_CACHE_BYTES,selectSnapshot,updateStoredCache,latestCacheTime,type PolymarketStoredCache,type PolymarketView,type PolymarketReply} from './model';
 export const DEADLINE_MS=12_000;
-export type PolymarketOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:PolymarketSnapshot;errorCode?:string};
-export type PolymarketGateState={state:'idle'|'busy'|'blocked';retryAt:number;snapshot:PolymarketSnapshot|null;errorCode:string|null;checkedAt:number};
+export type PolymarketOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:PolymarketStoredCache;errorCode?:string};
+export type PolymarketGateState={state:'idle'|'busy'|'blocked';retryAt:number;snapshot:PolymarketStoredCache|null;errorCode:string|null;checkedAt:number};
 export interface PolymarketGate {
  inspect():Promise<PolymarketGateState>;
  acquire(signal?:AbortSignal):Promise<{token:string}>;
@@ -17,8 +17,8 @@ function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
 }
 export function createPolymarketHandler(options:{gate:PolymarketGate;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean}){
  const now=options.now??Date.now,fetcher=options.fetcher??fetch;
- let snapshot:PolymarketSnapshot|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
- async function refresh(requestSignal:AbortSignal,lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>){
+ let snapshot:PolymarketStoredCache|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
+ async function refresh(view:PolymarketView,requestSignal:AbortSignal,lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>){
   const controller=new AbortController(),deadline=new AbortController();
   const abort=()=>controller.abort();requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
   const timer=setTimeout(()=>{deadline.abort();controller.abort();},DEADLINE_MS);
@@ -32,9 +32,17 @@ export function createPolymarketHandler(options:{gate:PolymarketGate;fetcher?:ty
    const lease=await settleGate(track(options.gate.acquire(controller.signal)),deadline.signal);token=lease.token;
    if(!token)throw new PolymarketError('source_gate_unavailable');
    if(controller.signal.aborted)throw new PolymarketError(requestSignal.aborted?'source_aborted':'timeout');
-   const acquisition=await fetchPolymarket(fetcher,controller.signal,now);
+   const acquired=await (async()=>{
+    if(view==='hot'){
+     const rows=await fetchHotPolymarket(fetcher,controller.signal,now);
+     return parseHotPolymarket(rows,new Date(started).toISOString(),new Date(now()).toISOString());
+    }
+    const acquisition=await fetchPolymarket(fetcher,controller.signal,now);
+    return parsePolymarket(acquisition.rows,new Date(started).toISOString(),new Date(now()).toISOString(),acquisition.coverage);
+   })();
    if(controller.signal.aborted)throw new PolymarketError(requestSignal.aborted?'source_aborted':'timeout');
-   const candidate=parsePolymarket(acquisition.rows,new Date(started).toISOString(),new Date(now()).toISOString(),acquisition.coverage);
+   // Atomic publication retains the other independently-timestamped mode.
+   const candidate=updateStoredCache(snapshot,acquired);
    // Metadata update clocks are not price observation clocks. Never synthesize
    // the latter from acquisition time or a market's record-level updatedAt.
    // Reject oversize evidence before entering uncertain publication state, so
@@ -66,16 +74,18 @@ export function createPolymarketHandler(options:{gate:PolymarketGate;fetcher?:ty
   try{if(options.waitUntil){options.waitUntil(lifetime);retained=true;}}catch{retained=false;}
   return work;
  }
- function reply():PolymarketReply{
-  const at=now(),age=snapshot?at-Date.parse(snapshot.fetched_at):null;
+ function reply(view:PolymarketView):PolymarketReply{
+  const selected=selectSnapshot(snapshot,view),at=now(),age=selected?at-Date.parse(selected.fetched_at):null;
   const permissionUnknown=['source_busy','source_gate_unavailable','source_gate_outcome_unconfirmed','source_stale_lease'].includes(error??'');
   const valid=!permissionUnknown&&age!==null&&age>=0&&age<=MAX_CACHE_AGE_MS;
-  return {snapshot:!denied&&valid?snapshot:null,status:{state:denied?'denied':!valid?'unavailable':error||age!>REFRESH_MS?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:snapshot?.fetched_at??null,cache_age_ms:age,refresh_ms:REFRESH_MS,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:denied||retryAt===0||retryAt>8.64e15?null:new Date(retryAt).toISOString()}};
+  return {snapshot:!denied&&valid?selected:null,status:{state:denied?'denied':!valid?'unavailable':error||age!>REFRESH_MS?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:selected?.fetched_at??null,cache_age_ms:age,refresh_ms:REFRESH_MS,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:denied||retryAt===0||retryAt>8.64e15?null:new Date(retryAt).toISOString()}};
  }
  return async(request:Request):Promise<Response>=>{
   const url=new URL(request.url),mode=url.pathname.split('/').at(-1);
   if(request.method!=='GET')return Response.json({error:'method_not_allowed'},{status:405,headers:{Allow:'GET'}});
-  if(!['snapshot','status'].includes(mode??'')||url.search)return Response.json({error:'invalid_request'},{status:400});
+  const views=url.searchParams.getAll('view');
+  if(!['snapshot','status'].includes(mode??'')||[...url.searchParams.keys()].some(key=>key!=='view')||views.length>1||views.length===1&&!['hot','newest'].includes(views[0]))return Response.json({error:'invalid_request'},{status:400});
+  const view:PolymarketView=views[0]==='hot'?'hot':'newest';
   const run=async(ready:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>)=>{
    let busy=false;
    try{
@@ -84,14 +94,14 @@ export function createPolymarketHandler(options:{gate:PolymarketGate;fetcher?:ty
     else if(!denied){
      busy=shared.state==='busy';retryAt=Math.max(retryAt,shared.retryAt);
      // Busy/unknown permission state cannot serve warm or persisted evidence.
-     if(busy){const status={...reply().status,state:'unavailable' as const,error_code:'source_busy'};return Response.json(mode==='status'?status:{status,snapshot:null},{status:mode==='status'?200:503,headers:{'Cache-Control':'no-store'}});}
-     if(shared.snapshot&&(!snapshot||Date.parse(shared.snapshot.fetched_at)>=Date.parse(snapshot.fetched_at))){snapshot=shared.snapshot;error=shared.errorCode;}
+     if(busy){const status={...reply(view).status,state:'unavailable' as const,error_code:'source_busy'};return Response.json(mode==='status'?status:{status,snapshot:null},{status:mode==='status'?200:503,headers:{'Cache-Control':'no-store'}});}
+     if(shared.snapshot&&(!snapshot||latestCacheTime(shared.snapshot)>=latestCacheTime(snapshot))){snapshot=shared.snapshot;error=shared.errorCode;}
      if(shared.checkedAt>0)lastAttempt=Math.max(lastAttempt??0,shared.checkedAt);
-     if(!snapshot&&now()<retryAt)error=shared.errorCode??'source_cooldown';
+     if(!selectSnapshot(snapshot,view)&&now()<retryAt)error=shared.errorCode??'source_cooldown';
     }
-   }catch{error='source_gate_unavailable';const status={...reply().status,state:'unavailable' as const};return Response.json(mode==='status'?status:{status,snapshot:null},{status:503,headers:{'Cache-Control':'no-store'}});}
-   if(mode==='snapshot'&&!denied&&!busy&&now()>=retryAt){pending??=refresh(request.signal,ready,track).finally(()=>{pending=undefined;});await pending;}
-   const result=reply();return Response.json(mode==='status'?result.status:result,{status:mode==='status'||result.snapshot?200:503,headers:{'Cache-Control':'no-store','X-Data-Status':result.status.state}});
+   }catch{error='source_gate_unavailable';const status={...reply(view).status,state:'unavailable' as const};return Response.json(mode==='status'?status:{status,snapshot:null},{status:503,headers:{'Cache-Control':'no-store'}});}
+   if(mode==='snapshot'&&!denied&&!busy&&now()>=retryAt){pending??=refresh(view,request.signal,ready,track).finally(()=>{pending=undefined;});await pending;}
+   const result=reply(view);return Response.json(mode==='status'?result.status:result,{status:mode==='status'||result.snapshot?200:503,headers:{'Cache-Control':'no-store','X-Data-Status':result.status.state}});
   };
   // Register synchronously, before even asynchronous permission inspection.
   return mode==='snapshot'?retainedRequest(run):run(()=>false,operation=>operation);
