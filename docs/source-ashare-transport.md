@@ -60,3 +60,18 @@ that claim index points, and unknown quote units. Source details also explain
 the two meanings. Synthetic regression tests cover both valid scopes, incorrect
 units in both directions, and null/missing quotes. This corrects the contract;
 it does not establish the quote's observation time or live source availability.
+
+
+### Deploying the unit correction
+
+The cached acquisition stores raw rows and scope, not response `field_units`.
+The response constructs corrected units each time, and its ETag covers those
+units. A conditional request carrying the previous industry-CNY ETag therefore
+receives HTTP 200 with corrected metadata and the same cached rows; subsequent
+requests with the new ETag receive 304 without reacquiring the source.
+
+Deploy the adapter and frontend validator together. An already-open browser
+running the old strict validator does not accept `index_points` and must refresh
+the page to load the updated client. Do not make the new validator accept the
+incorrect old CNY industry label to hide a mixed-version deployment. Synthetic
+regression coverage verifies this cache/ETag transition without live requests.

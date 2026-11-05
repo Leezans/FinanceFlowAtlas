@@ -1,7 +1,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {createAshareHandler,FIELDS,parseScope} from '../lib/ashare/ashare';
 import {strictJSON} from '../lib/ashare/strict-json';
-import {validateEvidence} from '../components/ashare/model';
+import {validateEvidence,type EvidenceSnapshot} from '../components/ashare/model';
 const request=(scope='level1',path='snapshot',headers?:HeadersInit)=>new Request(`https://private.example/api/v1/ashare/${path}?scope=${scope}`,{headers});
 const item=(i=1,stock=false)=>Object.fromEntries(FIELDS.map(f=>[f,f==='f12'?(stock?String(i).padStart(6,'0'):`BK${String(i).padStart(4,'0')}`):f==='f14'?'合成行业':1]));
 const upstream=(rows:unknown[]=[item()],total=rows.length)=>new Response(JSON.stringify({rc:0,data:{total,diff:rows}}),{headers:{'content-type':'application/json'}});
@@ -44,6 +44,33 @@ describe('persistent source gate integration',()=>{
  it('temporary failure releases as temporary, not denial',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};expect((await make(async()=>new Response('{\"error\":\"temporary\"}',{status:500,headers:{'content-type':'application/json'}}),{sourceGate:gate})(request())).status).toBe(503);expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'collection_failed'});});
 });
 describe('scope-specific quote units',()=>{
+ it('revalidates a legacy quote-unit ETag without refetching cached rows',async()=>{
+  const fetcher=vi.fn(async()=>upstream([{...item(),f2:5432.1}]));
+  const handler=make(fetcher);
+  const first=await handler(request());
+  // Retain response key order because it is part of the serialized ETag input.
+  const corrected=await first.json() as EvidenceSnapshot;
+  validateEvidence(corrected);
+  // Before the unit correction, the same rows/scope/timestamps were labeled CNY.
+  const legacy={...corrected,field_units:{...corrected.field_units,f2:'CNY'}};
+  const etagFor=async(value:unknown)=>{
+   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));
+   return '"'+Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')+'"';
+  };
+  expect(await etagFor(corrected)).toBe(first.headers.get('etag'));
+  const legacyEtag=await etagFor(legacy);
+  expect(()=>validateEvidence(legacy)).toThrow('Quote unit differs from source scope');
+  const updated=await handler(request('level1','snapshot',{'If-None-Match':legacyEtag}));
+  expect(updated.status).toBe(200);
+  expect(updated.headers.get('etag')).not.toBe(legacyEtag);
+  expect(updated.headers.get('etag')).toBe(first.headers.get('etag'));
+  expect(await updated.json()).toEqual(corrected);
+  expect(corrected.field_units.f2).toBe('index_points');
+  const cached=await handler(request('level1','snapshot',{'If-None-Match':updated.headers.get('etag')!}));
+  expect(cached.status).toBe(304);
+  expect(await cached.text()).toBe('');
+  expect(fetcher).toHaveBeenCalledTimes(1);
+ });
  it.each([false,true])('retains the raw quote and rejects incompatible metadata for stocks=%s',async stocks=>{
   const quote=stocks?12.34:5432.1;
   const response=await make(async()=>upstream([{...item(1,stocks),f2:quote}]))(request(stocks?'BK0001':'level1'));
