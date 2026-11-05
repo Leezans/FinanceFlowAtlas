@@ -1,7 +1,7 @@
 import {STAGE_MAX_AGE_MS} from './stage';
 import {STAGE_SQL} from './stage-store';
 import {inspectGateState,NOW,SQL,SUCCESS_QUIET_MS,SourceGateError,type GateD1,type D1Result,type SourceGateCode} from './source-gate';
-import {decodeSnapshot,encodeSnapshot,scopeKey,SNAPSHOT_FRESH_MS,SNAPSHOT_MAX_AGE_MS,SNAPSHOT_MAX_SCOPES,type Snapshot,type Scope} from './snapshot';
+import {decodeSnapshot,encodeSnapshot,scopeKey,SNAPSHOT_MAX_AGE_MS,SNAPSHOT_MAX_SCOPES,type Snapshot,type Scope} from './snapshot';
 
 export type SnapshotRead={snapshot?:Snapshot;ageMs?:number;code?:SourceGateCode|'snapshot_invalid'|'snapshot_store_unavailable';canAcquire:boolean};
 export interface SnapshotStore {
@@ -60,7 +60,10 @@ export class D1SnapshotStore implements SnapshotStore {
       if(acquired>now+60_000)return {code:'snapshot_invalid',canAcquire:false};
       const ageMs=Math.max(now-committed,now-acquired,snapshot.collection_started_at?now-Date.parse(snapshot.collection_started_at):0);
       if(ageMs>=SNAPSHOT_MAX_AGE_MS)return base;
-      return {...base,snapshot,ageMs,code:failedCooldown?gateCode!:ageMs>=SNAPSHOT_FRESH_MS?base.code:undefined};
+      // Oldest-page age may legitimately make a completed staged snapshot stale.
+      // That does not turn the normal post-success pacing interval into a failed
+      // refresh. Retain the age and gate, but report only a failure cooldown.
+      return {...base,snapshot,ageMs,code:failedCooldown?gateCode!:undefined};
     }catch{return {code:'snapshot_invalid',canAcquire:false};}
   }
   async commit(token:string,snapshot:Snapshot):Promise<void> {
