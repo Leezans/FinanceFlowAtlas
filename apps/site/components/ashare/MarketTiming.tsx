@@ -40,7 +40,8 @@ export default function MarketTiming({state,loading=false}:{state:EvidenceState;
   {collectionStart&&<p>本次完整采集窗口 · 北京时间：{collectionStart} 至 {fetched}。分页不是同一时刻的原子快照；各页仍可能存在时差。</p>}
   <p className="timing-acquisition" data-acquisition-status={acquisition.status} role="status">{state.retainedDuringCollection?'完整分页仍在核对，保留上次完整快照':acquisition.label}{loading ? '；正在获取并核对完整分页' : ''}。</p>
   <details><summary>时间口径与日历依据</summary>
-   <p>休市不代表数据过期，处于交易时段也不代表数据实时。当前来源没有提供交易日期、行情观测时间或延迟，以上三项不会用抓取日期补齐。</p>
+   <p>休市不代表数据过期，处于交易时段也不代表数据实时。当前采集尚未验证主力净额对应的交易日期、资金观测时间或来源延迟，以上三项不会用抓取日期补齐。</p>
+   <p>报价更新时间不等于资金观测时间。只有确认时间字段与主力净额属于同一观测记录后，才能据此判断资金数据的新旧。</p>
    <p>60 秒仅是应用检查间隔，缓存年龄依据设备时钟估算。采集超过间隔或服务器报告刷新失败时会单独提示，不把旧缓存标成最新行情。</p>
    <p>当前只核对了 <a href={ASHARE_CALENDAR.holidaySource} target="_blank" rel="noreferrer">2026 年上交所休市安排</a>。周末调休上班不改成交易日；日历年份以外显示未知。<a href={ASHARE_CALENDAR.hoursSource} target="_blank" rel="noreferrer">股票竞价交易时段</a>：09:15–09:25 开盘集合竞价；09:30–11:30、13:00–14:57 连续竞价；14:57–15:00 收盘集合竞价。仅用于沪深 A 股普通竞价时段参考，不覆盖盘后交易。</p>
   </details>
