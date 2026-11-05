@@ -1,9 +1,11 @@
 import {strictJSON} from './strict-json';
 import {safeSourceCode} from './recovery';
-import {type SourceGateCode,type SourceGate,type SourceOutcome} from './source-gate';
+import {type SourceGateCode,type SourceGate,type SourceOutcome,type SourceLease} from './source-gate';
 export type {SourceGate,SourceOutcome} from './source-gate';
 import {FIELDS,parseScope,validateRow,type Row,type Scope,type Snapshot,SNAPSHOT_FRESH_MS as TTL} from './snapshot';
 import type {SnapshotStore,SnapshotRead} from './snapshot-store';
+import {StageSaveNotStarted,type StageStore} from './stage-store';
+import {STAGE_MAX_AGE_MS,type Stage} from './stage';
 export {NUMERIC_FIELDS,FIELDS,parseScope} from './snapshot';
 export type {Row,Scope} from './snapshot';
 const PATH='/api/qt/clist/get';
@@ -32,7 +34,7 @@ async function discardDeniedResponse(response?:Response):Promise<void> {
 }
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
-const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','snapshot_store_required','snapshot_store_unavailable','snapshot_invalid','source_gate_unavailable','source_busy','source_outcome_unconfirmed','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
+const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','snapshot_store_required','snapshot_store_unavailable','snapshot_invalid','source_gate_unavailable','source_busy','source_outcome_unconfirmed','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot','stage_invalid','stage_store_unavailable','acquisition_expired','unstable_order','collection_in_progress']);
 function failureCode(error:unknown):string {
   if(error&&typeof error==='object'&&'code'in error&&typeof error.code==='string'&&ERROR_CODES.has(error.code))return error.code;
   if(error instanceof Error&&ERROR_CODES.has(error.message))return error.message;
@@ -45,6 +47,7 @@ function failureMessage(code?:string):string {
   if(code==='source_gate_unavailable'||code==='snapshot_store_required'||code==='snapshot_store_unavailable')return '数据协调存储尚未就绪，请检查数据库迁移。';
   if(code==='source_outcome_unconfirmed')return '上次采集未能确认结果，已停止自动重试；需要核查请求结束记录。';
   if(code==='source_busy')return '已有采集占用，尚未确认完成。';
+  if(code==='collection_in_progress')return '完整分页仍在核对，部分数据不会用于资金矩阵；稍后继续采集。';
   if(code==='source_cooldown')return '来源限速等待中。';
   if(code==='unsupported_content_encoding')return '来源返回不支持的内容编码，传输校验未通过。';
   if(code==='source_access_denied'||code==='persistent_source_denial'||code==='source_denied'||code==='source_denial_latched')return '来源限制访问，已停止采集，不会绕过限制。';
@@ -88,7 +91,7 @@ async function body(response:Response,budget:number,signal:AbortSignal):Promise<
   const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
 /** Server-only: no background worker; no network until an enabled snapshot GET. */
-export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetcher;now?:()=>number;isolatedForTests?:boolean;runtime?:'cloudflare-workers';sourceGate?:SourceGate;snapshotStore?:SnapshotStore;waitUntil?:(promise:Promise<unknown>)=>void}={}){
+export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetcher;now?:()=>number;isolatedForTests?:boolean;runtime?:'cloudflare-workers';sourceGate?:SourceGate;snapshotStore?:SnapshotStore;stageStore?:StageStore;waitUntil?:(promise:Promise<unknown>)=>void}={}){
   const state=options.isolatedForTests?freshState():processState();
   const fetcher=options.fetcher??((url,init)=>fetch(url,init));
   const sourceGate:SourceGate|undefined=options.sourceGate??(options.isolatedForTests?{async acquire(){return {token:'synthetic-only'};},async release(){}}:undefined);
@@ -103,13 +106,20 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     const env=host.process?.env;
     return !env||!['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'].some(k=>!!env[k]);
   }
-  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number):Promise<Snapshot>{
+  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number,stage?:Stage,acquiredAtMs?:number,acquiredClock=now()):Promise<{snapshot:Snapshot}|{stage:Stage}>{
     const controller=new AbortController();const abort=()=>controller.abort(requestSignal.reason);
     requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
     const signal=controller.signal;
-    let bytes=0,redirects=0,total:number|undefined,endpoint=ORIGIN;const rows:Row[]=[],ids=new Set<string>();
+    let bytes=stage?.bytes??0,redirects=stage?.redirect_count??0,total:number|undefined=stage?.source_total,endpoint=stage?.endpoint==='official_redirect'?DELAY:ORIGIN;
+    const rows:Row[]=stage?[...stage.rows]:[],ids=new Set(rows.map(row=>row.f12));
+    // DB-origin start plus monotonic elapsed avoids mixing Worker and D1 wall clocks.
+    const clock=()=>acquiredAtMs===undefined?Date.now():acquiredAtMs+Math.max(0,now()-acquiredClock);
+    const timestamp=()=>new Date(clock()).toISOString();
+    const startedAt=stage?.started_at??new Date(acquiredAtMs??Date.now()).toISOString(),firstPage=(stage?.page_count??0)+1;
+    const staged=!!options.stageStore;
     try {
-      for(let page=1;page<=MAX_PAGES;page++){
+      for(let page=firstPage;page<=MAX_PAGES;page++){
+        if(staged&&clock()-Date.parse(startedAt)>=STAGE_MAX_AGE_MS)throw new Error('acquisition_expired');
         const query=params(scope,page);let url=`${endpoint}${PATH}?${query}`;let response:Response;let raw:Uint8Array;
         while(true){
           abortCheck(signal);if(state.denied)throw new SourceDenied('source_denial_latched');if(!enabled())throw new Error('disabled');if(!routingAllowed())throw new Error('runtime_routing_unverified');
@@ -145,8 +155,16 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         const count=payload.data.total as number;if(count<=0||count>MAX_ROWS||Math.ceil(count/100)>MAX_PAGES)throw new Error('row_budget');
         if(total===undefined)total=count;if(count!==total)throw new Error('unstable_total');
         const items=payload.data.diff;if(items.length!==Math.min(100,total-rows.length))throw new Error('incomplete_page');
-        for(const item of items){const value=validateRow(item,scope);if(ids.has(value.f12))throw new Error('duplicate_id');ids.add(value.f12);rows.push(value);}
-        if(rows.length===total){abortCheck(signal);if(!enabled())throw new Error('disabled');return {rows,source_total:total,scope,page_count:page,fetched_at:new Date().toISOString()};}
+        for(const item of items){const value=validateRow(item,scope);if(ids.has(value.f12))throw new Error('duplicate_id');
+          if(staged&&rows.length&&rows[rows.length-1].f12<=value.f12)throw new Error('unstable_order');
+          ids.add(value.f12);rows.push(value);}
+        abortCheck(signal);if(!enabled())throw new Error('disabled');
+        if(staged&&clock()-Date.parse(startedAt)>=STAGE_MAX_AGE_MS)throw new Error('acquisition_expired');
+        if(rows.length===total)return {snapshot:{rows,source_total:total,scope,page_count:page,fetched_at:staged?timestamp():new Date().toISOString(),...(staged?{collection_started_at:startedAt}:{})}};
+        // Yield only after validating a whole page. Durable partial rows never
+        // enter a public snapshot or its denominator. The next normal request
+        // must acquire the same gate again, respecting its shared pacing.
+        if(staged&&(page-firstPage+1>=3||now()>=deadline-6000))return {stage:{rows,source_total:total,scope,page_count:page,started_at:startedAt,updated_at:timestamp(),endpoint:endpoint===DELAY?'official_redirect':'primary',redirect_count:redirects as 0|1,bytes}};
       }
       throw new Error('incomplete_snapshot');
     }finally{requestSignal.removeEventListener('abort',abort);controller.abort();}
@@ -180,7 +198,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           try{return await sourceGate.acquire(scope.fs,signal);}
           catch(error){if(error&&typeof error==='object'&&'code'in error&&error.code==='source_denied')throw new SourceDenied('persistent_source_denial');throw error;}
         };
-        let lease:{token:string};
+        let lease:SourceLease;
         try{lease=await acquire();}
         catch(error){
           if(!error||typeof error!=='object'||!('code'in error)||error.code!=='source_cooldown')throw error;
@@ -191,30 +209,53 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           lease=await acquire();
         }
         if(!lease||typeof lease.token!=='string'||!lease.token)throw new SourceDenied('invalid_source_lease');
+        const acquiredClock=now();
         console.info('[ashare lifecycle]',JSON.stringify({event:'lease_acquired',scope:scope.kind}));
-        let next:Snapshot|undefined, collectionError:unknown;
+        let next:Snapshot|undefined,partial:Stage|undefined,collectionError:unknown;
         let outcome:SourceOutcome={kind:'success'};
-        try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');next=await collect(scope,signal,deadline);}
+        try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
+          const previous=await options.stageStore?.read(lease.token,scope);
+          const collected=await collect(scope,signal,deadline,previous,lease.acquiredAtMs,acquiredClock);
+          if('snapshot'in collected)next=collected.snapshot;else partial=collected.stage;}
         catch(error){
+          // An uncertain mutation inside stage-read expiry cleanup is already an
+          // unsettled write. Never retry cleanup or guess a lease release.
+          if(error&&typeof error==='object'&&'code'in error&&error.code==='source_gate_release_unconfirmed')throw new SourceDenied('source_gate_release_unconfirmed');
           // Never let a deadline erase an actually observed denial.
           collectionError=!(error instanceof SourceDenied)&&signal.aborted&&signal.reason instanceof Error&&signal.reason.message==='deadline'?new Error('deadline'):error;
           outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:'temporary_failure',reason:'collection_failed'};
         }
-        if(next&&!collectionError){
+        if((next||partial)&&!collectionError){
           // Check before issuing the atomic commit, not after it. An issued
           // commit must settle; a timeout is not permission for a second release.
           try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');}
-          catch(error){next=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:'collection_failed'};}
+          catch(error){next=undefined;partial=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:'collection_failed'};}
         }
         // Release exactly once, including cancellation, and never silently ignore a
         // failed/uncertain write. No publication until persistence confirms release.
         try{
           if(next&&!collectionError&&options.snapshotStore)await options.snapshotStore.commit(lease.token,next);
-          else await sourceGate.release(lease.token,outcome);
+          else if(partial&&!collectionError&&options.stageStore)await options.stageStore.save(lease.token,partial);
+          else {
+            // Only this invocation's owned stage may be discarded. An uncertain
+            // stage mutation is not followed by a guessed gate release.
+            if(options.stageStore&&outcome.kind!=='denied')await options.stageStore.discard(lease.token,scope);
+            await sourceGate.release(lease.token,outcome);
+          }
           console.info('[ashare lifecycle]',JSON.stringify({event:'lease_released',scope:scope.kind,outcome:outcome.kind}));}
-        catch{throw new SourceDenied('source_gate_release_unconfirmed');}
+        catch(error){
+          if(error instanceof StageSaveNotStarted){
+            // Deterministic preflight rejection is known not to have issued the
+            // save batch. Clean up this owner's scope once and release normally.
+            try{await options.stageStore!.discard(lease.token,scope);await sourceGate.release(lease.token,{kind:'temporary_failure',reason:'collection_failed'});}
+            catch{throw new SourceDenied('source_gate_release_unconfirmed');}
+            throw new Error('stage_invalid');
+          }
+          throw new SourceDenied('source_gate_release_unconfirmed');
+        }
         finally{if(collectionError instanceof SourceDenied)await discardDeniedResponse(collectionError.response);}
         if(collectionError)throw collectionError;
+        if(partial){entry.error=false;entry.errorCode='collection_in_progress';entry.retryAt=now()+3000;return;}
         if(!next)throw new Error('missing_snapshot');
         entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
       }
@@ -302,7 +343,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         }catch{if(!issue?.stopped)issue={code:'source_gate_unavailable',stopped:false,retrySeconds:60};}
         finally{if(timer!==undefined)clearTimeout(timer);}
       }
-      return reply(200,{state:!state.denied&&entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue,refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
+      return reply(200,{state:!state.denied&&entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue&&issue.code!=='collection_in_progress',refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
     }
     if(!state.entries.has(key)){
       // One level-1 plus one selected industry cache. Never evict in-flight work.
@@ -316,7 +357,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     shared=await readShared(scope);hydrate(entry,shared);
     const issue=sharedDiagnostic(shared,entry);
     if(state.denied||!entry.snapshot)return reply(503,{state:'unavailable',error_code:issue?.code??'not_yet_acquired',message:failureMessage(issue?.code)},undefined,issue);
-    const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:scope.kind==='industry_rank'?'index_points':'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale()||!!issue,has_error:!!issue};
+    const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:scope.kind==='industry_rank'?'index_points':'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale()||!!issue,has_error:!!issue&&issue.code!=='collection_in_progress'};
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload)));
     const etag='"'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')+'"';
     // The ETag digest yields. Recheck shared permission as the final async step

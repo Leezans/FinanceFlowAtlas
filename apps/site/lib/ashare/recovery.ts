@@ -4,15 +4,15 @@ const STOPPED = new Set([
  'source_outcome_unconfirmed','source_gate_release_unconfirmed','invalid_source_lease','html_challenge','non_json_challenge',
  'redirect_denied','automatic_redirect_denied','provider_error_or_challenge',
 ]);
-const STORAGE = new Set(['source_gate_required','source_gate_unavailable','source_stale_lease','snapshot_store_required','snapshot_store_unavailable']);
+const STORAGE = new Set(['source_gate_required','source_gate_unavailable','source_stale_lease','snapshot_store_required','snapshot_store_unavailable','stage_store_unavailable']);
 const VALIDATION = new Set(['byte_budget','invalid_schema','invalid_json','row_budget','unstable_total',
  'incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id',
- 'snapshot_invalid','invalid_name','invalid_numeric','negative_price','invalid_return','missing_snapshot']);
+ 'snapshot_invalid','invalid_name','invalid_numeric','negative_price','invalid_return','missing_snapshot','stage_invalid','acquisition_expired','unstable_order']);
 const TRANSPORT = new Set(['upstream_http','not_json','unsupported_content_encoding','transport_or_encoding_failure',
  'aborted','source_aborted','deadline','collection_failed','not_yet_acquired']);
 export function safeSourceCode(value:unknown):string|null {
  return typeof value==='string' && (STOPPED.has(value)||STORAGE.has(value)||VALIDATION.has(value)||TRANSPORT.has(value)||
- ['source_busy','source_cooldown','runtime_routing_unverified','runtime_lifetime_unverified','disabled','browser_network'].includes(value)) ? value : null;
+ ['collection_in_progress','source_busy','source_cooldown','runtime_routing_unverified','runtime_lifetime_unverified','disabled','browser_network'].includes(value)) ? value : null;
 }
 export function isSourceStopped(code:string):boolean {return STOPPED.has(code)||code==='disabled';}
 export function describeRecovery(code:string):{stage:string;message:string;action:string} {
@@ -23,6 +23,7 @@ export function describeRecovery(code:string):{stage:string;message:string;actio
  if(STORAGE.has(code))return {stage:'采集协调存储',message:'数据协调存储尚未就绪，请检查数据库迁移。',action:'维护者需核查 D1 绑定、采集门禁与快照缓存迁移；不要清空锁或拒绝记录。'};
  if(code==='runtime_lifetime_unverified')return {stage:'请求生命周期',message:'当前运行环境尚未建立安全的取消清理机制。',action:'维护者需核查 Workers 请求信号与清理保活；不会启动来源采集。'};
  if(code==='runtime_routing_unverified')return {stage:'运行环境',message:'当前运行环境的来源连接未通过校验。',action:'维护者需核对受支持的 Workers 原生连接；不要改用代理绕过限制。'};
+ if(code==='collection_in_progress')return {stage:'完整分页核对中',message:'正在分段采集和核对完整列表，尚未发布部分数据。',action:'页面将在来源冷却结束后继续；只有全部分页通过校验才更新矩阵。采集跨越一段时间，不代表同一时刻的行情。'};
  if(code==='source_busy')return {stage:'采集协调',message:'已有采集占用，尚未确认完成。',action:'暂时等待现有采集；若超过预期时长，将停止自动检查并提示核查结果。不能抢占租约。'};
  if(code==='source_cooldown')return {stage:'来源限速',message:'来源限速等待中，请稍后重试。',action:'等待冷却结束，重试仍受服务端限速约束。'};
  if(code==='unsupported_content_encoding')return {stage:'传输解码',message:'来源返回不支持的内容编码，传输校验未通过。',action:'维护者需核对来源内容编码与 Workers 解码结果。'};

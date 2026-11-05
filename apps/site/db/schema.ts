@@ -140,3 +140,15 @@ export const ashareSnapshotCache=sqliteTable('ashare_snapshot_cache',{
  check('ashare_snapshot_payload',sql`json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000`),
  check('ashare_snapshot_retention',sql`${t.committedMs} >= 0 AND ${t.expiresMs} = ${t.committedMs} + 86400000`),
 ]);
+
+/** Private incomplete A-share prefixes. Never exposed as complete observations. */
+export const ashareStagedAcquisitions=sqliteTable('ashare_staged_acquisitions',{
+ scopeKey:text('scope_key').primaryKey(),formatVersion:integer('format_version').notNull(),
+ payload:text('payload').notNull(),startedMs:integer('started_ms').notNull(),
+ updatedMs:integer('updated_ms').notNull(),expiresMs:integer('expires_ms').notNull(),
+},t=>[
+ check('ashare_stage_scope',sql`${t.scopeKey} = 'level1' OR ${t.scopeKey} GLOB 'BK[0-9][0-9][0-9][0-9]'`),
+ check('ashare_stage_version',sql`${t.formatVersion} = 1`),
+ check('ashare_stage_payload',sql`json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000`),
+ check('ashare_stage_retention',sql`${t.startedMs} >= 0 AND ${t.updatedMs} >= ${t.startedMs} AND ${t.updatedMs} < ${t.expiresMs} AND ${t.expiresMs} = ${t.startedMs} + 180000`),
+]);

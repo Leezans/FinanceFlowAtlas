@@ -1,3 +1,5 @@
+import {STAGE_MAX_AGE_MS} from './stage';
+import {STAGE_SQL} from './stage-store';
 import {inspectGateState,NOW,SQL,SUCCESS_QUIET_MS,SourceGateError,type GateD1,type D1Result,type SourceGateCode} from './source-gate';
 import {decodeSnapshot,encodeSnapshot,scopeKey,SNAPSHOT_FRESH_MS,SNAPSHOT_MAX_AGE_MS,SNAPSHOT_MAX_SCOPES,type Snapshot,type Scope} from './snapshot';
 
@@ -32,7 +34,7 @@ export const SNAPSHOT_SQL={
  * 24h. Expired records are removed lazily during the next successful commit.
  */
 export class D1SnapshotStore implements SnapshotStore {
-  constructor(private readonly db:SnapshotD1) {}
+  constructor(private readonly db:SnapshotD1,private readonly options:{staged?:boolean}={}) {}
   async read(scope:Scope):Promise<SnapshotRead> {
     let result:D1Result;
     try{result=await this.db.prepare(SNAPSHOT_SQL.read).bind(scopeKey(scope)).run();}
@@ -56,7 +58,7 @@ export class D1SnapshotStore implements SnapshotStore {
     try{
       const snapshot=decodeSnapshot(row!.payload,scope),acquired=Date.parse(snapshot.fetched_at);
       if(acquired>now+60_000)return {code:'snapshot_invalid',canAcquire:false};
-      const ageMs=Math.max(now-committed,now-acquired);
+      const ageMs=Math.max(now-committed,now-acquired,snapshot.collection_started_at?now-Date.parse(snapshot.collection_started_at):0);
       if(ageMs>=SNAPSHOT_MAX_AGE_MS)return base;
       return {...base,snapshot,ageMs,code:failedCooldown?gateCode!:ageMs>=SNAPSHOT_FRESH_MS?base.code:undefined};
     }catch{return {code:'snapshot_invalid',canAcquire:false};}
@@ -64,19 +66,28 @@ export class D1SnapshotStore implements SnapshotStore {
   async commit(token:string,snapshot:Snapshot):Promise<void> {
     if(!token)throw new SourceGateError('source_stale_lease');
     const payload=encodeSnapshot(snapshot);
+    const started=snapshot.collection_started_at?Date.parse(snapshot.collection_started_at):undefined;
+    if(this.options.staged&&started===undefined)throw new Error('snapshot_invalid');
+    // NOT NULL rejects an expired/future start inside the transaction itself.
+    // This rolls back publication, stage cleanup and lease release together.
+    const put=this.options.staged
+      ?this.db.prepare(SNAPSHOT_SQL.put.replace('SELECT ?,1,?,',`SELECT ?,1,CASE WHEN ?<=${NOW} AND ${NOW}<?+${STAGE_MAX_AGE_MS} THEN json_set(?,'$.fetched_at',strftime('%Y-%m-%dT%H:%M:%fZ','now')) ELSE NULL END,`)).bind(scopeKey(snapshot.scope),started,started,payload,token)
+      :this.db.prepare(SNAPSHOT_SQL.put).bind(scopeKey(snapshot.scope),payload,token);
     let results:D1Result[];
     try{
       // D1 batch is sequential and transactional. Every mutation requires the
       // same live token; an old token cannot modify cache, retention, or gate.
       results=await this.db.batch([
-        this.db.prepare(SNAPSHOT_SQL.put).bind(scopeKey(snapshot.scope),payload,token),
+        put,
         this.db.prepare(SNAPSHOT_SQL.expire).bind(token),
         this.db.prepare(SNAPSHOT_SQL.trim).bind(token),
+        ...(this.options.staged?[this.db.prepare(STAGE_SQL.discard).bind(scopeKey(snapshot.scope),token)]:[]),
         this.db.prepare(SQL.finish).bind('idle',null,SUCCESS_QUIET_MS,token),
       ]);
     }catch{throw new SourceGateError('source_gate_unavailable');}
-    if(results.length!==4||results.some(result=>!result.success))throw new SourceGateError('source_gate_unavailable');
-    if(results[0].meta?.changes===0&&results[3].meta?.changes===0)throw new SourceGateError('source_stale_lease');
-    if(results[0].meta?.changes!==1||results[3].meta?.changes!==1)throw new SourceGateError('source_gate_unavailable');
+    const finish=results.at(-1);
+    if(results.length!==(this.options.staged?5:4)||results.some(result=>!result.success))throw new SourceGateError('source_gate_unavailable');
+    if(results[0].meta?.changes===0&&finish?.meta?.changes===0)throw new SourceGateError('source_stale_lease');
+    if(results[0].meta?.changes!==1||finish?.meta?.changes!==1)throw new SourceGateError('source_gate_unavailable');
   }
 }

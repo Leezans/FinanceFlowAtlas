@@ -4,7 +4,7 @@ const rawNumber=z.union([number,z.null(),z.literal('-'),z.literal('--'),z.litera
 export const numericFields=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'] as const;
 const raw=z.object({f12:z.string().min(1),f14:z.string().trim().min(1),f2:rawNumber,f3:rawNumber,f62:rawNumber,f184:rawNumber,f66:rawNumber,f69:rawNumber,f72:rawNumber,f75:rawNumber,f78:rawNumber,f81:rawNumber,f84:rawNumber,f87:rawNumber}).passthrough();
 export const scopeSchema=z.object({kind:z.enum(['industry_rank','industry_stocks']),fs:z.string(),classification_level:z.enum(['eastmoney_level_1','eastmoney_level_2','eastmoney_level_3','unknown_may_mix_levels'])}).strict();
-const schema=z.object({schema:z.literal('ashare-provider-evidence/1'),rows:z.array(raw),source_total:z.number().int().nonnegative(),fetched_at:z.string().datetime({offset:true}),scope:scopeSchema,page_count:z.number().int().min(1),source_observed_at:z.null(),trade_date:z.null(),metric_kind:z.literal('provider_order_flow_proxy'),metric_field:z.literal('f62'),unit:z.literal('CNY'),field_units:z.object({f62:z.literal('CNY'),f3:z.literal('percent'),f2:z.enum(['CNY','index_points'])}).strict(),delay_status:z.literal('not_provided'),classification_exclusivity:z.literal('not_established'),notice:z.string().min(1),stale:z.boolean(),has_error:z.boolean()}).strict();
+const schema=z.object({schema:z.literal('ashare-provider-evidence/1'),rows:z.array(raw),source_total:z.number().int().nonnegative(),fetched_at:z.string().datetime({offset:true}),collection_started_at:z.string().datetime({offset:true}).optional(),scope:scopeSchema,page_count:z.number().int().min(1),source_observed_at:z.null(),trade_date:z.null(),metric_kind:z.literal('provider_order_flow_proxy'),metric_field:z.literal('f62'),unit:z.literal('CNY'),field_units:z.object({f62:z.literal('CNY'),f3:z.literal('percent'),f2:z.enum(['CNY','index_points'])}).strict(),delay_status:z.literal('not_provided'),classification_exclusivity:z.literal('not_established'),notice:z.string().min(1),stale:z.boolean(),has_error:z.boolean()}).strict();
 export type EvidenceSnapshot=z.infer<typeof schema>;
 export type Scope=z.infer<typeof scopeSchema>;
 export type EvidenceRow=EvidenceSnapshot['rows'][number];
@@ -19,6 +19,7 @@ export function validateEvidence(input:unknown,expectedScope?:Scope):ValidEviden
  // inconsistent metadata before any chart or numeric detail can consume it.
  if(s.field_units.f2!==(s.scope.kind==='industry_rank'?'index_points':'CNY'))throw new Error('Quote unit differs from source scope');
  if(expectedScope&&scopeKey(s.scope)!==scopeKey(expectedScope))throw new Error('Returned scope differs from requested scope');
+ if(s.collection_started_at&&(Date.parse(s.collection_started_at)>Date.parse(s.fetched_at)||Date.parse(s.fetched_at)-Date.parse(s.collection_started_at)>180_000))throw new Error('Invalid collection window');
  if(s.source_total!==s.rows.length)throw new Error('Incomplete source pagination');
  const seen=new Set<string>();for(const row of s.rows){if(!(s.scope.kind==='industry_rank'?/^BK\d+$/:/^\d{6}$/).test(row.f12)||seen.has(row.f12))throw new Error('Invalid or duplicate provider code');seen.add(row.f12);if(numeric(row.f2)!==null&&Number(row.f2)<0||numeric(row.f3)!==null&&Number(row.f3)< -100)throw new Error('Invalid price or return')}
  return s as ValidEvidence;

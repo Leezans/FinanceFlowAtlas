@@ -33,7 +33,7 @@ export default {async fetch(request){
  if(path==='/offline/progress')return Response.json({commitStarted,complete,bodyStarted});
  return ashareHandler(request);
 }};`,resolveDir:root,sourcefile:'offline-shared-snapshots.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
-const migrations=(await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots'].map(n=>readFile(new URL('../drizzle/'+n+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
+const migrations=(await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(n=>readFile(new URL('../drizzle/'+n+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
 const endpoint='https://offline.invalid/api/v1/ashare/snapshot';
 const nowSQL="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 const numeric=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];

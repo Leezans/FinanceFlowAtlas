@@ -1,5 +1,6 @@
 import {env,waitUntil} from 'cloudflare:workers';
 import {createAshareHandler} from './ashare';
+import {D1StageStore} from './stage-store';
 import {D1SourceGate} from './source-gate';
 import {D1SnapshotStore,type SnapshotD1} from './snapshot-store';
 const db=env.DB as unknown as SnapshotD1;
@@ -10,5 +11,6 @@ export const ashareHandler=createAshareHandler({
  runtime:'cloudflare-workers',
  waitUntil,
  sourceGate:new D1SourceGate(db),
- snapshotStore:new D1SnapshotStore(db),
+ snapshotStore:new D1SnapshotStore(db,{staged:true}),
+ stageStore:new D1StageStore(db),
 });

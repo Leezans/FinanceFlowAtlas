@@ -72,3 +72,17 @@ describe('A-share recovery interactions',()=>{
   expect(screen.getByRole('button',{name:/合成股票.*000001/})).toBeTruthy();expect(screen.queryByText('旧请求不得显示')).toBeNull();
  });
 });
+
+describe('bounded staged continuation',()=>{
+ async function advance(ms:number){await act(async()=>{await vi.advanceTimersByTimeAsync(ms);});}
+ const pending=()=>new Response(JSON.stringify({state:'unavailable',error_code:'collection_in_progress'}),{status:503,headers:{'x-ashare-error-code':'collection_in_progress','x-ashare-recovery':'retry','retry-after':'3'}});
+ it('continues only after the returned cooldown and publishes no partial rows',async()=>{
+  vi.useFakeTimers();const mock=vi.fn().mockResolvedValueOnce(pending()).mockResolvedValueOnce(new Response(JSON.stringify(root),{status:200}));vi.stubGlobal('fetch',mock);
+  render(<Page/>);await advance(1);expect(mock).toHaveBeenCalledOnce();expect(screen.queryByRole('button',{name:/合成行业.*BK0001/})).toBeNull();expect(screen.getByText('正在分段采集和核对完整列表，尚未发布部分数据。')).toBeTruthy();
+  await advance(2999);expect(mock).toHaveBeenCalledOnce();await advance(102);expect(mock).toHaveBeenCalledTimes(2);expect(screen.getByRole('button',{name:/合成行业.*BK0001/})).toBeTruthy();
+ });
+ it('cancels continuation on unmount and does not retry a denial',async()=>{
+  vi.useFakeTimers();const mock=vi.fn().mockResolvedValue(pending());vi.stubGlobal('fetch',mock);const view=render(<Page/>);await advance(1);view.unmount();await advance(10000);expect(mock).toHaveBeenCalledOnce();
+  mock.mockResolvedValue(new Response(JSON.stringify({error_code:'source_denied'}),{status:503,headers:{'x-ashare-recovery':'stopped'}}));render(<Page/>);await advance(1);expect(mock).toHaveBeenCalledTimes(2);await advance(180000);expect(mock).toHaveBeenCalledTimes(2);
+ });
+});

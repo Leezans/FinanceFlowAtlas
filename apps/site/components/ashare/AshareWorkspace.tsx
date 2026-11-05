@@ -21,15 +21,20 @@ export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
  const [{client,cancel}]=useState(createSession);
  const retry=useRef<()=>void>(()=>{});
  useEffect(()=>{
-  let live=true,busy=false;
-  async function load(){if(busy||!client.canLoad(scope))return;busy=true;if(live)setLoading(true);const pending=client.load(scope);if(live)setState(client.getState());const next=await pending;if(live){setState(next);setLoading(false)}busy=false}
+  let live=true,busy=false,continuation:ReturnType<typeof setTimeout>|undefined;
+  async function load(){if(busy||!client.canLoad(scope))return;busy=true;if(live)setLoading(true);const pending=client.load(scope);if(live)setState(client.getState());const next=await pending;if(live){setState(next);setLoading(false)}busy=false;
+   if(live&&next.recovery?.code==='collection_in_progress'&&next.recovery.mode==='retry'){
+    if(continuation)clearTimeout(continuation);
+    continuation=setTimeout(()=>void load(),Math.max(1000,(next.recovery.retryAt??Date.now()+3000)-Date.now()+100));
+   }
+  }
   retry.current=()=>void load();
   const start=setTimeout(()=>void load(),0);const timer=setInterval(()=>void load(),60_000);
-  return()=>{live=false;clearTimeout(start);clearInterval(timer);cancel();client.clear()};
+  return()=>{live=false;clearTimeout(start);if(continuation)clearTimeout(continuation);clearInterval(timer);cancel();client.clear()};
  },[client,cancel,scope]);
  return <section aria-label="A 股行业与个股矩阵工作区" style={{minHeight:embedded?undefined:'100vh',background:'#07111b',padding:embedded?'0':'16px',color:'#d9e7ec'}}>
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:12}}><strong>FinanceFlowAtlas · A股</strong><span style={{fontSize:12,color:'#92aabd'}}>个人研究视图</span></div>
-  <nav aria-label="市场与行业" style={{display:'flex',gap:10,alignItems:'center',marginBottom:12}}>{scope.kind==='industry_stocks'?<><button style={{background:'#182936',color:'#d9e7ec',border:'1px solid #3c5361',padding:'8px 12px',borderRadius:5}} onClick={()=>{setIndustry('');setScope(ROOT)}}>← 全部一级行业</button><span>{industry}</span></>:<span>东财一级行业</span>}<span role="status" style={{fontSize:12,color:'#92aabd'}}>{loading?'正在获取并核对完整分页…':state.recovery?.mode==='stopped'?'来源检查已停止':state.recovery?'等待恢复；不代表行情更新':'每分钟检查一次；不代表行情每分钟更新'}</span></nav>
+  <nav aria-label="市场与行业" style={{display:'flex',gap:10,alignItems:'center',marginBottom:12}}>{scope.kind==='industry_stocks'?<><button style={{background:'#182936',color:'#d9e7ec',border:'1px solid #3c5361',padding:'8px 12px',borderRadius:5}} onClick={()=>{setIndustry('');setScope(ROOT)}}>← 全部一级行业</button><span>{industry}</span></>:<span>东财一级行业</span>}<span role="status" style={{fontSize:12,color:'#92aabd'}}>{loading?'正在获取并核对完整分页…':state.recovery?.mode==='stopped'?'来源检查已停止':state.recovery?.code==='collection_in_progress'?'正在核对完整分页；未发布部分数据':state.recovery?'等待恢复；不代表行情更新':'每分钟检查一次；不代表行情每分钟更新'}</span></nav>
   <EvidenceHeatmap state={state} onIndustrySelect={(next,row)=>{setIndustry(row.f14);setScope(next)}}/>
   <SourceRecovery state={state} scope={scope} loading={loading} onRetry={()=>retry.current()}/>
   <MarketTiming state={state} loading={loading}/>
