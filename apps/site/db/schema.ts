@@ -103,3 +103,19 @@ export const cvmSourceGate=sqliteTable('cvm_source_gate',{
  check('cvm_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
  check('cvm_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
+
+/** One-time operational reconciliation. Metadata only, never financial observations. */
+export const ashareRecoveryAudit=sqliteTable('ashare_recovery_audit',{
+ id:text('id').primaryKey(),
+ priorStatus:text('prior_status').notNull(),
+ priorLeaseToken:text('prior_lease_token').notNull(),
+ priorAcquiredMs:integer('prior_acquired_ms').notNull(),
+ priorFinishedMs:integer('prior_finished_ms'),
+ priorUpdatedMs:integer('prior_updated_ms').notNull(),
+ priorNotBeforeMs:integer('prior_not_before_ms').notNull(),
+ priorReasonCode:text('prior_reason_code'),
+ reconciledMs:integer('reconciled_ms').notNull(),
+ invocationOutcome:text('invocation_outcome').notNull(),
+ sourceOutcome:text('source_outcome').notNull(),
+ evidence:text('evidence').notNull(),
+});
