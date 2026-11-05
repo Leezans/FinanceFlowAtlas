@@ -22,7 +22,7 @@ npm run dev
 
 ## Data semantics
 
-The hosted adapter targets the fixed, previously verified **2026-08** TIC month. It does not infer the latest month or provide real-time prices. Foreign country means reported residence; the security issuer economy remains the United States. Signed monthly net transactions are distinct from holdings and from gross purchases or sales.
+The hosted adapter discovers the latest complete, validated observation month present in the fetched official TIC table, with a rolling twelve-month history. It never infers unpublished data from the clock or presents monthly statistics as real-time prices. Foreign country means reported residence; the security issuer economy remains the United States. Signed monthly net transactions are distinct from holdings and from gross purchases or sales.
 
 Treemap area is the absolute net amount divided by the sum of absolute net amounts of included reported countries, not market capitalization or the Treasury Grand Total. Zero rows are separate; missing rows have no area. No industry or individual-stock hierarchy is implied.
 
@@ -48,7 +48,7 @@ coverage outside 2026 is explicitly unknown. See
 
 The treemap remains the primary view. Search and provider-net-direction filters apply to both the chart and its collapsed **数值明细** panel. The optional panel shows unscaled CNY amounts, deterministic magnitude/buy/sell/name sorting, and drilldown for zero/missing rows that have no treemap area. Missing amounts never become zero; area shares use only the absolute nonzero amounts in the current filter, not a whole-market denominator.
 
-Same-scope refreshes preserve search, palette, filters, sorting, the expanded panel and selected stock evidence. If a selected stock changes direction, its detail updates even when it no longer matches the filter. Changing scope resets exploration; a denied/error response clears all displayed evidence. Tests use synthetic observations only. This UI increment neither changes acquisition permissions nor verifies live source access, and a repository commit does not deploy it.
+Same-scope refreshes preserve search, palette, filters, sorting, the expanded panel and selected stock evidence. If a selected stock changes direction, its detail updates even when it no longer matches the filter. Changing scope resets exploration. Temporary network/5xx errors retain only the currently selected scope’s validated in-memory snapshot, with an explicit browser-stale warning and its original acquisition time and ETag. Authorization failures, known source denials and invalid successful payloads clear displayed evidence. Tests use synthetic observations only. This UI increment neither changes acquisition permissions nor verifies live source access, and a repository commit does not deploy it.
 
 ### A-share heatmap readability
 
@@ -79,3 +79,33 @@ market-data redistribution rights. Apply `0003_brainy_donald_blake.sql` through
 the supported migration workflow before deployment. Run
 `npm run test:kraken-runtime` for offline native workerd/D1 checks. See
 [scope, licensing and verified limits](../../docs/source-kraken-spot.md).
+
+### A-share recovery and diagnostics
+
+A single recovery strip identifies the failed stage (browser connection, source
+connection/decoding, complete-page validation, coordination storage or access
+stop). Its collapsed details contain only allowlisted codes and local handling
+advice, not raw upstream bodies, URLs, SQL, tokens or exception text.
+
+Snapshot and status replies carry `X-Ashare-Error-Code` and
+`X-Ashare-Recovery: retry|stopped` when applicable, including stale 200 and 304
+replies. Recoverable failures include a `Retry-After` countdown matching the
+remaining in-isolate exponential backoff, including the global source cooldown
+when the selected scope has no entry. Stopped acquisition does not advertise a
+retry time. Diagnostics do not modify the validated snapshot schema or make the
+ETag change once per second; no new status polling is added.
+
+The one **重试当前来源** control is shown only for recoverable failures and is
+unavailable during cooldown or a request. Manual and minute-based checks use the
+same snapshot endpoint, with no force flag, gate reset, lease takeover, alternate
+source, new access or bypass. Known permanent source stops and lost display/login
+permission clear browser evidence and stop automatic checks for that scope.
+Browser-retained bytes remain separate from server-stale responses; a successful
+304 removes the browser-only failure marker without rewriting acquisition time.
+All browser evidence is memory-only and is cleared on navigation/unmount.
+
+Tests cover repeated clicks, interrupted scope changes, headerless older
+responses, 304 recovery, exponential backoff, permanent stops and preservation of
+search, palette, details and selected-stock evidence. These are synthetic local
+checks, not proof of authenticated production source availability. No database
+migration is required for this change.

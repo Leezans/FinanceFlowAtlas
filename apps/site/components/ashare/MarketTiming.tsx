@@ -21,7 +21,7 @@ export default function MarketTiming({state,loading=false}:{state:EvidenceState;
   return ()=>{clearTimeout(start);clearInterval(timer);window.removeEventListener('focus',update);document.removeEventListener('visibilitychange',visible);};
  },[snapshot?.fetched_at]);
  const session = getAshareSession(now);
- const acquisition = getAcquisitionTiming(snapshot,now);
+ const acquisition = getAcquisitionTiming(snapshot&&state.retainedAfterFailure?{...snapshot,stale:true,has_error:true}:snapshot,now);
  const age = acquisitionAgeLabel(acquisition.ageMs);
  const fetched = snapshot ? formatShanghaiTimestamp(snapshot.fetched_at) : null;
  return <section className="ashare-timing" aria-label="市场时段与数据时间">

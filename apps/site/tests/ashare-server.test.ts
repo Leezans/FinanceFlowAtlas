@@ -159,3 +159,32 @@ describe('native decoded response handling',()=>{
   expect(response.status).toBe(503);
  });
 });
+
+describe('actionable recovery headers',()=>{
+ it('advertises actual exponential backoff, carries it to a cold scope, and removes it on recovery',async()=>{
+  let n=0;const f=vi.fn(async()=>++n<=2?new Response('{}',{status:500,headers:{'content-type':'application/json'}}):upstream());const h=make(f);
+  const first=await h(request());expect(first.headers.get('retry-after')).toBe('60');expect(first.headers.get('x-ashare-recovery')).toBe('retry');
+  await vi.advanceTimersByTimeAsync(60001);const second=await h(request());expect(second.headers.get('retry-after')).toBe('120');
+  await vi.advanceTimersByTimeAsync(30000);const cold=await h(request('BK0002'));expect(cold.headers.get('retry-after')).toBe('90');expect(cold.headers.get('x-ashare-error-code')).toBe('upstream_http');expect(f).toHaveBeenCalledTimes(2);
+  const status=await h(request('BK0002','status'));expect(status.headers.get('retry-after')).toBe('90');expect(f).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(90000);const recovered=await h(request());expect(recovered.status).toBe(200);expect(recovered.headers.get('retry-after')).toBeNull();expect(recovered.headers.get('x-ashare-error-code')).toBeNull();
+ });
+ it('keeps diagnostics on stale 200 and 304 without changing ETag as countdown elapses',async()=>{
+  let n=0;const f=vi.fn(async()=>++n===1?upstream():new Response('{}',{status:500,headers:{'content-type':'application/json'}}));const h=make(f);
+  await h(request());await vi.advanceTimersByTimeAsync(60001);const stale=await h(request());expect(stale.status).toBe(200);expect(stale.headers.get('x-ashare-error-code')).toBe('upstream_http');
+  expect(await stale.json()).toMatchObject({stale:true,has_error:true});await vi.advanceTimersByTimeAsync(10000);
+  const same=await h(request('level1','snapshot',{'If-None-Match':stale.headers.get('etag')!}));expect(same.status).toBe(304);expect(same.headers.get('retry-after')).toBe('50');expect(same.headers.get('x-ashare-error-code')).toBe('upstream_http');expect(f).toHaveBeenCalledTimes(2);
+ });
+ it('reports a permanent global stop to every scope without promising retry',async()=>{
+  const f=vi.fn(async()=>new Response('',{status:403}));const h=make(f);
+  for(const scope of ['level1','BK0001','BK0002']){
+   const response=await h(request(scope));expect(response.headers.get('retry-after')).toBeNull();expect(response.headers.get('x-ashare-recovery')).toBe('stopped');expect(response.headers.get('x-ashare-error-code')).toBe('source_access_denied');
+  }
+  expect(f).toHaveBeenCalledTimes(1);
+ });
+ it('marks cached denial on both 200 and 304 so browser can remove evidence',async()=>{
+  let n=0;const h=make(async()=>++n===1?upstream():new Response('',{status:403}));await h(request());await vi.advanceTimersByTimeAsync(60001);
+  const first=await h(request());expect(first.status).toBe(200);expect(first.headers.get('x-ashare-recovery')).toBe('stopped');
+  const cached=await h(request('level1','snapshot',{'If-None-Match':first.headers.get('etag')!}));expect(cached.status).toBe(304);expect(cached.headers.get('x-ashare-recovery')).toBe('stopped');expect(cached.headers.get('retry-after')).toBeNull();
+ });
+});
