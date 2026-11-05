@@ -104,3 +104,19 @@ end-to-end socket-disconnect propagation through the Sites platform.
 An already-interrupted production operation remains uncertain until separately
 reconciled by an authorized operator. Deploying this prevention fix never clears
 an existing busy or denied gate.
+
+## Observed denials take priority over body disposal
+
+HTTP denials, HTML/non-JSON challenges, and rejected redirects are classified as
+soon as their response metadata is observed. The handler first attempts its
+single, token-matched durable denial write. Only after that write settles does
+it dispose of the denied response body, with a one-second maximum wait. A
+body-cancellation promise that hangs or rejects cannot postpone recording the
+denial or turn it into an ordinary retryable failure. Failed/uncertain persistence
+still stops local acquisition and never reopens the shared gate.
+
+Regression tests include permanently pending stream cancellation, failures of
+both persistence and cleanup, cross-isolate refusal before disposal completes,
+and automatic-redirect/cancellation races. An offline native-workerd test uses
+an actual stream and D1 table to verify that the denial is durable despite stalled
+body disposal. Production state is not modified by these tests or the fix.
