@@ -1,6 +1,6 @@
 import {MAX_CACHE_AGE_MS,REFRESH_MS,MAX_PAIRS,MAX_SOURCE_PAIRS,UNIVERSE_REFRESH_MS,type KrakenReply,type KrakenSnapshot} from '@/lib/crypto/kraken';
 import {z} from 'zod';
-import {tradeSnapshotSchema} from '@/lib/crypto/trade-validation';
+import {tradeSnapshotSchema,tradeSelectionSchema} from '@/lib/crypto/trade-validation';
 const date=z.string().datetime({offset:true});
 const decimal=z.string().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,12})?$/);
 const positive=decimal.refine(value=>/[1-9]/.test(value));
@@ -12,9 +12,11 @@ const snapshotSchema=z.object({schema:z.literal('kraken-spot/2'),venue:z.literal
  snapshot.rows.length+snapshot.missing.length===snapshot.universe_pair_count&&snapshot.catalog_pair_count>=snapshot.universe_pair_count&&
  new Set([...snapshot.rows,...snapshot.missing].map(row=>row.pair)).size===snapshot.universe_pair_count&&new Set(snapshot.rows.map(row=>row.source_pair)).size===snapshot.rows.length&&
  snapshot.rows.every(row=>row.pair===`${row.base}/USD`)&&(snapshot.quality==='partial')===(snapshot.missing.length>0));
-const replySchema=z.object({trade_snapshot:tradeSnapshotSchema.nullable().optional(),snapshot:snapshotSchema.nullable(),status:z.object({state:z.enum(['available','stale','unavailable','denied']),error_code:z.string().regex(/^[a-z_]{1,64}$/).nullable(),last_attempt_at:date.nullable(),fetched_at:date.nullable(),cache_age_ms:z.number().int().safe().nullable(),refresh_ms:z.literal(REFRESH_MS),max_cache_age_ms:z.literal(MAX_CACHE_AGE_MS),next_retry_at:date.nullable()}).strict()}).strict().refine(reply=>
+const replySchema=z.object({requested_pairs:tradeSelectionSchema.optional(),trade_snapshot:tradeSnapshotSchema.nullable().optional(),snapshot:snapshotSchema.nullable(),status:z.object({state:z.enum(['available','stale','unavailable','denied']),error_code:z.string().regex(/^[a-z_]{1,64}$/).nullable(),last_attempt_at:date.nullable(),fetched_at:date.nullable(),cache_age_ms:z.number().int().safe().nullable(),refresh_ms:z.literal(REFRESH_MS),max_cache_age_ms:z.literal(MAX_CACHE_AGE_MS),next_retry_at:date.nullable()}).strict()}).strict().refine(reply=>
  (reply.status.state==='available'||reply.status.state==='stale')===!!reply.snapshot&&(!reply.snapshot||reply.snapshot.fetched_at===reply.status.fetched_at)&&(!reply.trade_snapshot||!!reply.snapshot&&reply.trade_snapshot.fetched_at===reply.snapshot.fetched_at&&reply.trade_snapshot.window_ended_at===reply.snapshot.acquisition_started_at)).refine(reply=>{
  const quotes=reply.snapshot,trades=reply.trade_snapshot;if(!trades)return true;if(!quotes)return false;
+ if(trades.schema==='kraken-trades/2'){if(!reply.requested_pairs||JSON.stringify(reply.requested_pairs)!==JSON.stringify(trades.selected_pairs))return false;}
+ else if(reply.requested_pairs)return false;
  const catalogPairs=new Set([...quotes.rows,...quotes.missing].map(row=>row.pair));
  return trades.rows.every(row=>{
   const quoted=quotes.rows.find(quote=>quote.pair===row.pair);

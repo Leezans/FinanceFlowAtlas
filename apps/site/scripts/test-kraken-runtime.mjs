@@ -43,7 +43,7 @@ async function scenario(mode,fn){
   tradeCalls++;events.push({endpoint:'trades',at:Date.now()});
   if(mode==='trade-denied')return {statusCode:403,data:''};
   const query=new URL(options.path,'https://api.kraken.com').searchParams,pair=query.get('pair'),start=Number(BigInt(query.get('since'))/1_000_000n)/1000;
-  assert.ok(['XXBTZUSD','XETHZUSD','SOLUSD'].includes(pair));assert.equal(query.get('count'),'1000');assert.match(query.get('since'),/^\d+$/);
+  assert.ok(Object.hasOwn(catalog.result,pair),'trade source ID must come from the verified catalog');assert.equal(query.get('count'),'1000');assert.match(query.get('since'),/^\d+$/);
   const rows=mode==='trade-cap'?Array.from({length:1000},(_,index)=>['0.1','0.2',start+1+index/1000,'b','l','',index+1]):[['0.1','0.2',start+1,'b','l','',1],['0.3','0.1',start+2,'s','m','',2]];
   const raw=Buffer.from(JSON.stringify({error:[],result:{[pair]:rows,last:query.get('since')}})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
   return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json',...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};
@@ -52,7 +52,7 @@ async function scenario(mode,fn){
  // Separate native worker module state sharing the exact same D1 gate.
  const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-shared-kraken-gate'},fetchMock:mock});
  const mf=new Miniflare({workers:[worker('warm'),worker('cold')]});
- try{const db=await mf.getD1Database('DB','warm');for(const sql of [aMigration,migration])for(const statement of sql.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();await db.prepare("UPDATE ashare_source_gate SET status='blocked',reason_code='http_403' WHERE id='single_upstream'").run();await fn(mf,db,()=>calls);assert.equal(metadataCalls,1);for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'all Kraken requests require source pacing');assert.ok(tradeCalls<=3,'fixed three-pair trade request budget');assert.equal((await db.prepare('SELECT status FROM ashare_source_gate').first()).status,'blocked');}
+ try{const db=await mf.getD1Database('DB','warm');for(const sql of [aMigration,migration])for(const statement of sql.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();await db.prepare("UPDATE ashare_source_gate SET status='blocked',reason_code='http_403' WHERE id='single_upstream'").run();await fn(mf,db,()=>calls);assert.equal(metadataCalls,1);for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'all Kraken requests require source pacing');assert.ok(tradeCalls<=3,'bounded three-pair trade request budget');assert.equal((await db.prepare('SELECT status FROM ashare_source_gate').first()).status,'blocked');}
  finally{await mf.dispose();await mock.close();}
 }
 for(const encoding of ['plain','gzip','br'])await scenario(encoding,async(mf,db,calls)=>{
@@ -62,6 +62,19 @@ for(const encoding of ['plain','gzip','br'])await scenario(encoding,async(mf,db,
  const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,503);assert.equal((await cold.json()).status.error_code,'source_cooldown');assert.equal(calls(),1);
  const row=await db.prepare('SELECT status,not_before_ms FROM kraken_source_gate').first();assert.equal(row.status,'idle');assert.ok(row.not_before_ms>Date.now()+50_000);
  console.log(`PASS checked-in Kraken host ${encoding}; exact decimals; shared cold-worker cooldown; A-share gate untouched`);
+});
+await scenario('selection',async(mf,db,calls)=>{
+ const invalid=await mf.dispatchFetch(url+'?pairs=BTC/USD,BTC/USD');assert.equal(invalid.status,400);assert.equal(calls(),0);
+ const chosen=url+'?pairs=S2%2FUSD%2CS1%2FUSD';
+ const body=await (await mf.dispatchFetch(chosen)).json();assert.deepEqual(body.requested_pairs,['S1/USD','S2/USD']);assert.equal(body.trade_snapshot.schema,'kraken-trades/2');assert.deepEqual(body.trade_snapshot.selected_pairs,['S1/USD','S2/USD']);assert.deepEqual(body.trade_snapshot.rows.map(row=>row.pair),['S1/USD','S2/USD']);assert.equal(calls(),1);
+ const same=await (await mf.dispatchFetch(url+'?pairs=S1/USD,S2/USD')).json();assert.deepEqual(same.trade_snapshot,body.trade_snapshot);assert.equal(calls(),1);
+ const other=await (await mf.dispatchFetch(url+'?pairs=S3/USD')).json();assert.deepEqual(other.requested_pairs,['S3/USD']);assert.equal(other.trade_snapshot,null);assert.deepEqual(other.snapshot,body.snapshot);assert.equal(calls(),1);
+ const legacy=await (await mf.dispatchFetch(url)).json();assert.equal(legacy.trade_snapshot,null);assert.equal(legacy.requested_pairs,undefined);
+ const cold=await (await (await mf.getWorker('cold')).fetch(chosen)).json();assert.equal(cold.status.error_code,'source_cooldown');assert.equal(cold.trade_snapshot,null);assert.deepEqual(cold.requested_pairs,['S1/USD','S2/USD']);assert.equal(calls(),1);
+ // Synthetic test DB only: another worker records a terminal denial.
+ await db.prepare("UPDATE kraken_source_gate SET status='blocked' WHERE id='spot_usd'").run();
+ const denied=await (await mf.dispatchFetch(chosen)).json();assert.equal(denied.status.state,'denied');assert.equal(denied.snapshot,null);assert.equal(denied.trade_snapshot,null);
+ console.log('PASS arbitrary verified selections; canonical cache identity; no cross-selection trades; shared cold-worker cooldown and denial');
 });
 await scenario('metadata-denied',async(mf,db,calls)=>{
  const r=await mf.dispatchFetch(url);assert.equal(r.status,503);assert.equal((await r.json()).status.state,'denied');assert.equal(calls(),0);assert.equal((await db.prepare('SELECT status FROM kraken_source_gate').first()).status,'blocked');
