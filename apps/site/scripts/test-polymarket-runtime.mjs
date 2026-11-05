@@ -1,0 +1,113 @@
+/** Native workerd/D1. Synthetic fixtures only; real external network is disabled. */
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {gzipSync,brotliCompressSync} from 'node:zlib';
+const require=createRequire(import.meta.url),wranglerRequire=createRequire(require.resolve('wrangler/package.json'));
+const {Miniflare,createFetchMock}=wranglerRequire('miniflare'),{build}=wranglerRequire('esbuild');
+const root=fileURLToPath(new URL('..',import.meta.url));
+const {outputFiles}=await build({stdin:{contents:`
+ import {polymarketHandler} from './lib/polymarket/host';
+ let releaseAbort;
+ export default {async fetch(request,env){
+  const path=new URL(request.url).pathname;
+  if(path==='/offline/abort'){releaseAbort?.();return new Response('synthetic cancellation released');}
+  if(path==='/offline/cancel-after-response'){
+   const controller=new AbortController();
+   void new Promise(resolve=>{releaseAbort=resolve;}).then(()=>controller.abort());
+   void polymarketHandler(new Request(new URL('/api/v1/polymarket/snapshot',request.url),{signal:controller.signal})).then(response=>response.body?.cancel());
+   for(let i=0;i<100;i++){
+    const row=await env.DB.prepare('SELECT status FROM polymarket_source_gate').first();
+    if(row.status==='busy')return new Response('synthetic early response',{status:202});
+    await new Promise(resolve=>setTimeout(resolve,10));
+   }
+   return new Response('synthetic admission did not start',{status:500});
+  }
+  return polymarketHandler(request);
+ }};`,resolveDir:root,sourcefile:'polymarket-offline-worker.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
+const migration=await readFile(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8');
+const {outputFiles:modelFiles}=await build({stdin:{contents:"export {SOURCE_URL,MAX_CACHE_AGE_MS} from './lib/polymarket/model';export {fixture} from './tests/polymarket-fixture';",resolveDir:root,sourcefile:'polymarket-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
+const {SOURCE_URL,MAX_CACHE_AGE_MS,fixture}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
+const url='https://test.invalid/api/v1/polymarket/snapshot';
+async function scenario(mode,fn){
+ let calls=0;const mock=createFetchMock();mock.disableNetConnect();
+ const interception=mock.get('https://gamma-api.polymarket.com').intercept({method:'GET',path:new URL(SOURCE_URL).pathname+new URL(SOURCE_URL).search}).reply(()=>{
+  calls++;
+  if(mode==='denied')return {statusCode:403,data:''};
+  if(mode==='rate_denied')return {statusCode:429,data:''};
+  if(mode==='challenge')return {statusCode:200,data:'<html>challenge</html>',responseOptions:{headers:{'content-type':'application/json'}}};
+  if(mode==='temporary')return {statusCode:503,data:'{}',responseOptions:{headers:{'content-type':'application/json','retry-after':'3600'}}};
+  const data=fixture();for(const market of data)if(market.updatedAt)market.updatedAt=new Date(Date.now()-60_000).toISOString();
+  const raw=Buffer.from(JSON.stringify(data)),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
+  return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json','content-length':String(encoded.length),...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};
+ }).persist();
+ if(mode==='disconnect')interception.delay(5000);
+ const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-shared-polymarket-gate'},fetchMock:mock});
+ const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('virgin')]});
+ try{
+  const db=await mf.getD1Database('DB','warm');
+  // Independent sentinel proves the append-only migration never changes an
+  // existing stopped source. All setup is isolated synthetic test state.
+  await db.prepare('CREATE TABLE ashare_source_gate (id TEXT, status TEXT, lease_token TEXT)').run();
+  await db.prepare("INSERT INTO ashare_source_gate VALUES ('single_upstream','blocked','synthetic-sentinel')").run();
+  const before=(await db.prepare('SELECT * FROM ashare_source_gate').all()).results;
+  for(const statement of migration.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();
+  await fn(mf,db,()=>calls,value=>{mode=value;});
+  assert.deepEqual((await db.prepare('SELECT * FROM ashare_source_gate').all()).results,before,'prior source stop must be unchanged');
+ }finally{await mf.dispose();await mock.close();}
+}
+for(const encoding of ['plain','gzip','br'])await scenario(encoding,async(mf,db,calls)=>{
+ const status=await mf.dispatchFetch(url.replace('snapshot','status'));assert.equal((await status.json()).state,'unavailable');assert.equal(calls(),0);
+ const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,200,JSON.stringify(body));assert.equal(body.snapshot.rows.length,3);assert.equal(body.snapshot.rows[0].outcomes[1].price,'0.65');assert.equal(body.snapshot.rows[1].volume_24h,0);assert.equal(body.snapshot.rows[2].volume_24h,null);assert.equal(body.snapshot.source_observed_at,null);assert.equal(body.snapshot.net_capital_flow,null);assert.equal(body.snapshot.complete_universe,false);assert.equal(calls(),1);
+ const cached=await mf.dispatchFetch(url);assert.equal(cached.status,200);assert.equal(calls(),1);
+ const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,200);assert.deepEqual((await cold.json()).snapshot,body.snapshot);assert.equal(calls(),1);
+ const row=await db.prepare('SELECT status,not_before_ms,error_code FROM polymarket_source_gate').first();assert.equal(row.status,'idle');assert.ok(row.not_before_ms>Date.now()+27_000);assert.equal(row.error_code,null);
+ await db.prepare("UPDATE polymarket_source_gate SET payload='{}'").run();
+ const corrupt=await (await mf.getWorker('cold')).fetch(url);assert.equal(corrupt.status,503);assert.equal((await corrupt.json()).status.error_code,'source_gate_unavailable');assert.equal(calls(),1);
+ console.log(`PASS native Polymarket ${encoding}; shared cold cache/cooldown; explicit time semantics; strict corrupt-cache rejection`);
+});
+await scenario('temporary',async(mf,db,calls)=>{
+ const r=await mf.dispatchFetch(url);assert.equal(r.status,503);assert.equal((await r.json()).status.state,'unavailable');
+ const row=await db.prepare('SELECT status,not_before_ms,error_code FROM polymarket_source_gate').first();assert.equal(row.status,'idle');assert.ok(row.not_before_ms>Date.now()+3590_000);assert.equal(row.error_code,'upstream_http');
+ const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal((await cold.json()).status.error_code,'upstream_http');assert.equal(calls(),1);console.log('PASS temporary failure and Retry-After persisted across isolates');
+});
+await scenario('plain',async(mf,db,calls,setMode)=>{
+ const warm=await mf.dispatchFetch(url);const initial=await warm.json();assert.equal(warm.status,200);
+ await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();setMode('temporary');
+ const transient=await (await mf.getWorker('cold')).fetch(url);const stale=await transient.json();assert.equal(transient.status,200);assert.equal(stale.status.state,'stale');assert.equal(stale.snapshot.fetched_at,initial.snapshot.fetched_at);assert.equal(stale.status.error_code,'upstream_http');assert.equal(calls(),2);
+ const previous=await mf.dispatchFetch(url);assert.equal((await previous.json()).status.state,'stale');assert.equal(calls(),2);
+ // Modify only the isolated test fixture to exercise independent expiry.
+ const record=await db.prepare('SELECT payload FROM polymarket_source_gate').first(),payload=JSON.parse(record.payload);
+ payload.fetched_at=new Date(Date.now()-MAX_CACHE_AGE_MS-5000).toISOString();payload.acquisition_started_at=payload.fetched_at;for(const row of payload.rows)row.source_record_updated_at=null;
+ await db.prepare('UPDATE polymarket_source_gate SET payload=?').bind(JSON.stringify(payload)).run();
+ // Expiry is checked in an isolate with no retained local snapshot.
+ const expired=await (await mf.getWorker('virgin')).fetch(url);assert.equal(expired.status,503);assert.equal((await expired.json()).snapshot,null);assert.equal(calls(),2);
+ // Existing handlers must obey an explicit shared busy state, even when warm.
+ await db.prepare("UPDATE polymarket_source_gate SET status='busy',lease_token='synthetic-other-owner'").run();
+ const busy=await mf.dispatchFetch(url);assert.equal(busy.status,503);assert.equal((await busy.json()).snapshot,null);assert.equal(calls(),2);
+ console.log('PASS shared stale error/time preserved; independent cold expiry; busy suppresses warm evidence');
+});
+for(const denial of ['denied','rate_denied','challenge'])await scenario(denial,async(mf,db,calls)=>{
+ const r=await mf.dispatchFetch(url);assert.equal(r.status,503);assert.equal((await r.json()).status.state,'denied');
+ const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal((await cold.json()).status.state,'denied');assert.equal(calls(),1);
+ const blocked=await db.prepare('SELECT status,payload FROM polymarket_source_gate').first();assert.equal(blocked.status,'blocked');assert.equal(blocked.payload,null);console.log(`PASS ${denial} persists across workers with no fallback`);
+});
+await scenario('plain',async(mf,db,calls,setMode)=>{
+ assert.equal((await mf.dispatchFetch(url)).status,200);
+ await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();setMode('denied');
+ const denied=await (await mf.getWorker('cold')).fetch(url);assert.equal((await denied.json()).status.state,'denied');
+ assert.equal((await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload,null);
+ const previous=await mf.dispatchFetch(url);assert.equal((await previous.json()).snapshot,null);assert.equal(calls(),2);console.log('PASS denial atomically erases cache and invalidates warm worker');
+});
+await scenario('disconnect',async(mf,db,calls)=>{
+ const early=await mf.dispatchFetch('https://test.invalid/offline/cancel-after-response');assert.equal(early.status,202);await early.text();
+ const waitFor=async(check,message)=>{const until=Date.now()+3000;while(Date.now()<until){if(await check())return;await new Promise(resolve=>setTimeout(resolve,20));}throw new Error(message);};
+ await waitFor(()=>calls()===1,'synthetic source did not start');
+ await (await mf.dispatchFetch('https://test.invalid/offline/abort')).text();
+ await waitFor(async()=> (await db.prepare('SELECT status FROM polymarket_source_gate').first()).status==='idle','cancellation must retain exact owned release');
+ const gate=await db.prepare('SELECT status,lease_token,payload,not_before_ms-updated_ms AS cooldown_ms FROM polymarket_source_gate').first();
+ assert.equal(gate.lease_token,null);assert.equal(gate.payload,null);assert.equal(gate.cooldown_ms,30_000);assert.equal(calls(),1);
+ const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,503);assert.equal(calls(),1);console.log('PASS cancellation after response retains exact lease cleanup and cold-worker cooldown');
+});
+console.log('PASS no real provider network calls or captured observations');
