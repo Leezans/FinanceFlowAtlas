@@ -42,7 +42,7 @@ describe('visual market entry',()=>{
   render(<MarketLanding/>);
   const section=screen.getByRole('region',{name:'选择市场视图'});
   expect(within(section).getByRole('link',{name:'打开 A 股热力图：行业到个股'}).getAttribute('href')).toBe('/ashare');
-  expect(within(section).getByRole('link',{name:'打开全球市场地图'}).getAttribute('href')).toBe('/markets');
+  expect(within(section).getByRole('link',{name:'打开全球市场矩阵'}).getAttribute('href')).toBe('/markets');
   expect(within(section).getByRole('link',{name:'打开加密现货：Kraken BTC 和 ETH'}).getAttribute('href')).toBe('/crypto');
   expect(within(section).getByRole('link',{name:'继续看美国 TIC'}).getAttribute('href')).toBe('#tic-view');
   expect(within(section).queryByRole('table')).toBeNull();

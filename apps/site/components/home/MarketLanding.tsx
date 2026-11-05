@@ -6,7 +6,7 @@ export default function MarketLanding({onOpenTic}:{onOpenTic?:()=>void}={}){
   <div className={s.intro}><div><p className={s.eyebrow}>FINANCE FLOW ATLAS / INDUSTRY MATRIX</p><h1>从行业，看见资金流。</h1><p className={s.subtitle}>行业 → 成分股。直接看区块，点击下钻；来源缺失时保留画布。</p></div><span className={s.mode}>矩阵视图</span></div>
   <nav className={s.grid} aria-label="选择矩阵市场">
    <a className={s.featured} href="/ashare" aria-label="打开 A 股热力图：行业到个股">A 股行业 <span>行业 → 个股</span></a>
-   <a href="/markets" aria-label="打开全球市场地图">全球市场</a>
+   <a href="/markets" aria-label="打开全球市场矩阵">全球市场</a>
    <a href="/crypto" aria-label="打开加密现货：Kraken BTC 和 ETH">加密现货</a>
    <a href="/futures" aria-label="打开期货持仓：美国 CFTC 精选市场">期货持仓</a>
    <a href="/forex" aria-label="打开外汇参考：ECB 每日汇率">外汇参考</a>

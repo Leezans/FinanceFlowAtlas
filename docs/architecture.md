@@ -1,6 +1,7 @@
 # FinanceFlowAtlas architecture
 
-Reviewed 2026-11-05 against main `84b7537c`, including the CVM implementation merged in PR #14.
+Reviewed 2026-11-05 against main `6715f086`, including CVM and the unified FX/crypto matrices.
+The global-country matrix migration below builds on that baseline.
 This is a modular monolith. Adding another market must not require another copy
 of the renderer, or pretend that its financial measure equals another source's.
 
@@ -103,8 +104,8 @@ IDs. The renderer never parses a formatted number or reconstructs hidden evidenc
 
 ## 5. One matrix language, appropriate geometry
 
-`MatrixHeatmap` is the common grouped-item renderer for futures, TPEx and CVM;
-FX and crypto should use it rather than introduce copies. It supports:
+`MatrixHeatmap` is the common grouped-item renderer for futures, TPEx, CVM, FX,
+crypto and TIC country evidence. It supports:
 
 - Treemap for a small/hierarchical dataset with explicit area semantics.
 - Readable equal-area grid for dense industry/security data. All names remain
@@ -116,11 +117,12 @@ FX and crypto should use it rather than introduce copies. It supports:
 
 The existing ASEAN country × industry table is a genuine two-dimensional matrix.
 Do not flatten it into unrelated rectangles just to claim a single component.
-Likewise, A-share and TIC currently have richer specialized treemaps, including
-zero/missing disclosures and source-specific drilldown. Migrate their common
-mechanics incrementally only after preserving those capabilities. A small family
-of renderers sharing a presentation contract is preferable to a universal widget
-with dozens of source-name conditionals.
+A-share still has a specialized industry treemap. Migrate its common mechanics
+only after preserving its source-specific drilldown. TIC now uses the common
+readable grid, preserving region/country navigation and treating a reported zero
+as a neutral equal-area tile, rather than dropping it from the primary view. A
+small family of renderers sharing a presentation contract is preferable to a
+universal widget with dozens of source-name conditionals.
 
 Rules for any projection:
 
@@ -140,6 +142,28 @@ inflows. Kraken last-price deviation from rolling-24h VWAP can be an explicitly
 labeled calculated ratio, but is not a 24h return. Base-coin volumes across BTC and
 ETH are not a shared monetary scale. CVM fund net share transactions in BRL are
 partial disclosed fund activity, not all Brazilian or foreign investment.
+
+### Global entrypoint
+
+`/markets` leads with the existing TIC monthly US-equity net-transaction layer,
+not a fabricated worldwide market-flow total. `lib/tic/model.ts` owns its display
+contract; `lib/tic/matrix.ts` projects a single validated period to region →
+reported foreign residence; `TicMatrix` composes source controls with the common
+renderer. `TicLayer` remains responsible for the existing source lifecycle,
+country evidence, optional map and provenance. The projection does not fetch.
+Geographic views and total history are code-split and mounted only on demand.
+
+TIC color magnitude uses the full source period before filtering. Equal country
+areas make zero observations visible and do not imply fund size. Palette choices
+swap rendering colors only, without changing values or signs. Missing countries
+get no invented tiles. Published issuer totals and their history stay separate
+from country records; history is loaded only when expanded below the matrix.
+
+`GeographicNavigator` is a secondary, read-only 249-entry directory. Opening it
+never claims that 249 countries have financial observations. Direct country URLs,
+keyboard/map search and local-market links remain available. A-share, TPEx, CVM
+and ASEAN entry links keep their own units, periods, sources and acquisition gates.
+The global page neither fetches them speculatively nor adds their values to TIC.
 
 ## 6. Cadence and persistence are source policies
 
