@@ -12,7 +12,7 @@ const TRANSPORT = new Set(['upstream_http','not_json','unsupported_content_encod
  'aborted','source_aborted','deadline','collection_failed','not_yet_acquired']);
 export function safeSourceCode(value:unknown):string|null {
  return typeof value==='string' && (STOPPED.has(value)||STORAGE.has(value)||VALIDATION.has(value)||TRANSPORT.has(value)||
- ['source_busy','source_cooldown','runtime_routing_unverified','disabled','browser_network'].includes(value)) ? value : null;
+ ['source_busy','source_cooldown','runtime_routing_unverified','runtime_lifetime_unverified','disabled','browser_network'].includes(value)) ? value : null;
 }
 export function isSourceStopped(code:string):boolean {return STOPPED.has(code)||code==='disabled';}
 export function describeRecovery(code:string):{stage:string;message:string;action:string} {
@@ -20,6 +20,7 @@ export function describeRecovery(code:string):{stage:string;message:string;actio
   ?'采集租约状态未能确认，需要维护者核查；不会重置租约或继续采集。'
   :'请核查来源访问许可；不会自动重试、切换来源地址或绕过限制。'};
  if(STORAGE.has(code))return {stage:'采集协调存储',message:'数据协调存储尚未就绪，请检查数据库迁移。',action:'维护者需核查 D1 绑定与 ashare_source_gate 迁移；不要清空锁或拒绝记录。'};
+ if(code==='runtime_lifetime_unverified')return {stage:'请求生命周期',message:'当前运行环境尚未建立安全的取消清理机制。',action:'维护者需核查 Workers 请求信号与清理保活；不会启动来源采集。'};
  if(code==='runtime_routing_unverified')return {stage:'运行环境',message:'当前运行环境的来源连接未通过校验。',action:'维护者需核对受支持的 Workers 原生连接；不要改用代理绕过限制。'};
  if(code==='source_busy')return {stage:'采集协调',message:'另一项数据采集仍在进行，请稍后重试。',action:'等待现有采集结束；若持续占用，请维护者核查，不能抢占租约。'};
  if(code==='source_cooldown')return {stage:'来源限速',message:'来源限速等待中，请稍后重试。',action:'等待冷却结束，重试仍受服务端限速约束。'};

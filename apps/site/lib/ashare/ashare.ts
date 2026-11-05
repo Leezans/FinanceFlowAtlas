@@ -17,7 +17,7 @@ type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;b
 class SourceDenied extends Error {}
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
-const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','source_gate_required','source_gate_unavailable','source_busy','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
+const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','source_gate_unavailable','source_busy','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
 function failureCode(error:unknown):string {
   if(error&&typeof error==='object'&&'code'in error&&typeof error.code==='string'&&ERROR_CODES.has(error.code))return error.code;
   if(error instanceof Error&&ERROR_CODES.has(error.message))return error.message;
@@ -86,7 +86,7 @@ async function body(response:Response,budget:number,signal:AbortSignal):Promise<
   const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
 /** Server-only: no background worker; no network until an enabled snapshot GET. */
-export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetcher;now?:()=>number;isolatedForTests?:boolean;runtime?:'cloudflare-workers';sourceGate?:SourceGate}={}){
+export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetcher;now?:()=>number;isolatedForTests?:boolean;runtime?:'cloudflare-workers';sourceGate?:SourceGate;waitUntil?:(promise:Promise<unknown>)=>void}={}){
   const state=options.isolatedForTests?freshState():processState();
   const fetcher=options.fetcher??((url,init)=>fetch(url,init));
   const sourceGate:SourceGate|undefined=options.sourceGate??(options.isolatedForTests?{async acquire(){return {token:'synthetic-only'};},async release(){}}:undefined);
@@ -146,7 +146,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       throw new Error('incomplete_snapshot');
     }finally{clearTimeout(timer);requestSignal.removeEventListener('abort',abort);controller.abort();}
   }
-  async function refresh(entry:Entry,scope:Scope,signal:AbortSignal){
+  async function refresh(entry:Entry,scope:Scope,signal:AbortSignal,lifetimeReady:()=>boolean){
     // Serialize entire acquisitions globally, so pages and redirects share pacing.
     const run=state.tail.catch(()=>{}).then(async()=>{
       if(state.denied||now()<state.backoffUntil){entry.error=true;entry.errorCode=state.errorCode??'source_cooldown';entry.retryAt=state.denied?Infinity:state.backoffUntil;return;}
@@ -157,6 +157,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       try{
         // Gate covers the whole acquisition, not just each page or individual isolate.
         // No lease takeover/expiry is permitted: unknown crashed work stays busy.
+        if(!lifetimeReady())throw new Error('runtime_lifetime_unverified');
         if(!sourceGate)throw new Error('source_gate_required');
         if(!enabled())throw new Error('disabled');
         if(!routingAllowed())throw new Error('runtime_routing_unverified');
@@ -193,6 +194,23 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       finally{clearTimeout(timer);signal.removeEventListener('abort',abort);acquisition.abort();}
     });state.tail=run;await run;
   }
+  function retainedRefresh(entry:Entry,scope:Scope,requestSignal:AbortSignal):Promise<void> {
+    // Register the complete acquisition/release promise before any asynchronous
+    // admission. Workers may otherwise terminate it immediately on disconnect.
+    // With enable_request_signal, disconnect still aborts upstream work; the
+    // retained lifetime is for its existing cleanup, not a background refresh.
+    const controller=new AbortController();
+    const abort=()=>controller.abort();
+    requestSignal.addEventListener('abort',abort,{once:true});
+    if(requestSignal.aborted)abort();
+    let retained=options.isolatedForTests===true&&!options.waitUntil;
+    const work=refresh(entry,scope,controller.signal,()=>retained).finally(()=>{
+      requestSignal.removeEventListener('abort',abort);controller.abort();
+    });
+    try{if(options.waitUntil){options.waitUntil(work);retained=true;}}
+    catch{controller.abort();}
+    return work;
+  }
   type Diagnostic={code:string;stopped:boolean;retrySeconds:number};
   function diagnostic(entry?:Entry):Diagnostic|undefined {
     const code=state.denied ? state.errorCode??'source_denial_latched' : entry?.errorCode??(now()<state.backoffUntil?state.errorCode??'source_cooldown':undefined);
@@ -223,7 +241,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       entry={published:0,error:false,failures:0,retryAt:0};state.entries.set(key,entry);
     }
     const stale=()=>!!entry!.snapshot&&(state.denied||entry!.error||now()-entry!.published>=TTL);
-    if(!state.denied&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=refresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
+    if(!state.denied&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
     if(entry.pending)await entry.pending;
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     const issue=diagnostic(entry);

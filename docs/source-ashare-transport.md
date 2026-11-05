@@ -75,3 +75,32 @@ running the old strict validator does not accept `index_points` and must refresh
 the page to load the updated client. Do not make the new validator accept the
 incorrect old CNY industry label to hide a mixed-version deployment. Synthetic
 regression coverage verifies this cache/ETag transition without live requests.
+
+## Canceled request cleanup
+
+The host registers each complete acquisition-and-release promise with Workers
+`waitUntil` **before** it may acquire the D1 lease. It fails closed if registration
+is missing or throws. This keeps an already-started operation's cleanup eligible
+to run after the client leaves; it does not create periodic or unrelated
+background acquisition.
+
+The deployment explicitly enables `enable_request_signal`. For the deployed
+2026-05-15 compatibility date, disconnect notifications are not enabled by
+default. The incoming signal still aborts the source request and pagination;
+retention covers the existing release operation. See Cloudflare's
+[request-cancellation announcement](https://developers.cloudflare.com/changelog/post/2025-05-22-handle-request-cancellation/)
+and [Workers lifetime limits](https://developers.cloudflare.com/workers/platform/limits/).
+The grace period is bounded by the runtime, so process crashes or unavailable D1
+can still leave an uncertain lease. No code expires, resets, steals, or releases
+another acquisition's token.
+
+Offline native-workerd coverage returns an early HTTP response, aborts the
+synthetic request signal, then verifies that the actual D1 lease is released with
+the temporary-failure cooldown and that another isolate cannot acquire early.
+The test uses mocked provider responses with real network access disabled. It
+proves post-response cleanup retention, not production source availability or
+end-to-end socket-disconnect propagation through the Sites platform.
+
+An already-interrupted production operation remains uncertain until separately
+reconciled by an authorized operator. Deploying this prevention fix never clears
+an existing busy or denied gate.

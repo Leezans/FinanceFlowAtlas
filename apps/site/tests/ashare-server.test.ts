@@ -188,3 +188,39 @@ describe('actionable recovery headers',()=>{
   const cached=await h(request('level1','snapshot',{'If-None-Match':first.headers.get('etag')!}));expect(cached.status).toBe(304);expect(cached.headers.get('x-ashare-recovery')).toBe('stopped');expect(cached.headers.get('retry-after')).toBeNull();
  });
 });
+
+describe('request lifetime retention',()=>{
+ it('registers acquisition and release lifetime before source admission',async()=>{
+  const order:string[]=[];const retained:Promise<unknown>[]=[];
+  const gate={async acquire(){order.push('acquire');return {token:'one'};},async release(){order.push('release');}};
+  const h=make(async()=>{order.push('fetch');return upstream();},{sourceGate:gate,waitUntil:(promise:Promise<unknown>)=>{order.push('retain');retained.push(promise);}});
+  expect((await h(request())).status).toBe(200);await Promise.all(retained);
+  expect(order).toEqual(['retain','acquire','fetch','release']);expect(retained).toHaveLength(1);
+ });
+ it('fails closed before acquiring if lifetime registration throws',async()=>{
+  const f=vi.fn();const gate={acquire:vi.fn(),release:vi.fn()};
+  const h=make(f,{sourceGate:gate,waitUntil:()=>{throw new Error('unavailable');}});
+  const result=await h(request());expect(result.status).toBe(503);
+  expect(await result.json()).toMatchObject({error_code:'runtime_lifetime_unverified'});
+  expect(f).not.toHaveBeenCalled();expect(gate.acquire).not.toHaveBeenCalled();
+ });
+ it('production requires lifetime registration without touching the gate',async()=>{
+  const f=vi.fn();const gate={acquire:vi.fn(),release:vi.fn()};
+  const h=createAshareHandler({enabled:()=>true,runtime:'cloudflare-workers',fetcher:f,sourceGate:gate});
+  expect(await (await h(request())).json()).toMatchObject({error_code:'runtime_lifetime_unverified'});
+  expect(f).not.toHaveBeenCalled();expect(gate.acquire).not.toHaveBeenCalled();
+ });
+ it('retained promise includes confirmed release after request cancellation',async()=>{
+  const retained:Promise<unknown>[]=[];const c=new AbortController();let releaseDone!:()=>void;
+  const releaseBarrier=new Promise<void>(resolve=>{releaseDone=resolve;});
+  const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>releaseBarrier)};
+  const f=vi.fn(async(_url:string,init:RequestInit)=>new Promise<Response>((_,reject)=>init.signal?.addEventListener('abort',()=>reject(new Error('aborted')))));
+  const h=make(f,{sourceGate:gate,waitUntil:(promise:Promise<unknown>)=>retained.push(promise)});
+  const pending=h(new Request('https://x/api/v1/ashare/snapshot',{signal:c.signal}));
+  await vi.advanceTimersByTimeAsync(1);c.abort();await vi.advanceTimersByTimeAsync(1);
+  expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'collection_failed'});
+  let settled=false;void retained[0].then(()=>{settled=true;});await vi.advanceTimersByTimeAsync(1);expect(settled).toBe(false);
+  releaseDone();expect((await pending).status).toBe(503);await Promise.all(retained);expect(settled).toBe(true);
+  expect(f).toHaveBeenCalledTimes(1);expect(gate.release).toHaveBeenCalledTimes(1);
+ });
+});
