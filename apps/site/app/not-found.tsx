@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 
 export default function NotFound() {
   return (
@@ -8,9 +9,9 @@ export default function NotFound() {
         <h1 style={{ fontSize: "clamp(28px, 5vw, 42px)" }}>这个地址没有对应页面</h1>
         <p style={{ color: "#a9bfcb", lineHeight: 1.8 }}>链接可能多带了括号或文字，也可能已过期。请从下面的入口继续。</p>
         <nav aria-label="可用页面" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 28 }}>
-          <a href="/markets" style={linkStyle}>全球市场地图 →</a>
-          <a href="/ashare" style={linkStyle}>A 股行业与个股 →</a>
-          <a href="/" style={linkStyle}>美国 TIC 补充层 →</a>
+          <Link href="/markets" style={linkStyle}>全球市场地图 →</Link>
+          <Link href="/ashare" style={linkStyle}>A 股行业与个股 →</Link>
+          <Link href="/" style={linkStyle}>美国 TIC 补充层 →</Link>
         </nav>
       </section>
     </main>
