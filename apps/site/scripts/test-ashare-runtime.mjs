@@ -9,7 +9,7 @@ import {gzipSync,brotliCompressSync} from 'node:zlib';
 
 const require=createRequire(import.meta.url);
 const wranglerRequire=createRequire(require.resolve('wrangler/package.json'));
-const {Miniflare,createFetchMock}=wranglerRequire('miniflare');
+const {Miniflare,createFetchMock,fetch:mockFetch}=wranglerRequire('miniflare');
 const {build}=wranglerRequire('esbuild');
 const root=fileURLToPath(new URL('..',import.meta.url));
 const {outputFiles}=await build({
@@ -26,6 +26,17 @@ const {outputFiles}=await build({
       export default {async fetch(request){
         if(new URL(request.url).pathname==='/offline/hanging-denial')return hangingDenial(new Request(new URL('/api/v1/ashare/snapshot',request.url)));
         if(new URL(request.url).pathname==='/offline/abort'){releaseAbort?.();return new Response('synthetic cancellation released');}
+        if(new URL(request.url).pathname==='/offline/early-without-cancel'){
+          // Model a hosting layer that ends the client request without relaying
+          // cancellation into this Request.signal. Only the absolute budget acts.
+          void ashareHandler(new Request(new URL('/api/v1/ashare/snapshot',request.url))).then(response=>response.body?.cancel());
+          const deadline=Date.now()+3000;
+          while(Date.now()<deadline){
+            if((await env.DB.prepare('SELECT status FROM ashare_source_gate').first()).status==='busy')break;
+            await new Promise(resolve=>setTimeout(resolve,10));
+          }
+          return new Response('synthetic response without request abort',{status:202});
+        }
         if(new URL(request.url).pathname==='/offline/cancel-after-response'){
           const controller=new AbortController();
           void ashareHandler(new Request(new URL('/api/v1/ashare/snapshot',request.url),{signal:controller.signal})).then(response=>response.body?.cancel());
@@ -66,15 +77,22 @@ async function withWorkers(mode,check){
     .intercept({method:'GET',path:/^\/api\/qt\/clist\/get\?/})
     .reply(()=>{
       calls++;
-      const statusCode=mode==='temporary_failure'?503:mode==='denied'?403:200;
+      const statusCode=mode==='temporary_failure'?503:mode==='denied'?403:mode==='deadline_redirect'?302:200;
       const data=mode==='gzip'?gzipSync(syntheticBody):mode==='br'?brotliCompressSync(syntheticBody):statusCode===200?syntheticBody:Buffer.from('{}');
       return {statusCode,data,responseOptions:{headers:{
         'content-type':'application/json',
         'content-length':String(data.length),
+        ...(mode==='deadline_redirect'?{location:'https://push2delay.eastmoney.com/api/qt/clist/get'}:{}),
         ...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{}),
       }}};
     }).persist();
   if(mode==='disconnect')interception.delay(5000);
+  if(mode==='deadline_initial')interception.delay(35_000);
+  if(mode==='deadline_redirect'){
+    interception.delay(18_000);
+    mock.get('https://push2delay.eastmoney.com').intercept({method:'GET',path:/^\/api\/qt\/clist\/get\?/})
+      .reply(()=>{calls++;return {statusCode:200,data:syntheticBody,responseOptions:{headers:{'content-type':'application/json'}}};}).delay(35_000).persist();
+  }
   // Distinct workerd workers have independent module state but share the exact
   // same D1 database. A new handler in an existing isolate is not sufficient.
   const worker=name=>({
@@ -84,7 +102,9 @@ async function withWorkers(mode,check){
     compatibilityDate:'2026-05-15',
     compatibilityFlags:['nodejs_compat','enable_request_signal'],
     d1Databases:{DB:'offline-shared-ashare-gate'},
-    fetchMock:mock,
+    // Preserve manual redirect semantics in the test bridge too. Miniflare's
+    // default fetchMock bridge otherwise follows redirects in its Node fetch.
+    outboundService:request=>mockFetch(request,{dispatcher:mock,redirect:'manual'}),
   });
   const mf=new Miniflare({workers:[worker('warm'),worker('cold')]});
   try{
@@ -244,3 +264,23 @@ await withWorkers('plain',async(mf,db,calls)=>{
   assert.equal((await db.prepare('SELECT count(*) AS n FROM ashare_recovery_audit').first()).n,1);
 });
 console.log('PASS native one-time audited repair: exact legacy lease only, shared cooldown, synthetic cold-start snapshot, replay no-op');
+
+
+for(const mode of ['deadline_initial','deadline_redirect'])await withWorkers(mode,async(mf,db,calls)=>{
+  const started=Date.now();
+  const early=await mf.dispatchFetch('https://offline.invalid/offline/early-without-cancel');
+  assert.equal(early.status,202);await early.text();
+  const limit=started+27_000;let gate;
+  while(Date.now()<limit){
+    gate=await db.prepare('SELECT status,lease_token,finished_ms,not_before_ms FROM ashare_source_gate').first();
+    if(gate.status==='idle'&&gate.finished_ms!==null)break;
+    await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  assert.equal(gate.status,'idle','native abort must release before the retained runtime ceiling');
+  assert.equal(gate.lease_token,null);assert.equal(gate.not_before_ms-gate.finished_ms,60_000);
+  assert.ok(Date.now()-started<27_000);assert.equal(calls(),mode==='deadline_redirect'?2:1);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM ashare_snapshot_cache').first()).n,0);
+  const beforeCalls=calls();const cold=await mf.getWorker('cold');const reply=await cold.fetch(endpoint);
+  assert.equal(reply.status,503);assert.equal((await reply.json()).error_code,'source_cooldown');assert.equal(calls(),beforeCalls);
+  console.log(`PASS native ${mode}: missing disconnect signal, one20s budget, real abort+D1 release before27s, no partial cache or cold retry`);
+});

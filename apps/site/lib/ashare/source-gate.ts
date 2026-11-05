@@ -29,7 +29,7 @@ export const SUCCESS_QUIET_MS = 3_000;
 // 60s failure window in shared metadata so cold isolates cannot retry after 3s.
 const TEMPORARY_FAILURE_QUIET_MS = 60_000;
 // A diagnostic threshold only, not a lease expiry or proof of source outcome.
-// Allow the 90s acquisition budget plus cleanup margin before asking for review.
+// This deliberately conservative diagnostic does not expire the 20s operation.
 export const UNCONFIRMED_AFTER_MS = 180_000;
 export const SQL = {
   acquire: `UPDATE ashare_source_gate SET status='busy', lease_token=?, acquired_ms=${NOW}, updated_ms=${NOW}

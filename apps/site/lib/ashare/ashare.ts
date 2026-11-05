@@ -9,7 +9,11 @@ export type {Row,Scope} from './snapshot';
 const PATH='/api/qt/clist/get';
 const ORIGIN='https://push2.eastmoney.com';
 const DELAY='https://push2delay.eastmoney.com';
-const INTERVAL=3_000, DEADLINE=90_000, MAX_BYTES=4_000_000, MAX_ROWS=2000, MAX_PAGES=20;
+// Workers retain waitUntil work for at most 30s after the client disconnects.
+// Start one 20s budget at handler entry, leaving room for disposal and D1 release.
+// This bounds ordinary native-abort work, not uncertain network/storage results.
+export const ACQUISITION_BUDGET_MS=20_000;
+const INTERVAL=3_000, MAX_BYTES=4_000_000, MAX_ROWS=2000, MAX_PAGES=20;
 type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>;errorCode?:string};
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
 type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean;errorCode?:string};
@@ -52,7 +56,7 @@ const stateKey=Symbol.for('FinanceFlowAtlas.ashare.controlled.v1');
 const globals=globalThis as typeof globalThis & {[stateKey]?:State};
 function processState():State{return globals[stateKey]??=(freshState());}
 function freshState():State{return {entries:new Map(),tail:Promise.resolve(),lastRequest:-Infinity,backoffUntil:0,backoffFailures:0,denied:false};}
-function abortCheck(signal:AbortSignal){if(signal.aborted)throw new Error('aborted');}
+function abortCheck(signal:AbortSignal){if(signal.aborted)throw new Error(signal.reason instanceof Error&&signal.reason.message==='deadline'?'deadline':'aborted');}
 function sleep(ms:number,signal:AbortSignal):Promise<void>{return new Promise((resolve,reject)=>{abortCheck(signal);const done=()=>{clearTimeout(timer);signal.removeEventListener('abort',cancel);};const cancel=()=>{done();reject(new Error('aborted'));};const timer=setTimeout(()=>{done();resolve();},ms);signal.addEventListener('abort',cancel,{once:true});});}
 function params(scope:Scope,page:number):URLSearchParams{return new URLSearchParams({pn:String(page),pz:'100',po:'1',np:'1',fltt:'2',invt:'2',fid:'f62',fs:scope.fs,fields:FIELDS.join(',')});}
 function redirect(current:string,location:string,query:URLSearchParams):string {
@@ -96,20 +100,20 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     const env=host.process?.env;
     return !env||!['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'].some(k=>!!env[k]);
   }
-  async function collect(scope:Scope,requestSignal:AbortSignal):Promise<Snapshot>{
-    const controller=new AbortController();const abort=()=>controller.abort();
+  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number):Promise<Snapshot>{
+    const controller=new AbortController();const abort=()=>controller.abort(requestSignal.reason);
     requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
-    const timer=setTimeout(abort,DEADLINE);const signal=controller.signal;
-    const start=now();let bytes=0,redirects=0,total:number|undefined,endpoint=ORIGIN;const rows:Row[]=[],ids=new Set<string>();
+    const signal=controller.signal;
+    let bytes=0,redirects=0,total:number|undefined,endpoint=ORIGIN;const rows:Row[]=[],ids=new Set<string>();
     try {
       for(let page=1;page<=MAX_PAGES;page++){
         const query=params(scope,page);let url=`${endpoint}${PATH}?${query}`;let response:Response;let raw:Uint8Array;
         while(true){
           abortCheck(signal);if(state.denied)throw new SourceDenied('source_denial_latched');if(!enabled())throw new Error('disabled');if(!routingAllowed())throw new Error('runtime_routing_unverified');
           const wait=INTERVAL-(now()-state.lastRequest);if(wait>0)await sleep(wait,signal);
-          abortCheck(signal);if(!enabled())throw new Error('disabled');if(now()-start>=DEADLINE)throw new Error('deadline');
+          abortCheck(signal);if(!enabled())throw new Error('disabled');if(now()>=deadline)throw new Error('deadline');
           state.lastRequest=now();
-          console.info('[ashare lifecycle]',JSON.stringify({event:'source_request',scope:scope.kind,page,redirects}));
+          console.info('[ashare lifecycle]',JSON.stringify({event:'source_request',scope:scope.kind,page,redirects,route:endpoint===ORIGIN?'primary':'official_redirect'}));
           response=await fetcher(url,{method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'},signal});
           console.info('[ashare lifecycle]',JSON.stringify({event:'source_response',scope:scope.kind,page,status:response.status}));
           const isRedirect=[301,302,303,307,308].includes(response.status);
@@ -126,7 +130,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           if([401,403,407,429,451].includes(response.status)){throw new SourceDenied('source_access_denied',response);}
           if(response.status===200&&response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json'){throw new SourceDenied('non_json_challenge',response);}
           if(response.redirected)throw new SourceDenied('automatic_redirect_denied',response);
-          abortCheck(signal);if(now()-start>=DEADLINE)throw new Error('deadline');
+          abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
           raw=await body(response,MAX_BYTES-bytes,signal);bytes+=raw.byteLength;
           if(isRedirect){redirects++;url=nextUrl!;endpoint=DELAY;continue;}
           if(response.status!==200)throw new Error('upstream_http');
@@ -142,16 +146,12 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         if(rows.length===total){abortCheck(signal);if(!enabled())throw new Error('disabled');return {rows,source_total:total,scope,page_count:page,fetched_at:new Date().toISOString()};}
       }
       throw new Error('incomplete_snapshot');
-    }finally{clearTimeout(timer);requestSignal.removeEventListener('abort',abort);controller.abort();}
+    }finally{requestSignal.removeEventListener('abort',abort);controller.abort();}
   }
-  async function refresh(entry:Entry,scope:Scope,signal:AbortSignal,lifetimeReady:()=>boolean){
+  async function refresh(entry:Entry,scope:Scope,signal:AbortSignal,lifetimeReady:()=>boolean,deadline:number){
     // Serialize entire acquisitions globally, so pages and redirects share pacing.
     const run=state.tail.catch(()=>{}).then(async()=>{
       if(state.denied||now()<state.backoffUntil){entry.error=true;entry.errorCode=state.errorCode??'source_cooldown';entry.retryAt=state.denied?Infinity:state.backoffUntil;return;}
-      const acquisition=new AbortController();
-      const abort=()=>acquisition.abort();
-      signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
-      const timer=setTimeout(abort,DEADLINE);
       try{
         // Gate covers the whole acquisition, not just each page or individual isolate.
         // No lease takeover/expiry is permitted: unknown crashed work stays busy.
@@ -160,7 +160,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         if(!options.snapshotStore&&!options.isolatedForTests)throw new Error('snapshot_store_required');
         if(!enabled())throw new Error('disabled');
         if(!routingAllowed())throw new Error('runtime_routing_unverified');
-        abortCheck(acquisition.signal);
+        abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
         const reuseFresh=async()=>{
           if(!options.snapshotStore)return false;
           const current=await readShared(scope);hydrate(entry,current);
@@ -172,9 +172,9 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         // Reuse that complete snapshot rather than acquire and fetch it again.
         if(await reuseFresh())return;
         const acquire=async()=>{
-          abortCheck(acquisition.signal);
+          abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
           if(!enabled())throw new Error('disabled');
-          try{return await sourceGate.acquire(scope.fs,acquisition.signal);}
+          try{return await sourceGate.acquire(scope.fs,signal);}
           catch(error){if(error&&typeof error==='object'&&'code'in error&&error.code==='source_denied')throw new SourceDenied('persistent_source_denial');throw error;}
         };
         let lease:{token:string};
@@ -183,7 +183,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           if(!error||typeof error!=='object'||!('code'in error)||error.code!=='source_cooldown')throw error;
           // One bounded admission wait, NOT an upstream request retry. Busy,
           // denied and unavailable are never retried or taken over here.
-          await sleep(3100,acquisition.signal);
+          await sleep(3100,signal);
           if(await reuseFresh())return;
           lease=await acquire();
         }
@@ -191,8 +191,18 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         console.info('[ashare lifecycle]',JSON.stringify({event:'lease_acquired',scope:scope.kind}));
         let next:Snapshot|undefined, collectionError:unknown;
         let outcome:SourceOutcome={kind:'success'};
-        try{next=await collect(scope,acquisition.signal);}
-        catch(error){collectionError=error;outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:'temporary_failure',reason:'collection_failed'};}
+        try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');next=await collect(scope,signal,deadline);}
+        catch(error){
+          // Never let a deadline erase an actually observed denial.
+          collectionError=!(error instanceof SourceDenied)&&signal.aborted&&signal.reason instanceof Error&&signal.reason.message==='deadline'?new Error('deadline'):error;
+          outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:'temporary_failure',reason:'collection_failed'};
+        }
+        if(next&&!collectionError){
+          // Check before issuing the atomic commit, not after it. An issued
+          // commit must settle; a timeout is not permission for a second release.
+          try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');}
+          catch(error){next=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:'collection_failed'};}
+        }
         // Release exactly once, including cancellation, and never silently ignore a
         // failed/uncertain write. No publication until persistence confirms release.
         try{
@@ -206,20 +216,25 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
       }
       catch(error){entry.errorCode=failureCode(error);state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied||entry.errorCode==='source_outcome_unconfirmed'){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
-      finally{clearTimeout(timer);signal.removeEventListener('abort',abort);acquisition.abort();}
     });state.tail=run;await run;
   }
-  function retainedRefresh(entry:Entry,scope:Scope,requestSignal:AbortSignal):Promise<void> {
+  function retainedRefresh(entry:Entry,scope:Scope,requestSignal:AbortSignal,deadline:number):Promise<void> {
     // Register the complete acquisition/release promise before any asynchronous
     // admission. Workers may otherwise terminate it immediately on disconnect.
-    // With enable_request_signal, disconnect still aborts upstream work; the
-    // retained lifetime is for its existing cleanup, not a background refresh.
+    // Do not depend on end-to-end disconnect propagation through the host. One
+    // absolute deadline includes reads/admission/queue/redirects/all pages; the
+    // retained lifetime is for this operation's cleanup, not background refresh.
     const controller=new AbortController();
-    const abort=()=>controller.abort();
+    const abort=()=>controller.abort(requestSignal.reason);
     requestSignal.addEventListener('abort',abort,{once:true});
     if(requestSignal.aborted)abort();
+    const expire=()=>{console.info('[ashare lifecycle]',JSON.stringify({event:'acquisition_deadline',scope:scope.kind,budget_ms:ACQUISITION_BUDGET_MS}));controller.abort(new Error('deadline'));};
+    const remaining=deadline-now();
+    if(remaining<=0)expire();
+    const timer=remaining>0?setTimeout(expire,remaining):undefined;
     let retained=options.isolatedForTests===true&&!options.waitUntil;
-    const work=refresh(entry,scope,controller.signal,()=>retained).finally(()=>{
+    const work=refresh(entry,scope,controller.signal,()=>retained,deadline).finally(()=>{
+      if(timer!==undefined)clearTimeout(timer);
       requestSignal.removeEventListener('abort',abort);controller.abort();
     });
     try{if(options.waitUntil){options.waitUntil(work);retained=true;}}
@@ -266,6 +281,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     return {code:shared.code,stopped:shared.code==='source_denied'||shared.code==='source_outcome_unconfirmed',retrySeconds:60};
   }
   return async function handle(request:Request):Promise<Response>{
+    const deadline=now()+ACQUISITION_BUDGET_MS;
     if(request.method!=='GET')return reply(405,{error:'method_not_allowed'});
     const url=new URL(request.url);if(!['/api/v1/ashare/snapshot','/api/v1/ashare/status'].includes(url.pathname))return reply(404,{error:'not_found'});
     let scope:Scope;try{scope=parseScope(url);}catch{return reply(400,{error:'invalid_scope'});}
@@ -291,7 +307,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       state.entries.set(key,entry);
     }
     const stale=()=>!!entry!.snapshot&&(state.denied||entry!.error||now()-entry!.published>=TTL);
-    if(!state.denied&&shared?.canAcquire!==false&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
+    if(!state.denied&&shared?.canAcquire!==false&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal,deadline).finally(()=>{target.pending=undefined;});}
     if(entry.pending)await entry.pending;
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     shared=await readShared(scope);hydrate(entry,shared);
