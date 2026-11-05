@@ -12,15 +12,15 @@ vi.mock('next/navigation',()=>({usePathname:()=>pathname}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();pathname='/'});
 
 describe('market navigation',()=>{
- it('links only implemented pages and keeps upcoming FX noninteractive',()=>{
+ it('links only implemented pages including the separate daily FX reference',()=>{
   render(<MarketNavigation/>);
   const nav=screen.getByRole('navigation',{name:'市场导航'});
-  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/markets','/crypto','/']);
-  expect(within(nav).queryByRole('link',{name:/外汇/})).toBeNull();
-  expect(within(nav).getByText('即将接入')).toBeTruthy();
+  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/markets','/crypto','/forex','/']);
+  expect(within(nav).getByRole('link',{name:'外汇参考'}).getAttribute('href')).toBe('/forex');
+  expect(within(nav).queryByText('即将接入')).toBeNull();
   for(const link of marketLinks)expect(existsSync(resolve(process.cwd(),`app${link.href==='/'?'':link.href}/page.tsx`))).toBe(true);
  });
- it.each(['/ashare','/markets','/crypto','/'])('marks the exact current page %s',route=>{
+ it.each(['/ashare','/markets','/crypto','/forex','/'])('marks the exact current page %s',route=>{
   pathname=route;const {container}=render(<MarketNavigation/>);
   expect(container.querySelectorAll('[aria-current=page]')).toHaveLength(1);
   expect(container.querySelector('[aria-current=page]')?.getAttribute('href')).toBe(route);
@@ -46,7 +46,8 @@ describe('visual market entry',()=>{
   expect(within(section).getByRole('link',{name:'打开加密现货：Kraken BTC 和 ETH'}).getAttribute('href')).toBe('/crypto');
   expect(within(section).getByRole('link',{name:'继续看美国 TIC'}).getAttribute('href')).toBe('#tic-view');
   expect(within(section).queryByRole('table')).toBeNull();
-  expect(within(section).queryByRole('link',{name:/外汇/})).toBeNull();
+  expect(within(section).getByRole('link',{name:'打开外汇参考：ECB 每日汇率'}).getAttribute('href')).toBe('/forex');
+  expect(within(section).getByText('参考汇率不是资金流或实时交易报价')).toBeTruthy();
  });
  it('does not fetch other sources or invent observations to decorate the landing',()=>{
   const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);const {container}=render(<MarketLanding/>);
