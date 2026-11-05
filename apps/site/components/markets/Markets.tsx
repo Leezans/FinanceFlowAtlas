@@ -38,12 +38,12 @@ export default function Markets(){
     <p className={s.eyebrow}>{selected?`${selected.iso3} / ${selected.region}`:'YOUR NEXT LEVEL'}</p>
     <h2>{selected?marketName(selected):'选择你的起点'}</h2><p className={s.english}>{selected?selected.name:'A world of markets. Evidence first.'}</p>
     <div className={s.journey}><span className={s.stepActive}>全球</span><i>→</i><span className={selected?s.stepActive:''}>市场</span><i>→</i><span>行业</span><i>→</i><span>个股</span></div>
-    {!selected?<><p className={s.body}>从地图或搜索进入。每个市场只展示实际存在的证据入口，缺失的数据不会被当成零。</p><div className={s.emptyVisual} aria-hidden="true"><span>◎</span><span>◌</span><span>◌</span></div><p className={s.caption}>目前 A 股提供行业 → 个股路径。美国 TIC 是独立的跨境补充层，其余市场尚未接入。</p></>:<>
+    {!selected?<><p className={s.body}>从地图或搜索进入。每个市场只展示实际存在的证据入口，缺失的数据不会被当成零。</p><div className={s.emptyVisual} aria-hidden="true"><span>◎</span><span>◌</span><span>◌</span></div><p className={s.caption}>A 股、台股上柜与巴西公开基金有独立矩阵入口。美国 TIC 是跨境补充层；每个来源的实际覆盖与新鲜度请进入后查看。</p></>:<>
      <div className={s.status}>{route?'已实现页面 · 实时状态未在此核验':'尚无已实现的市场页面'}</div>
      <h3>{route?.metric||'行业与个股资金证据待接入'}</h3><p className={s.body}>{route?.scope||'此处仅提供地理定位。尚无可供展示的、已核验的本地市场行业与个股资金数据；不使用价格、持仓或模拟值替代。'}</p>
      <dl className={s.facts}><div><dt>观测期</dt><dd>未在导航页加载</dd></div><div><dt>频率</dt><dd>{route?.frequency||'未接入'}</dd></div><div><dt>单位</dt><dd>{route?.unit||'未核验，不展示金额'}</dd></div><div><dt>新鲜度</dt><dd>未核验；进入来源页查看</dd></div></dl>
      {route?<a className={s.cta} href={route.href}>{route.label}<span>→</span></a>:<div className={s.unavailable}>暂无可下钻的行业 / 个股视图</div>}
-     <details className={s.details} key={selected.iso3}><summary>来源与口径限制</summary>{route&&<p><a href={route.reference} target="_blank" rel="noreferrer">查看{selected.iso3==='CHN'?'提供商接口文档':'美国财政部官方来源'} ↗</a></p>}<p><a href="https://data.imf.org/Datasets/BOP" target="_blank" rel="noreferrer">IMF BOP 官方参考 ↗</a></p><p>BOP 是国际收支投资组合权益交易，不是本地股票行业流向。货币单位仍为 review_required，导航页不展示金额，也不宣称该地区有观测数据。</p>{selected.iso3==='USA'&&<p>TIC 的外国交易对手居住地不等于股票发行人所属行业。不可将跨境交易分摊成行业或个股资金流。</p>}</details>
+     <details className={s.details} key={selected.iso3}><summary>来源与口径限制</summary>{route&&<p><a href={route.reference} target="_blank" rel="noreferrer">查看{selected.iso3==='CHN'?'提供商接口文档':selected.iso3==='BRA'?'CVM 官方开放数据':'美国财政部官方来源'} ↗</a></p>}<p><a href="https://data.imf.org/Datasets/BOP" target="_blank" rel="noreferrer">IMF BOP 官方参考 ↗</a></p><p>BOP 是国际收支投资组合权益交易，不是本地股票行业流向。货币单位仍为 review_required，导航页不展示金额，也不宣称该地区有观测数据。</p>{selected.iso3==='USA'&&<p>TIC 的外国交易对手居住地不等于股票发行人所属行业。不可将跨境交易分摊成行业或个股资金流。</p>}</details>
     </>}
    </aside>
   </div>

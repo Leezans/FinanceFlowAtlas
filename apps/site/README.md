@@ -172,3 +172,11 @@ Run `npm run test:tpex-runtime` for native workerd/D1 synthetic checks, with all
 external networking disabled. See [source rights, verified access, exact join
 coverage and semantics](../../docs/source-tpex-institutional.md). Coding-runtime
 source verification does not establish deployed-host availability.
+
+## Brazil disclosed fund equity matrix
+
+`/brazil` displays monthly CVM disclosed FIF-class share acquisition minus sale
+amounts, in BRL, grouped by exact official company industry and ticker. Both
+source datasets use ODbL. Missing/confidential transactions remain unknown and
+are never allocated to sectors. This is partial fund activity, not all-market
+capital flow. See `../../docs/source-cvm-fund-equity.md`.
