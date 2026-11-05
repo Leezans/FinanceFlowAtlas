@@ -1,6 +1,6 @@
 "use client";
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {historySchema, HISTORY_START, HISTORY_END, type TicHistory as History} from '../../lib/tic/history';
+import {historySchema, type TicHistory as History} from '../../lib/tic/history';
 import {signedMillions} from './ticModel';
 import {timestamp, POLL_MS} from './model';
 
@@ -48,7 +48,7 @@ export default function TicHistory() {
  const maximum = Math.max(1, ...data?.observations.map(r => Math.abs(r.net_foreign_purchases_usd ?? 0)) || []);
  return <section className="tic-history" aria-label="美国股权境外净交易历史">
   <div className="history-heading"><div><span className="eyebrow">美国 · US ISSUER OVERVIEW</span>
-   <h3>境外居民净买卖美国股权</h3><p>{HISTORY_START} 至 {HISTORY_END} · 含基金份额 · 月度，非实时</p></div>
+   <h3>境外居民净买卖美国股权</h3><p>{data ? `${data.start_period} 至 ${data.end_period}` : '等待来源核验最近 12 个月'} · 含基金份额 · 月度，非实时</p></div>
    <button onClick={() => void refresh()} aria-label="刷新美国历史数据">刷新历史 ↻</button></div>
   <p className="history-scope">原表 Grand Total，独立于下方国家筛选。不是美国全市场资金流，也不代表个股资金流。</p>
   {stale && <p className="notice warning" role="status">历史来源检查失败或逾期，显示最后核验快照。</p>}
@@ -76,7 +76,7 @@ export default function TicHistory() {
    <div className="table-scroll"><table aria-label="美国股权境外净交易历史数值"><thead><tr><th>观测月份</th><th>原表 Grand Total · USD millions</th><th>状态</th></tr></thead>
     <tbody>{data.observations.map(row => <tr key={row.period}><td>{row.period}</td><td>{signedMillions(row.net_foreign_purchases_usd)}</td><td>{row.state === 'reported' ? '已报告' : '未报告，不是零'}</td></tr>)}</tbody></table></div>
    <p>全部月份来自同一次获取的来源版本，历史值可能修订。与下方逐国快照单独缓存，不用于相减或拼接。未计算区间累计，未从国家行相加构造总计。</p>
-   <p>这不是各月份首次公布时的版本；历史逐月首次发布日期未核验。窗口固定截止 {HISTORY_END}，不宣称最新月份。</p>
+   <p>这不是各月份首次公布时的版本；历史逐月首次发布日期未核验。窗口自动截止于本次来源表中最新通过核验的月份 {data.end_period}；获取时间不是发布日期。</p>
    <p><a href={data.source_url} target="_blank" rel="noreferrer">U.S. Treasury TIC · SLT Table 1 ↗</a> · 字段 {data.source_field}</p>
    <p>获取时间：{timestamp(data.retrieved_at)}<br/>来源 SHA-256：<span className="history-hash">{data.raw_sha256}</span></p>
   </details></>}
