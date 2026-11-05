@@ -1,11 +1,12 @@
 import {afterEach,describe,it,expect,vi} from 'vitest';
 import {createCboeHandler,type CboeGate} from '../lib/cboe/handler';
-import {REFRESH_MS,type CboeReply} from '../lib/cboe/service-model';
+import {REFRESH_MS,MAX_CACHE_AGE_MS,type CboeReply} from '../lib/cboe/service-model';
 import {fixture,NOW,FILE,LINE} from './cboe-fixture';
 import {sourceUrl} from '../lib/cboe/source';
+import {nextCboeCache,type CboeCache} from '../lib/cboe/cache';
 const request=(mode='snapshot')=>new Request(`https://test.invalid/api/v1/europe/cboe/${mode}`);
 const data=async(r:Response)=>await r.json() as CboeReply;
-function gate():CboeGate{let snapshot:ReturnType<typeof fixture>|null=null;return {inspect:vi.fn(async()=>({state:'idle' as const,retryAt:0,snapshot})),acquire:vi.fn(async()=>({token:'synthetic'})),release:vi.fn(async(_token,outcome)=>{if(outcome.kind==='success')snapshot=outcome.snapshot!;if(outcome.kind==='denied')snapshot=null;})};}
+function gate():CboeGate{let cache:CboeCache|null=null;return {inspect:vi.fn(async()=>({state:'idle' as const,retryAt:0,snapshot:cache?.snapshot??null,latestEmptyCheck:cache?.latestEmptyCheck??null})),acquire:vi.fn(async()=>({token:'synthetic'})),release:vi.fn(async(_token,outcome)=>{if(outcome.kind==='success')cache=nextCboeCache(cache,outcome.snapshot!,outcome.retention);if(outcome.kind==='denied')cache=null;})};}
 function setup(){let now=NOW;const g=gate(),fetcher=vi.fn<typeof fetch>(async url=>String(url).includes('get_file_map')?new Response(JSON.stringify({daily:[],minute:[{filename:FILE,serveUrl:`https://cdn.cboe.com/data/europe/equities/delayed_data/eqt_trade_BATE/synthetic/minute/${FILE}`}]}),{headers:{'content-type':'application/json'}}):new Response(LINE,{headers:{'content-type':'text/csv'}}));const handler=createCboeHandler({gate:g,fetcher,now:()=>now,isolatedForTests:true});return {g,fetcher,handler,advance:(ms:number)=>{now+=ms;}};}
 afterEach(()=>vi.useRealTimers());
 describe('Cboe shared handler',()=>{
@@ -19,6 +20,28 @@ describe('Cboe shared handler',()=>{
  it('starts the source budget at entry including slow initial inspection',async()=>{vi.useFakeTimers();const t=setup();let retained:Promise<unknown>|undefined;const original=vi.mocked(t.g.inspect).getMockImplementation()!;vi.mocked(t.g.inspect).mockImplementationOnce(async()=>{await new Promise(resolve=>setTimeout(resolve,1500));return original();});t.fetcher.mockImplementation((_url,init)=>new Promise((_resolve,reject)=>{init?.signal?.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true});}));const h=createCboeHandler({gate:t.g,fetcher:t.fetcher,now:()=>NOW,waitUntil:p=>{retained=p;}});const result=h(request());await vi.advanceTimersByTimeAsync(18001);const r=await data(await result);await retained;expect(r.snapshot).toBeNull();expect(r.status.error_code).toBe('timeout');expect(t.g.release).toHaveBeenCalledExactlyOnceWith('synthetic',expect.objectContaining({kind:'temporary_failure'}));});
  it('never unlocks a source request with an unknown non-cooperative outcome',async()=>{vi.useFakeTimers();const t=setup();let retained:Promise<unknown>|undefined,finish:(r:Response)=>void=()=>{};t.fetcher.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));const h=createCboeHandler({gate:t.g,fetcher:t.fetcher,now:()=>NOW,waitUntil:p=>{retained=p;}});const result=h(request());await vi.advanceTimersByTimeAsync(20001);expect((await data(await result)).status.error_code).toBe('runtime_deadline');expect(t.g.release).not.toHaveBeenCalled();finish(new Response('',{status:503}));await retained;expect(t.g.release).toHaveBeenCalledTimes(1);expect(t.fetcher).toHaveBeenCalledTimes(1);});
  it('keeps last good data stale after temporary failure and preserves source times',async()=>{const t=setup();await t.handler(request());t.advance(REFRESH_MS);t.fetcher.mockImplementation(async()=>new Response('',{status:503,headers:{'retry-after':'3600'}}));const r=await data(await t.handler(request()));expect(r.status.state).toBe('stale');expect(r.snapshot?.fetchedAt).toBe(fixture().fetchedAt);expect(t.g.release).toHaveBeenLastCalledWith('synthetic',expect.objectContaining({kind:'temporary_failure',retryAfterMs:3600000}));});
+ it('retains priced evidence after a safe empty cohort, including a cold worker',async()=>{
+  const t=setup(),first=await data(await t.handler(request()));t.advance(REFRESH_MS);
+  const normal=t.fetcher.getMockImplementation()!;
+  t.fetcher.mockImplementation(async(url,opts)=>String(url).includes('get_file_map')?normal(url,opts):new Response(LINE.replace('ABC001','EMPTY1').replace('""','"NPFT,NETW"'),{headers:{'content-type':'text/csv'}}));
+  const result=await data(await t.handler(request()));expect(result.snapshot).toEqual(first.snapshot);expect(result.status.state).toBe('stale');expect(result.latest_empty_check?.rows).toEqual([]);expect(result.latest_empty_check?.fetchedAt).toBe(new Date(NOW+REFRESH_MS).toISOString());
+  const cold=createCboeHandler({gate:t.g,fetcher:t.fetcher,now:()=>NOW+REFRESH_MS,isolatedForTests:true});
+  const coldStatus=await(await cold(request('status'))).json() as CboeReply['status'];expect(coldStatus.state).toBe('stale');expect(coldStatus.fetched_at).toBe(first.snapshot?.fetchedAt);
+  t.advance(MAX_CACHE_AGE_MS);const expired=await data(await t.handler(request()));expect(expired.snapshot?.rows).toEqual([]);expect(expired.latest_empty_check).toBeNull();
+ });
+ it('expires retained prices into a newer verified empty check without another source request',async()=>{
+  const t=setup(),checkedAt=NOW+MAX_CACHE_AGE_MS-30_000;
+  const empty={...fixture(),fetchedAt:new Date(checkedAt).toISOString(),acquisitionStartedAt:new Date(checkedAt).toISOString(),rows:[],coverage:{rawRows:1,rejectedRows:1,qualifiedRows:0}};
+  vi.mocked(t.g.inspect).mockResolvedValue({state:'idle',retryAt:NOW+MAX_CACHE_AGE_MS+60_000,snapshot:fixture(),latestEmptyCheck:empty});
+  t.advance(MAX_CACHE_AGE_MS+1);const result=await data(await t.handler(request()));expect(result.snapshot).toEqual(empty);expect(result.latest_empty_check).toBeNull();expect(result.status.fetched_at).toBe(empty.fetchedAt);expect(t.fetcher).not.toHaveBeenCalled();
+ });
+ it('clears retained prices when a later empty cohort has a cancellation or same trade identity',async()=>{
+  for(const [id,flags] of [['EMPTY1','CANC'],['ABC001','NPFT,NETW']]){
+   const t=setup();await t.handler(request());t.advance(REFRESH_MS);const normal=t.fetcher.getMockImplementation()!;
+   t.fetcher.mockImplementation(async(url,opts)=>String(url).includes('get_file_map')?normal(url,opts):new Response(LINE.replace('ABC001',id).replace('""',`"${flags}"`),{headers:{'content-type':'text/csv'}}));
+   const result=await data(await t.handler(request()));expect(result.snapshot?.rows).toEqual([]);expect(result.latest_empty_check).toBeNull();
+  }
+ });
  it('rejects a cache-oversize candidate before entering the atomic success release',async()=>{const t=setup();const normal=t.fetcher.getMockImplementation()!;t.fetcher.mockImplementation(async(url,opts)=>String(url).includes('get_file_map')?normal(url,opts):new Response(LINE.replace('ABC001','A'.repeat(1_810_000)),{headers:{'content-type':'text/csv'}}));const r=await data(await t.handler(request()));expect(r.status.error_code).toBe('snapshot_budget');expect(r.status.state).toBe('unavailable');expect(t.g.release).toHaveBeenCalledExactlyOnceWith('synthetic',expect.objectContaining({kind:'temporary_failure'}));});
  it('fails closed if success release outcome is uncertain and never retries it',async()=>{const t=setup();vi.mocked(t.g.release).mockRejectedValue(new Error());const r=await data(await t.handler(request()));expect(r.status.error_code).toBe('source_gate_outcome_unconfirmed');expect(r.snapshot).toBeNull();expect(t.g.release).toHaveBeenCalledTimes(1);t.advance(2*REFRESH_MS);await t.handler(request());expect(t.g.acquire).toHaveBeenCalledTimes(1);});
  it('does not collect without retained runtime lifetime',async()=>{const t=setup();const handler=createCboeHandler({gate:t.g,fetcher:t.fetcher,now:()=>NOW});expect((await data(await handler(request()))).status.error_code).toBe('runtime_lifetime_unverified');expect(t.g.acquire).not.toHaveBeenCalled();expect(t.fetcher).not.toHaveBeenCalled();});

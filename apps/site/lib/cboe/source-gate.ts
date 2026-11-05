@@ -3,10 +3,12 @@ import {REFRESH_MS} from './service-model';
 import {snapshotSchema,MAX_SNAPSHOT_CHARS,type CboeSnapshot} from './model';
 import {strictJSON} from '../ashare/strict-json';
 import type {CboeGate,CboeOutcome} from './handler';
+import {nextCboeCache,parseCboeCache,type CboeCache} from './cache';
 const NOW="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 /** Independent acquisition gate with validated private delayed quote cache. Denied/busy states never expire or reset. */
 export const CBOE_SQL={
  acquire:`UPDATE cboe_delayed_source_gate SET status='busy', lease_token=?, updated_ms=${NOW} WHERE id='bxe_equities' AND status='idle' AND not_before_ms<=${NOW} RETURNING status`,
+ owned:`SELECT payload FROM cboe_delayed_source_gate WHERE id='bxe_equities' AND status='busy' AND lease_token=?`,
  inspect:`SELECT status, not_before_ms, payload, ${NOW} AS now_ms FROM cboe_delayed_source_gate WHERE id='bxe_equities'`,
  finish:`UPDATE cboe_delayed_source_gate SET status=?, lease_token=NULL, updated_ms=${NOW}, not_before_ms=${NOW}+?, payload=CASE WHEN ? THEN NULL ELSE COALESCE(?,payload) END WHERE id='bxe_equities' AND status='busy' AND lease_token=? RETURNING status`,
 };
@@ -16,12 +18,12 @@ export class D1CboeGate implements CboeGate{
  async inspect(){
   const row=(await this.run(CBOE_SQL.inspect)).results?.[0];
   if(!row||!['idle','busy','blocked'].includes(String(row.status))||typeof row.not_before_ms!=='number'||!Number.isSafeInteger(row.not_before_ms)||row.not_before_ms<0)throw new SourceGateError('source_gate_unavailable');
-  const state=row.status as 'idle'|'busy'|'blocked';let snapshot:CboeSnapshot|null=null;
+  const state=row.status as 'idle'|'busy'|'blocked';let snapshot:CboeSnapshot|null=null,latestEmptyCheck:CboeSnapshot|null=null;
   if(state==='idle'&&row.payload!==null){
-   try{if(typeof row.payload!=='string'||row.payload.length>MAX_SNAPSHOT_CHARS)throw new Error();snapshot=snapshotSchema.parse(strictJSON(row.payload));}
+   try{if(typeof row.payload!=='string'||row.payload.length>MAX_SNAPSHOT_CHARS)throw new Error();const cache=parseCboeCache(strictJSON(row.payload));snapshot=cache.snapshot;latestEmptyCheck=cache.latestEmptyCheck;}
    catch{throw new SourceGateError('source_gate_unavailable');}
   }
-  return {state,retryAt:row.not_before_ms,snapshot};
+  return {state,retryAt:row.not_before_ms,snapshot,latestEmptyCheck};
  }
  async acquire(signal?:AbortSignal){
   if(signal?.aborted)throw new SourceGateError('source_aborted');
@@ -40,7 +42,15 @@ export class D1CboeGate implements CboeGate{
   let payload:string|null=null;
   if(outcome.kind==='success'){
    const candidate=snapshotSchema.safeParse(outcome.snapshot);if(!candidate.success)throw new SourceGateError('source_gate_unavailable');
-   payload=JSON.stringify(candidate.data);if(payload.length>MAX_SNAPSHOT_CHARS)throw new SourceGateError('source_gate_unavailable');
+   // Read the previous evidence under our owned lease, not the earlier idle
+   // inspection. A different worker may have completed between those steps.
+   const owned=(await this.run(CBOE_SQL.owned,token)).results?.[0];
+   if(!owned)throw new SourceGateError('source_stale_lease');
+   let previous:CboeCache|null=null;
+   try{if(owned.payload!==null){if(typeof owned.payload!=='string'||owned.payload.length>MAX_SNAPSHOT_CHARS)throw new Error();previous=parseCboeCache(strictJSON(owned.payload));}}
+   catch{throw new SourceGateError('source_gate_unavailable');}
+   const cache=nextCboeCache(previous,candidate.data,outcome.retention);
+   payload=JSON.stringify(cache);if(payload.length>MAX_SNAPSHOT_CHARS)throw new SourceGateError('source_gate_unavailable');
   }else if(outcome.snapshot)throw new SourceGateError('source_gate_unavailable');
   const result=await this.run(CBOE_SQL.finish,outcome.kind==='denied'?'blocked':'idle',delay,outcome.kind==='denied'?1:0,payload,token);
   if(result.meta?.changes===0)throw new SourceGateError('source_stale_lease');if(result.meta?.changes!==1)throw new SourceGateError('source_gate_unavailable');

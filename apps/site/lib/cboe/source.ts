@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {strictJSON} from '../ashare/strict-json';
 import {parseCboeTrades, projectCboeQuotes} from './adapter';
 import {snapshotSchema,type CboeSnapshot} from './model';
+import {tradeKey,type CboeRetentionEvidence} from './cache';
 
 export class CboeError extends Error {constructor(readonly code:string,readonly denied=false,readonly retryAfterMs=0){super(code);}}
 export const MAX_FILES=5,MAX_FILE_BYTES=2_000_000,MAX_TOTAL_BYTES=10_000_000;
@@ -49,7 +50,7 @@ async function requestText(fetcher:typeof fetch,url:string,accept:string,limit:n
   return {text,bytes};
  }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
 }
-export async function fetchCboeSnapshot(fetcher:typeof fetch,started:number,now:()=>number,signal:AbortSignal):Promise<CboeSnapshot>{
+export async function fetchCboeCollection(fetcher:typeof fetch,started:number,now:()=>number,signal:AbortSignal):Promise<{snapshot:CboeSnapshot;retention:CboeRetentionEvidence}>{
  const map=await requestText(fetcher,sourceUrl(started),'application/json',1_000_000,signal,now);
  const files=selectFiles(strictJSON(map.text),started);
  const delayCutoff = new Date(started-15*60_000).toISOString().replace('Z','000Z');
@@ -68,7 +69,15 @@ export async function fetchCboeSnapshot(fetcher:typeof fetch,started:number,now:
  }
  const rows=projectCboeQuotes(events),fetchedAt=new Date(now()).toISOString();
  const latestPublicationTime=events.reduce<string|null>((latest,row)=>!latest||row.publicationTime>latest?row.publicationTime:latest,null);
- return snapshotSchema.parse({schema:'cboe-delayed/1',source:'Cboe Europe BXE',sourceDelaySeconds:900,instrumentScope:'equities_and_etfs',venueScope:'BATE/BATD/BATP',frequency:'15_minute_delayed',acquisitionStartedAt:new Date(started).toISOString(),fetchedAt,
+ const snapshot=snapshotSchema.parse({schema:'cboe-delayed/1',source:'Cboe Europe BXE',sourceDelaySeconds:900,instrumentScope:'equities_and_etfs',venueScope:'BATE/BATD/BATP',frequency:'15_minute_delayed',acquisitionStartedAt:new Date(started).toISOString(),fetchedAt,
   sampledFiles:files.map(f=>f.filename),windowStart:new Date(files[0].minuteMs).toISOString(),windowEnd:new Date(files.at(-1)!.minuteMs+60_000).toISOString(),latestPublicationTime,
   coverage:{rawRows,rejectedRows,qualifiedRows:events.filter(event=>event.eligible).length},rows,netCapitalFlow:null});
+ // Only understood, non-price-forming ordinary reports permit retention.
+ // Cancellations, amendments, unknown flags and suppressed eligible prices do
+ // not. Keep identities transient so a changed prior trade cannot reappear.
+ const safeEmptyWindow=rows.length===0&&events.every(event=>event.action==='trade'&&!event.eligible&&event.flags.every(flag=>['ALGO','NPFT','NETW'].includes(flag)));
+ return {snapshot,retention:{safeEmptyWindow,reportedTradeKeys:events.map(tradeKey)}};
+}
+export async function fetchCboeSnapshot(fetcher:typeof fetch,started:number,now:()=>number,signal:AbortSignal):Promise<CboeSnapshot>{
+ return (await fetchCboeCollection(fetcher,started,now,signal)).snapshot;
 }
