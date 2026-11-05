@@ -26,7 +26,7 @@ export default function EquityContext() {
     if (url.href !== window.location.href) window.history.pushState({}, '', url);
   }
   const countryGroups = useMemo(() => projectCountryEquity(snapshot, selected), [snapshot, selected]);
-  return <main className={s.root}>
+  return <div className={s.surface}><main className={s.root}>
     <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/#tic-view">美国 TIC 跨境流量 ↗</a></header>
     <section className={s.intro}>
       <p className={s.eyebrow}>GLOBAL EQUITIES / WORLD BANK · WFE</p><h1>全球股市，年度规模矩阵。</h1>
@@ -65,5 +65,5 @@ export default function EquityContext() {
       </ul>
       <div className={s.links}><a href={SOURCE + INDICATORS.capitalization} target="_blank" rel="noreferrer">市值指标与许可 ↗</a><a href={SOURCE + INDICATORS.traded_value} target="_blank" rel="noreferrer">成交额指标与许可 ↗</a><a href={LICENSE} target="_blank" rel="noreferrer">CC BY 4.0 与世界银行附加条款 ↗</a></div>
     </section>
-  </main>;
+  </main></div>;
 }
