@@ -1,11 +1,17 @@
 /** Public spot evidence from one exchange. No accounts, orders or net-flow model. */
 import {strictJSON} from '../ashare/strict-json';
-export const KRAKEN_URL='https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD';
+export const KRAKEN_URL='https://api.kraken.com/0/public/Ticker?asset_class=forex';
+export const KRAKEN_PAIRS_URL='https://api.kraken.com/0/public/AssetPairs?aclass_base=currency';
+export const KRAKEN_PAIRS_DOCS='https://docs.kraken.com/api-reference/market-data/get-tradable-asset-pairs';
 export const KRAKEN_DOCS='https://docs.kraken.com/api-reference/market-data/get-ticker-information';
 export const REFRESH_MS=60_000, MAX_CACHE_AGE_MS=900_000;
-const MAX_BYTES=32_768, DEADLINE_MS=12_000;
-export type KrakenRow={pair:'BTC/USD'|'ETH/USD';base:'BTC'|'ETH';quote:'USD';last_price_usd:string;volume_base_24h:string;vwap_usd_24h:string;trades_24h:number;net_capital_flow:null;open_interest:null};
-export type KrakenSnapshot={schema:'kraken-spot/1';venue:'Kraken';coverage:'two_selected_spot_pairs_one_venue';rows:KrakenRow[];acquisition_started_at:string;fetched_at:string;source_observed_at:null;delay_status:'not_provided';window:'rolling_24h';monetary_encoding:'decimal_string'};
+export const MAX_PAIRS=2_000,MAX_SOURCE_PAIRS=10_000,UNIVERSE_REFRESH_MS=900_000;
+const MAX_BYTES=8_388_608, DEADLINE_MS=12_000, REQUEST_SPACING_MS=1_100;
+export type KrakenPair={source_pair:string;pair:string;base:string;quote:'USD'};
+export type KrakenUniverse={pairs:KrakenPair[];source_pair_count:number;fetched_at:string};
+export type KrakenRow=KrakenPair&{last_price_usd:string;volume_base_24h:string;vwap_usd_24h:string;trades_24h:number;net_capital_flow:null;open_interest:null};
+export type KrakenMissing={pair:string;reason:'missing_ticker'|'invalid_ticker'};
+export type KrakenSnapshot={schema:'kraken-spot/2';venue:'Kraken';coverage:'online_usd_spot_pairs_one_venue';rows:KrakenRow[];missing:KrakenMissing[];universe_pair_count:number;catalog_pair_count:number;catalog_fetched_at:string;quality:'complete'|'partial';acquisition_started_at:string;fetched_at:string;source_observed_at:null;delay_status:'not_provided';window:'rolling_24h';monetary_encoding:'decimal_string'};
 export type KrakenStatus={state:'available'|'stale'|'unavailable'|'denied';error_code:string|null;last_attempt_at:string|null;fetched_at:string|null;cache_age_ms:number|null;refresh_ms:number;max_cache_age_ms:number;next_retry_at:string|null};
 export type KrakenReply={status:KrakenStatus;snapshot:KrakenSnapshot|null};
 export type KrakenOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number};
@@ -18,22 +24,55 @@ function decimal(value:unknown,positive=false):string{
  return value;
 }
 function field(row:Record<string,unknown>,key:string,index:number):unknown{const values=row[key];if(!Array.isArray(values)||values.length!==2)fail('invalid_schema');return values[index];}
-/** Use v[1]/p[1]/t[1], not the UTC-today element. Never calculate flow from trades. */
-export function parseKrakenTicker(payload:unknown,started:string,fetched:string):KrakenSnapshot{
+function resultObject(payload:unknown):Record<string,unknown>{
  const root=object(payload);if(!Array.isArray(root.error)||root.error.some(e=>typeof e!=='string'))fail('invalid_schema');
  if(root.error.length){
   if(root.error.some(e=>/rate limit|throttl|permission|denied|unavailable in|restricted/i.test(e)))throw new KrakenError('source_access_denied',true);
   fail('source_api_error');
  }
- const result=object(root.result),keys=Object.keys(result).sort();
- if(keys.join(',')!=='XETHZUSD,XXBTZUSD')fail('incomplete_pair_set');
- const rows=([['XXBTZUSD','BTC'],['XETHZUSD','ETH']] as const).map(([key,base]):KrakenRow=>{
-  const row=object(result[key]);const trades=field(row,'t',1);
-  if(typeof trades!=='number'||!Number.isSafeInteger(trades)||trades<0)fail('invalid_trade_count');
-  return {pair:`${base}/USD`,base,quote:'USD',last_price_usd:decimal(field(row,'c',0),true),volume_base_24h:decimal(field(row,'v',1)),vwap_usd_24h:decimal(field(row,'p',1),true),trades_24h:trades,net_capital_flow:null,open_interest:null};
+ const result=object(root.result),size=Object.keys(result).length;
+ if(size===0||size>MAX_SOURCE_PAIRS)fail('source_pair_budget');
+ return result;
+}
+const code=(value:unknown):value is string=>typeof value==='string'&&/^[A-Z0-9][A-Z0-9.]{0,31}$/.test(value);
+/** Use provider metadata, never suffix guessing or invented sector membership. */
+export function parseKrakenUniverse(payload:unknown,fetched:string):KrakenUniverse{
+ const result=resultObject(payload),pairs:KrakenPair[]=[],seen=new Set<string>();
+ for(const [source_pair,value] of Object.entries(result)){
+  const row=object(value);
+  if(row.aclass_base!=='currency'||row.aclass_quote!=='currency'||row.quote!=='ZUSD'||row.status!=='online')continue;
+  if(!code(source_pair)||!code(row.base)||typeof row.wsname!=='string')fail('invalid_pair_metadata');
+  const names=row.wsname.split('/');if(names.length!==2||names[1]!=='USD'||!code(names[0]))fail('invalid_pair_metadata');
+  // These two established Kraken display aliases do not infer asset classes.
+  const base=names[0]==='XBT'?'BTC':names[0]==='XDG'?'DOGE':names[0],pair=`${base}/USD`;
+  if(seen.has(pair))fail('duplicate_pair');seen.add(pair);pairs.push({source_pair,pair,base,quote:'USD'});
+ }
+ if(pairs.length===0||pairs.length>MAX_PAIRS)fail('universe_pair_budget');
+ if(!Number.isFinite(Date.parse(fetched)))fail('invalid_clock');
+ pairs.sort((a,b)=>a.pair<b.pair?-1:a.pair>b.pair?1:0);
+ return {pairs,source_pair_count:Object.keys(result).length,fetched_at:fetched};
+}
+/** Use v[1]/p[1]/t[1], not the UTC-today element. Never calculate flow from trades. */
+export function parseKrakenTicker(payload:unknown,started:string,fetched:string,universe:KrakenUniverse):KrakenSnapshot{
+ const result=resultObject(payload),rows:KrakenRow[]=[],missing:KrakenMissing[]=[];
+ for(const pair of universe.pairs){
+  if(!Object.hasOwn(result,pair.source_pair)){missing.push({pair:pair.pair,reason:'missing_ticker'});continue;}
+  try{
+   const row=object(result[pair.source_pair]),trades=field(row,'t',1);
+   if(typeof trades!=='number'||!Number.isSafeInteger(trades)||trades<0)fail('invalid_trade_count');
+   rows.push({...pair,last_price_usd:decimal(field(row,'c',0),true),volume_base_24h:decimal(field(row,'v',1)),vwap_usd_24h:decimal(field(row,'p',1),true),trades_24h:trades,net_capital_flow:null,open_interest:null});
+  }catch(error){if(!(error instanceof KrakenError)||error.denied)throw error;missing.push({pair:pair.pair,reason:'invalid_ticker'});}
+ }
+ if(rows.length===0)fail('no_valid_tickers');
+ if(!Number.isFinite(Date.parse(started))||!Number.isFinite(Date.parse(fetched))||Date.parse(fetched)<Date.parse(started)||Date.parse(universe.fetched_at)>Date.parse(fetched))fail('invalid_clock');
+ return {schema:'kraken-spot/2',venue:'Kraken',coverage:'online_usd_spot_pairs_one_venue',rows,missing,universe_pair_count:universe.pairs.length,catalog_pair_count:universe.source_pair_count,catalog_fetched_at:universe.fetched_at,quality:missing.length?'partial':'complete',acquisition_started_at:started,fetched_at:fetched,source_observed_at:null,delay_status:'not_provided',window:'rolling_24h',monetary_encoding:'decimal_string'};
+}
+function pause(ms:number,signal:AbortSignal):Promise<void>{
+ return new Promise((resolve,reject)=>{
+  const abort=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);reject(new KrakenError('timeout'));};
+  const timer=setTimeout(()=>{signal.removeEventListener('abort',abort);resolve();},ms);
+  signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
  });
- if(!Number.isFinite(Date.parse(started))||!Number.isFinite(Date.parse(fetched))||Date.parse(fetched)<Date.parse(started))fail('invalid_clock');
- return {schema:'kraken-spot/1',venue:'Kraken',coverage:'two_selected_spot_pairs_one_venue',rows,acquisition_started_at:started,fetched_at:fetched,source_observed_at:null,delay_status:'not_provided',window:'rolling_24h',monetary_encoding:'decimal_string'};
 }
 async function readJSON(response:Response,signal:AbortSignal){
  if(!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type')??''))throw new KrakenError('unexpected_content_type',true);
@@ -56,6 +95,7 @@ function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
 function retryAfter(value:string|null,now:number){if(value===null)return 0;if(/^\d+$/.test(value))return Math.min(Number.MAX_SAFE_INTEGER,Number(value)*1000);const date=Date.parse(value);return Number.isFinite(date)?Math.max(0,date-now):0;}
 export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean}){
  const now=options.now??Date.now,fetcher=options.fetcher??fetch;
+ let universe:KrakenUniverse|null=null;
  let snapshot:KrakenSnapshot|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
  async function refresh(requestSignal:AbortSignal,lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),DEADLINE_MS);let token:string|undefined,releasing=false;
@@ -67,21 +107,31 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
    abortCheck();
    const lease=await settleGate(track(options.gate.acquire(controller.signal)),controller.signal);token=lease.token;
    if(!token)fail('source_gate_unavailable');abortCheck();
-   const response=await fetcher(KRAKEN_URL,{method:'GET',headers:{Accept:'application/json'},credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal});
-   let candidate:KrakenSnapshot;
-   try{
-    if([401,403,407,429,451].includes(response.status))throw new KrakenError('source_access_denied',true);
-    if(response.redirected||response.status>=300&&response.status<400)throw new KrakenError('redirect_denied',true);
-    if(/^(text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(response.headers.get('content-type')??''))throw new KrakenError('html_challenge',true);
-    if(response.status!==200)throw new KrakenError('upstream_http',false,retryAfter(response.headers.get('retry-after'),now()));
-    candidate=parseKrakenTicker(await readJSON(response,controller.signal),new Date(started).toISOString(),new Date(now()).toISOString());
-   }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
+   const acquireJSON=async(url:string)=>{
+    abortCheck();
+    const response=await fetcher(url,{method:'GET',headers:{Accept:'application/json'},credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal});
+    try{
+     if([401,403,407,429,451].includes(response.status))throw new KrakenError('source_access_denied',true);
+     if(response.redirected||response.status>=300&&response.status<400)throw new KrakenError('redirect_denied',true);
+     if(/^(text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(response.headers.get('content-type')??''))throw new KrakenError('html_challenge',true);
+     if(response.status!==200)throw new KrakenError('upstream_http',false,retryAfter(response.headers.get('retry-after'),now()));
+     return await readJSON(response,controller.signal);
+    }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
+   };
+   let nextUniverse=universe;
+   if(!nextUniverse||now()-Date.parse(nextUniverse.fetched_at)>=UNIVERSE_REFRESH_MS||now()<Date.parse(nextUniverse.fetched_at)){
+    nextUniverse=parseKrakenUniverse(await acquireJSON(KRAKEN_PAIRS_URL),new Date(now()).toISOString());
+    // Both endpoints share one admission lease; spacing cannot be skipped by a
+    // manual refresh, cold worker, malformed response or metadata cache miss.
+    await pause(REQUEST_SPACING_MS,controller.signal);
+   }
+   const candidate=parseKrakenTicker(await acquireJSON(KRAKEN_URL),new Date(started).toISOString(),new Date(now()).toISOString(),nextUniverse);
    abortCheck();
    // Cleanup has its own budget: request cancellation must not interrupt the
    // single owner-token release, or publish a candidate before it is confirmed.
    releasing=true;await settleGate(track(options.gate.release(token,{kind:'success'})),AbortSignal.timeout(2_000));token=undefined;releasing=false;
    abortCheck();
-   snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
+   snapshot=candidate;universe=nextUniverse;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
    const code=caught instanceof KrakenError?(caught.code==='timeout'&&requestSignal.aborted?'aborted':caught.code):typeof (caught as {code?:unknown})?.code==='string'?(caught as {code:string}).code:controller.signal.aborted?(requestSignal.aborted?'aborted':'timeout'):'source_unavailable';
    denied=denied||(caught instanceof KrakenError&&caught.denied)||code==='source_denied';error=code;
@@ -91,7 +141,7 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
     try{await settleGate(track(options.gate.release(token,{kind:denied?'denied':'temporary_failure',retryAfterMs:pause})),AbortSignal.timeout(2_000));}
     catch{denied=true;error='source_gate_outcome_unconfirmed';}
    }else if(releasing){denied=true;error='source_gate_outcome_unconfirmed';}
-   if(denied)snapshot=null;
+   if(denied){snapshot=null;universe=null;}
   }finally{clearTimeout(timer);requestSignal.removeEventListener('abort',abort);controller.abort();}
  }
  function retainedRequest<T>(run:(lifetimeReady:()=>boolean,track:<Value>(operation:Promise<Value>)=>Promise<Value>)=>Promise<T>):Promise<T>{

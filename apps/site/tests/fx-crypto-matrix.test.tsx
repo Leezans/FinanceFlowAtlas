@@ -1,3 +1,4 @@
+import {parseTicker as parseKrakenTicker} from './kraken-fixture';
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach,describe,expect,it} from 'vitest';
@@ -5,7 +6,7 @@ import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {fxReferenceGroups} from '../components/forex/matrix';
 import {cryptoColorMaximum,cryptoMatrixGroups,formatCryptoNumber,priceVwapDeviation} from '../components/crypto/matrix';
 import KrakenMatrix from '../components/crypto/KrakenMatrix';
-import {parseKrakenTicker,type KrakenRow} from '../lib/crypto/kraken';
+import {type KrakenRow} from '../lib/crypto/kraken';
 import {fxPayload} from './fx-fixture';
 
 // Synthetic source evidence only. These are deliberately not market quotes.
@@ -65,5 +66,19 @@ describe('Kraken metric matrix adapter',()=>{
   fireEvent.click(screen.getByRole('button',{name:'24h 成交均价'}));expect(screen.getByText('10 USD')).toBeTruthy();
   expect(screen.queryByRole('table')).toBeNull();
   rerender(<KrakenMatrix snapshot={null}/>);expect(container.querySelectorAll('[data-id]')).toHaveLength(0);
+ });
+});
+
+describe('expanded Kraken matrix',()=>{
+ it('keeps every verified pair readable and searchable, including the last pair',()=>{
+  const data=snapshot(),template=data.rows[0];data.rows=Array.from({length:250},(_,i)=>({...template,pair:`S${String(i).padStart(3,'0')}/USD`,base:`S${String(i).padStart(3,'0')}`,source_pair:`S${i}USD`}));data.universe_pair_count=250;data.catalog_pair_count=250;
+  const {container}=render(<KrakenMatrix snapshot={data}/>);expect(container.querySelector('[data-layout="readable-grid"]')).toBeTruthy();expect(container.querySelectorAll('[data-id]')).toHaveLength(250);expect(screen.getByText('S249/USD')).toBeTruthy();expect(screen.getByText('已核验 250 / 250 组 USD 现货交易对')).toBeTruthy();
+  fireEvent.change(screen.getByRole('textbox',{name:'查找加密货币交易对'}),{target:{value:' s249 '}});expect(container.querySelectorAll('[data-id]')).toHaveLength(1);expect(screen.getByText('S249/USD')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'24h 成交量'}));expect(screen.getByText('3.125 S249')).toBeTruthy();
+  fireEvent.change(screen.getByRole('textbox',{name:'查找加密货币交易对'}),{target:{value:'not-covered'}});expect(screen.getByText('没有匹配的交易对')).toBeTruthy();expect(container.querySelectorAll('[data-id]')).toHaveLength(0);
+  fireEvent.change(screen.getByRole('textbox',{name:'查找加密货币交易对'}),{target:{value:''}});expect(container.querySelectorAll('[data-id]')).toHaveLength(250);
+ });
+ it('discloses omitted rows instead of rendering fake zero tiles',()=>{
+  const data=snapshot();data.rows=data.rows.slice(0,1);data.missing=[{pair:'ETH/USD',reason:'missing_ticker'}];data.quality='partial';const {container}=render(<KrakenMatrix snapshot={data}/>);expect(container.querySelectorAll('[data-id]')).toHaveLength(1);expect(screen.getByText(/部分覆盖：1 组/)).toBeTruthy();expect(screen.getByText(/ETH\/USD（无行情）/)).toBeTruthy();expect(container.querySelector('p details')).toBeNull();
  });
 });
