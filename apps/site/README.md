@@ -26,7 +26,7 @@ The hosted adapter discovers the latest complete, validated observation month pr
 
 Treemap area is the absolute net amount divided by the sum of absolute net amounts of included reported countries, not market capitalization or the Treasury Grand Total. Zero rows are separate; missing rows have no area. No industry or individual-stock hierarchy is implied.
 
-The IMF layer is explicitly unavailable in this hosted application. Separate daily ECB FX reference and selected-pair Kraken spot layers are described below; neither extends TIC coverage. Selected CFTC futures positioning is another independent layer described below. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
+The IMF layer is explicitly unavailable in this hosted application. Separate daily ECB FX reference and Kraken spot layers are described below; neither extends TIC coverage. Selected CFTC futures positioning is another independent layer described below. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
 
 See [HOSTED_PROOF.md](HOSTED_PROOF.md) for cache validation and endpoint details, and [ATTRIBUTION.md](ATTRIBUTION.md) for separate geography and dependency licensing.
 
@@ -94,11 +94,14 @@ with synthetic plain/gzip/Brotli XML and real networking disabled. See
 [the FX source contract](../../docs/source-ecb-fx.md) for timing, rights and limits.
 ## Personal Kraken spot layer
 
-`/crypto` reads online USD-quoted Kraken spot pairs from the official public
-catalog and ticker, with explicit missing/invalid-pair coverage and local search.
-It shows last price, rolling-24h base-coin volume,
+`/crypto` reads the validated online USD spot catalog and ticker from Kraken
+without an account. It also adds a separate, bounded BTC/USD, ETH/USD and SOL/USD
+executed-trade imbalance matrix. See [trade source contract](../../docs/source-kraken-trades.md)
+for the five-minute requested window, REST side-label uncertainty and incomplete
+responses. The quote matrix shows last price, rolling-24h base-coin volume,
 VWAP and trade count, not net capital flow, derivative open interest or global
-crypto totals. Fetch time is separate from unknown source observation time.
+crypto totals. Quote observation time remains unknown; the separate trade matrix
+shows returned execution times independently of acquisition time.
 One-minute caching, a 15-minute display expiry and a separate persistent
 metadata-only source gate protect freshness and stop after access denial.
 Keep the existing owner-only boundary; code publication does not grant provider
