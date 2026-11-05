@@ -46,7 +46,7 @@ export default function GeographicNavigator(){
     </>}
    </aside>
   </div>
-  <section className={s.assetLinks} aria-label="独立跨资产资料"><div><strong>外汇 · 每日参考汇率</strong><span>欧洲央行公开来源；汇率参考，不是资金流或实时交易报价。</span></div><a href="/forex">查看 ECB 外汇参考 →</a></section>
+  <section className={s.assetLinks} aria-label="独立跨资产资料"><div><strong>外汇 · 交易所行情与每日参考</strong><span>Kraken 三组法币现货每分钟检查；ECB 每日参考单列。不是全球银行间报价或资金流。</span></div><a href="/forex">查看外汇行情矩阵 →</a></section>
   <div className={s.quick}><span>独立资产证据</span><a href="/futures">期货 · 美国 CFTC 持仓报告 ↗</a><a href="/crypto">虚拟货币 · Kraken 单一交易所现货 ↗</a></div>
 
   <footer className={s.footer}><p>{markets.length} 个可检索国家 / 地区 · {mappedCount} 个检索条目有对应地图多边形。小型地区请使用搜索。地图面积与颜色均不代表资金金额。</p><details><summary>地图来源与边界说明</summary><p>Natural Earth / world-atlas 2.0.2；名称与地区索引来自 iso-codes、world-countries。地图仅作示意，不表达主权立场。<a href="/geography/ATTRIBUTION.txt" target="_blank" rel="noreferrer">完整归属与许可 ↗</a></p></details></footer>

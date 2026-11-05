@@ -401,3 +401,23 @@ reset or bypassed. This adapter’s offline tests do not establish live access.
 See [country-owned semantics](docs/global-own-market.md),
 [runtime boundaries](docs/tpex-summary-runtime.md), and
 `npm run test:tpex-summary-runtime`.
+
+## Bounded intraday fiat FX view
+
+`/forex` now opens a **Kraken venue spot** matrix for AUD/USD, EUR/USD and
+GBP/USD. The optional ECB tab remains a daily reference view; only the selected
+view mounts. This is not worldwide wholesale FX coverage or a net-capital-flow
+feed. Rates, 24h VWAP, base-currency volume and trade counts use equal-area matrix
+tiles. Rate color is explicitly last-price/VWAP deviation, not daily return.
+
+The view reuses `/api/v1/crypto/kraken/snapshot` with the existing explicit
+three-pair selection. There is no new provider endpoint, source gate, cache,
+schema, database table or migration. The same retained 12-second acquisition,
+1.1-second request spacing, six trade-page maximum and shared 60-second cooldown
+apply. The common client lifecycle preserves original acquisition times,
+15-minute expiry, selection/window identity, authorization and denial clearing.
+
+Ticker observation time and latency remain unknown. Returned trade execution
+times are shown independently for the selected one/five-minute fixed window;
+they are not timestamps of the ticker rate and are not a guarantee of the latest
+venue trade. See [source and validation boundary](../../docs/source-kraken-fx.md).

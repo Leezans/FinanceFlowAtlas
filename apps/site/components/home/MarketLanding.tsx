@@ -9,7 +9,7 @@ export default function MarketLanding({onOpenTic}:{onOpenTic?:()=>void}={}){
    <a href="/markets" aria-label="打开全球市场矩阵">全球市场</a>
    <a href="/crypto" aria-label="打开加密现货：Kraken BTC 和 ETH">加密现货</a>
    <a href="/futures" aria-label="打开期货持仓：美国 CFTC 精选市场">期货持仓</a>
-   <a href="/forex" aria-label="打开外汇参考：ECB 每日汇率">外汇参考</a>
+   <a href="/forex" aria-label="打开外汇行情：Kraken 法币现货与 ECB 每日参考">外汇行情</a>
    <a href="#tic-view" onClick={onOpenTic}>继续看美国 TIC</a>
   </nav>
   <p className={s.disclosure}>主力净额是订单分类估算，非市场真实新增资金。各来源独立展示，不混合单位、时点或口径。</p>

@@ -1,4 +1,4 @@
 import type {Metadata} from 'next';
-import Forex from '@/components/forex/Forex';
-export const metadata:Metadata={title:'Finance Flow Atlas · 外汇参考',description:'ECB daily exchange-rate references with source dates and clearly labelled cross-rate calculations, not capital flows or live prices.'};
-export default function ForexPage(){return <Forex/>}
+import ForexWorkspace from '@/components/forex/ForexWorkspace';
+export const metadata:Metadata={title:'Finance Flow Atlas · 外汇行情',description:'Bounded Kraken fiat spot matrix with minute checks, independent execution timestamps, and a separate optional ECB daily reference. Not wholesale FX or capital flows.'};
+export default function ForexPage(){return <ForexWorkspace/>}
