@@ -28,9 +28,11 @@ export function formatDeviation(value:number|null):string{
 export function cryptoColorMaximum(snapshot:KrakenSnapshot|null):number{
  return Math.max(0,...(snapshot?.rows.map(row=>Math.abs(priceVwapDeviation(row)??0))??[]));
 }
-export function cryptoMatrixGroups(snapshot:KrakenSnapshot|null,metric:CryptoMetric):MatrixGroup[]{
+export function cryptoMatrixGroups(snapshot:KrakenSnapshot|null,metric:CryptoMetric,query=''):MatrixGroup[]{
  if(!snapshot)return [];
- return [{id:'kraken-spot',label:'Kraken · 仅两组已核验现货交易对',items:snapshot.rows.map(row=>{
+ const term=query.trim().toUpperCase(),rows=snapshot.rows.filter(row=>row.pair.includes(term));
+ if(!rows.length)return [];
+ return [{id:'kraken-spot',label:`Kraken · ${rows.length} 组已核验 USD 现货交易对`,items:rows.map(row=>{
   const unit=metric==='volume_base_24h'?row.base:metric==='trades_24h'?'笔':'USD';
   const detail=metric==='last_price_usd'?`相对 24h 成交均价 ${formatDeviation(priceVwapDeviation(row))} · 均价 ${formatCryptoNumber(row.vwap_usd_24h)} USD`
    :metric==='volume_base_24h'?`滚动 24 小时 · ${row.base} 数量，不是 USD 金额；不同币种不能相加`

@@ -94,8 +94,9 @@ with synthetic plain/gzip/Brotli XML and real networking disabled. See
 [the FX source contract](../../docs/source-ecb-fx.md) for timing, rights and limits.
 ## Personal Kraken spot layer
 
-`/crypto` reads two selected Kraken spot pairs (BTC/USD and ETH/USD) through its
-public no-account ticker. It shows last price, rolling-24h base-coin volume,
+`/crypto` reads online USD-quoted Kraken spot pairs from the official public
+catalog and ticker, with explicit missing/invalid-pair coverage and local search.
+It shows last price, rolling-24h base-coin volume,
 VWAP and trade count, not net capital flow, derivative open interest or global
 crypto totals. Fetch time is separate from unknown source observation time.
 One-minute caching, a 15-minute display expiry and a separate persistent

@@ -14,7 +14,7 @@ size or strength, and this source snapshot has no previous-day observation from
 which to calculate returns. Search filters only the observed currencies. The
 same-reference-date conversion tool is available in a secondary disclosure.
 
-Kraken retains two selected spot pairs and switches the matrix between last
+Kraken uses the verified online USD spot-pair catalog and switches the matrix between last
 price, rolling-24h VWAP, native-base volume and trade count. Equal tile area is
 not market capitalization. Only the last-price view uses signed color: the
 explicitly calculated `(last / rolling-24h VWAP - 1) × 100` deviation, scaled to
@@ -22,3 +22,7 @@ the validated snapshot's largest absolute deviation. It is not a 24h return,
 net capital flow or a trading signal. Other views use neutral color and retain
 native units; base-coin volumes are never combined. Missing, denied and expired
 snapshots produce no observation tiles. Tests use synthetic evidence only.
+
+The Kraken matrix now uses a searchable readable grid for the expanded catalog.
+All validated USD pairs remain available, with explicit missing/invalid counts.
+The catalog supplies identities only, not a fabricated sector taxonomy.

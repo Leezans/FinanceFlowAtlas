@@ -177,7 +177,7 @@ five different things. Current code has materially different policies:
 | Sina | Provider industry quotes | Five-minute refresh; ephemeral evidence and independent coordination |
 | Treasury TIC | Monthly residence-based US equity transactions | Read-through report discovery/history, separately persisted validated reports |
 | ECB | Daily reference rates | One-hour success cooldown, seven-day acquired-cache expiry; shared validated D1 cache |
-| Kraken | Selected-pair ticker/rolling-24h metrics | One-minute check, fifteen-minute acquired-cache expiry; metadata-only D1 gate |
+| Kraken | Online USD spot catalog and ticker/rolling-24h metrics | One-minute ticker check, fifteen-minute catalog refresh and acquired-cache expiry; metadata-only D1 gate |
 | CFTC | Weekly selected-contract positions | Hourly check, daily acquired-cache expiry plus separate report-age limits |
 | TPEx | Daily participant net share transactions | Hourly check, daily acquired-cache expiry plus separate report-age limits |
 | ASEANstats | Annual net inward FDI | Daily check, seven-day acquired-cache expiry; annual observation is not real time |

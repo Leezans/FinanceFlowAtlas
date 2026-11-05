@@ -7,3 +7,5 @@
 .matrixNote{font-size:11px;line-height:1.8;color:#627185;margin:12px 2px 0}
 .sources summary{font-size:13px;color:#304763;cursor:pointer}
 @media(max-width:680px){.metricControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.metricControls button{padding:10px 8px}}
+
+.matrixSearch{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;color:#627185;font-size:12px}.matrixSearch label{display:flex;align-items:center;gap:10px}.matrixSearch input{font:inherit;padding:10px 12px;max-width:100%;border:1px solid #cbd6e4;background:#fff;color:#182535;border-radius:6px}.matrixSearch input:focus-visible{outline:3px solid #406de2;outline-offset:2px}.matrixNote details{margin:5px 0}.matrixNote summary{cursor:pointer}
