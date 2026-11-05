@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "test": "vitest run --config vitest.config.ts",
     "test:sina-runtime": "node scripts/test-sina-runtime.mjs",
-    "test:ashare-runtime": "node scripts/test-ashare-runtime.mjs"
+    "test:ashare-runtime": "node scripts/test-ashare-runtime.mjs",
+    "test:kraken-runtime": "node scripts/test-kraken-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
