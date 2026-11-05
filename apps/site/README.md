@@ -26,7 +26,7 @@ The hosted adapter discovers the latest complete, validated observation month pr
 
 Treemap area is the absolute net amount divided by the sum of absolute net amounts of included reported countries, not market capitalization or the Treasury Grand Total. Zero rows are separate; missing rows have no area. No industry or individual-stock hierarchy is implied.
 
-The IMF layer is explicitly unavailable in this hosted application. Separate daily ECB FX reference and selected-pair Kraken spot layers are described below; neither extends TIC coverage. Futures remain unconnected. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
+The IMF layer is explicitly unavailable in this hosted application. Separate daily ECB FX reference and selected-pair Kraken spot layers are described below; neither extends TIC coverage. Selected CFTC futures positioning is another independent layer described below. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
 
 See [HOSTED_PROOF.md](HOSTED_PROOF.md) for cache validation and endpoint details, and [ATTRIBUTION.md](ATTRIBUTION.md) for separate geography and dependency licensing.
 
@@ -130,3 +130,15 @@ responses, 304 recovery, exponential backoff, permanent stops and preservation o
 search, palette, details and selected-stock evidence. These are synthetic local
 checks, not proof of authenticated production source availability. No database
 migration is required for this change.
+
+## Selected CFTC futures positioning
+
+`/futures` shows official public CFTC Legacy Futures Only positions for gold,
+WTI physical, corn and Euro FX futures. Counts and changes are contracts, not
+money flows. The diverging view uses a category's net position / the current
+market's OI, with exact current/prior report dates, source release time unknown,
+and explicit freshness limits. The no-account API is separate from the other
+sources and preserves the owner-only host. Apply the appended
+`0005_cftc_futures_gate.sql` after preceding migrations. Run
+`npm run test:cftc-runtime` for offline native workerd/D1 checks. See
+[scope, verified source and operational limits](../../docs/source-cftc-futures.md).
