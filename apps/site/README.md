@@ -115,6 +115,12 @@ zero imbalance and missing evidence remain distinct in the full details panel;
 area does not imply net capital flow or complete interval coverage.
 One-minute caching, a 15-minute display expiry and a separate persistent
 metadata-only source gate protect freshness and stop after access denial.
+Shared-lease contention and cooldown use the ordinary one-minute recheck; they
+do not compound genuine provider failures into an unnecessary 15-minute pause.
+Actual upstream failures still use exponential backoff and honor Retry-After.
+Every source request still requires the unchanged durable gate's permission.
+The quote/trade bundle remains isolate-local, so a cold worker during the shared
+cooldown can return unavailable rather than inventing or refreshing a timestamp.
 Keep the existing owner-only boundary; code publication does not grant provider
 market-data redistribution rights. Apply `0003_brainy_donald_blake.sql` through
 the supported migration workflow before deployment. Run
