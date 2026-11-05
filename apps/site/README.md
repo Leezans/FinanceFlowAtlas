@@ -26,7 +26,7 @@ The hosted adapter targets the fixed, previously verified **2026-08** TIC month.
 
 Treemap area is the absolute net amount divided by the sum of absolute net amounts of included reported countries, not market capitalization or the Treasury Grand Total. Zero rows are separate; missing rows have no area. No industry or individual-stock hierarchy is implied.
 
-The IMF layer is explicitly unavailable in this hosted application. FX, futures and crypto are unconnected. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
+The IMF layer is explicitly unavailable in this hosted application. FX and futures are unconnected. A separate selected-pair Kraken spot layer is described below; it does not extend TIC coverage. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
 
 See [HOSTED_PROOF.md](HOSTED_PROOF.md) for cache validation and endpoint details, and [ATTRIBUTION.md](ATTRIBUTION.md) for separate geography and dependency licensing.
 
@@ -65,3 +65,17 @@ failures must preserve a 60-second shared cooldown across workers and scopes;
 a denial must remain blocked. All external network access is disabled. These
 checks do not establish live provider availability or authenticated production
 access. No database migration is needed for the cooldown change.
+
+## Personal Kraken spot layer
+
+`/crypto` reads two selected Kraken spot pairs (BTC/USD and ETH/USD) through its
+public no-account ticker. It shows last price, rolling-24h base-coin volume,
+VWAP and trade count, not net capital flow, derivative open interest or global
+crypto totals. Fetch time is separate from unknown source observation time.
+One-minute caching, a 15-minute display expiry and a separate persistent
+metadata-only source gate protect freshness and stop after access denial.
+Keep the existing owner-only boundary; code publication does not grant provider
+market-data redistribution rights. Apply `0003_brainy_donald_blake.sql` through
+the supported migration workflow before deployment. Run
+`npm run test:kraken-runtime` for offline native workerd/D1 checks. See
+[scope, licensing and verified limits](../../docs/source-kraken-spot.md).
