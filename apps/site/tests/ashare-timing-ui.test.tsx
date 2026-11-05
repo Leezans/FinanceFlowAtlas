@@ -31,6 +31,9 @@ describe('session and source time stay distinct in the owner view',()=>{
   expect(screen.getByText('未提供')).toBeTruthy();expect(screen.getByText('均未知')).toBeTruthy();
   expect(screen.getByText('2026-11-05 10:00:00').getAttribute('dateTime')).toBe('2026-11-05T02:00:00Z');
   expect(screen.getByRole('status').textContent).toContain('行情新旧仍未知');
+  expect(screen.getByText(/当前采集尚未验证主力净额对应的交易日期/)).toBeTruthy();
+  expect(screen.getByText(/报价更新时间不等于资金观测时间/)).toBeTruthy();
+  expect(screen.queryByText(/当前来源没有提供/)).toBeNull();
   expect(original.snapshot).toMatchObject({source_observed_at:null,trade_date:null,stale:false});
  });
  it('ages a displayed snapshot without any source request and renews only for a new fetched_at',()=>{

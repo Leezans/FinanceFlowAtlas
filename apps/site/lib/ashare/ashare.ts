@@ -357,6 +357,10 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     shared=await readShared(scope);hydrate(entry,shared);
     const issue=sharedDiagnostic(shared,entry);
     if(state.denied||!entry.snapshot)return reply(503,{state:'unavailable',error_code:issue?.code??'not_yet_acquired',message:failureMessage(issue?.code)},undefined,issue);
+    // f124 is treated as a quote/update timestamp by third-party adapters, but
+    // its relationship to this f62 observation has not been verified. Neither
+    // it, an HTTP Date header, nor fetched_at can establish flow freshness.
+    // See docs/ASHARE-SOURCE-TIME-AUDIT.md before changing these null fields.
     const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:scope.kind==='industry_rank'?'index_points':'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale()||!!issue,has_error:!!issue&&issue.code!=='collection_in_progress'};
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload)));
     const etag='"'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')+'"';

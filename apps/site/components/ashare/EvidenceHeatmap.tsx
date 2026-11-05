@@ -17,7 +17,7 @@ function Heatmap({snapshot:s,onIndustrySelect,retainedAfterFailure,retainedDurin
  const scaleMaximum=flowScaleMaximum(s.rows);
  const industry=s.scope.kind==='industry_rank';
  const pick=(row:EvidenceRow)=>{if(industry){onIndustrySelect?.({kind:'industry_stocks',fs:`b:${row.f12}`,classification_level:'unknown_may_mix_levels'},row)}else setSelected(row.f12)};
- return <section className={`evidence-heatmap palette-${palette}`}><header><div><h2>{industry?'A 股行业矩阵':'行业成分股矩阵'} · 主力净额</h2><p>行情时间与延迟未提供</p></div><select aria-label="正负配色" value={palette} onChange={e=>setPalette(e.target.value as 'china'|'global')}><option value="china">红正 / 绿负</option><option value="global">绿正 / 红负</option></select></header>
+ return <section className={`evidence-heatmap palette-${palette}`}><header><div><h2>{industry?'A 股行业矩阵':'行业成分股矩阵'} · 主力净额</h2><p>资金观测时间与来源延迟尚未验证</p></div><select aria-label="正负配色" value={palette} onChange={e=>setPalette(e.target.value as 'china'|'global')}><option value="china">红正 / 绿负</option><option value="global">绿正 / 红负</option></select></header>
  {retainedDuringCollection&&<p className="warning" role="status">新一轮完整分页仍在核对；暂时保留上次完整快照，不是最新行情。部分分页不进入矩阵。</p>}
  {retainedAfterFailure&&<p className="warning" role="status">本次刷新失败；保留浏览器内上次核对完整的快照，不是最新行情。采集时间未更新。</p>}
  {s.stale&&!retainedAfterFailure&&!retainedDuringCollection&&<p className="warning" role="status">服务器已标记缓存陈旧{s.has_error?'且有刷新错误':''}；只展示此带标记快照，行情日期仍未知。</p>}
