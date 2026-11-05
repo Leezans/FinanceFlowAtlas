@@ -15,7 +15,7 @@ function setup(){
   if(url===KRAKEN_PAIRS_URL)return Response.json(catalog);
   if(url===KRAKEN_URL)return Response.json({error:[],result:Object.fromEntries(Object.keys(catalog.result).map(pair=>[pair,{c:['1','1'],v:['1','1'],p:['1','1'],t:[1,1]}]))});
   const query=new URL(url).searchParams,source=query.get('pair')!,start=Number(BigInt(query.get('since')!)/BigInt(1_000_000));
-  return Response.json({error:[],result:{[source]:[['0.1','0.2',(start+1000)/1000,'b','l','',1]],last:query.get('since')}});
+  return Response.json({error:[],result:{[source]:[['0.1','0.2',(start+1000)/1000,'b','l','',1]],last:(BigInt(query.get('since')!)+BigInt(1_000_000_000)).toString()}});
  });
  return {gate,catalog,calls,fetcher,handler:createKrakenHandler({gate,fetcher,includeTradeImbalance:true,isolatedForTests:true})};
 }

@@ -3,13 +3,16 @@
 ## What this measures
 
 The private `/crypto` page retains its full verified USD spot quote universe and
-adds a **separate, bounded executed-trade matrix** for BTC/USD, ETH/USD and SOL/USD.
+adds a **separate, bounded executed-trade matrix**. BTC/USD, ETH/USD and SOL/USD
+are the default; the owner can select one to three catalog-confirmed USD pairs.
 These are explicitly selected pairs, not all crypto markets or invented industries.
 Only pairs present in the validated online USD spot catalog are requested.
 
 For each pair, the adapter sums price × base quantity separately for
 buy-marked (`b`) and sell-marked (`s`) executions, in USD. Difference is buy minus sell;
-color is difference / (buy + sell), with a fixed ±100% scale and equal tile area.
+color is difference / (buy + sell), with a fixed ±100% scale. Tile area is the
+absolute USD difference across the same fixed stored window. Zero and missing
+amounts receive no invented area; accessible details keep them distinct.
 Decimal products and sums use scaled integers, retaining up to 24 decimal places.
 Presentation does not infer amounts from colors or round the stored evidence.
 
@@ -47,7 +50,16 @@ Existing personal access and source-use boundaries remain unchanged.
 
 ## Requested window, response limits and missingness
 
-The request interval is `[acquisition start − 5 minutes, acquisition start)`.
+The request interval is `[acquisition start − selected duration, acquisition start)`.
+The owner can select one minute or five minutes; five minutes remains the default.
+`window=1m` and `window=5m` are the only allowed timeframe values. The response
+echoes an explicit request as `requested_window`; `window_ms` must match the
+selected duration and exact stored start/end. The quote universe remains USD.
+Canonical pair selection **and timeframe** identify trade cache evidence. Changing
+either selector clears browser trade evidence immediately, retains independent
+quotes, ignores prior-scope responses, and does not abort/restart in-flight source
+work. Concurrent readers cannot receive another selection/window's trade rows.
+Switching windows does not bypass shared cooldown, even if no matching data exists.
 All selected pairs share these exact millisecond boundaries, including when
 requests execute sequentially. Responses can include trades after the interval
 ended; these are counted as excluded, never added to that window's amounts.
@@ -56,12 +68,25 @@ retain millisecond resolution. Acquisition time remains separate from execution
 time. The cursor is kept as text, not converted to a number or mislabeled as the
 latest trade time.
 
-Each pair gets **one page only**. Exactly 1,000 returned rows is potentially
-truncated, even if the first/last times look recent. That row is explicitly
-`capped_response`: all monetary totals and the color are null, never zero. There
-is no page-following loop, fallback endpoint, backfill or hidden retry.
+Each selected pair gets at most **two pages of 1,000 trades**, within the same
+shared source lease, spacing and 12-second acquisition deadline. Every pair gets
+its first page before any continuation; only a full page is continued. The next
+request uses the returned string cursor exactly. Nonempty continuations must
+advance the cursor strictly; an empty terminal page may repeat it but cannot
+rewind. Cursor timestamps must remain within the acquisition time bounds. Cursor
+and final execution time remain distinct, and need not be equal.
 
-An under-cap result is called `uncapped_response`, **not a verified complete
+Cross-page duplicate trade IDs or reversed execution times fail the collection,
+rather than being silently deduplicated or dropped. A full **terminal** page is
+still `capped_response`: all monetary totals, monetary area and directional color
+are null, even if the requested duration is only one minute or the last trade
+falls after the interval end. No full-window completeness is inferred. The page
+limit is not automatically increased and there is no fallback endpoint, backfill
+or hidden retry. The response exposes `page_limit`, `page_count`,
+`last_page_count`, cumulative returned count and the unchanged per-page
+`trade_limit`. The browser verifies their arithmetic and the null-capped rule.
+
+A short terminal page, including after one bounded continuation, is called `uncapped_response`, **not a verified complete
 window**. Values describe only the executions returned within the requested
 interval. Source publication lag, missing source events or omissions cannot be
 measured from this endpoint. The first/last returned execution, counts,
@@ -81,11 +106,14 @@ new quote timestamps with old trade amounts.
 
 The deployed host opts into the trade subfeed. Existing quote-only fixtures and
 older quote-only replies remain supported; trade data uses its own validated
-`kraken-trades/1` schema alongside the unchanged `kraken-spot/2` quote contract.
+`kraken-trades/1` (default pairs) or `/2` (explicit pair selection) contract alongside
+the unchanged `kraken-spot/2` quotes. The browser accepts legacy single-page
+five-minute records without pagination metadata. New pagination metadata is
+validated as a unit; it cannot turn a capped terminal page into a numeric total.
 
-- Warm collection: one ticker + at most three Trades GETs.
-- Catalog refresh/cold collection: one AssetPairs + one ticker + at most three
-  Trades GETs.
+- Warm collection: one ticker + at most six Trades GETs (two per pair).
+- Catalog refresh/cold collection: one AssetPairs + one ticker + at most six
+  Trades GETs. A short first page does not cause a second request.
 - One existing shared source lease, 1.1-second spacing, unchanged 12-second total
   acquisition deadline, cancellation handling and retained lease settlement.
 - Existing one-minute success cooldown and browser checks while visible. There
@@ -112,5 +140,18 @@ Tests use synthetic data only. Unit coverage includes exact decimals, boundaries
 cap handling, malformed/duplicate events, API denials, client tampering, expiry,
 shared pacing, cancellation, stale atomic retention and the existing deadline.
 The native workerd/D1 suite disables real networking and exercises the checked-in
-host, compressed responses, three-pair budgets, caps and trade-source denial.
+host, compressed responses, three-pair/two-page budgets, one/five-minute cache
+isolation, caps and trade-source denial.
 Local checks do not by themselves establish current provider availability.
+
+
+## Saved actual observations inspected for this change
+
+Previously acquired, normally gated snapshots were reviewed offline. On
+2026-11-05, the five-minute BTC window ending at 12:00:46.867 UTC returned 477
+trades (469 inside the fixed interval); the saved selection window ending at
+14:19:54.918 UTC returned
+41 ADA and 62 XRP trades. These were uncapped. The 1,000-row risk is therefore a
+bounded-source limitation, not a claimed failure observed in those snapshots.
+No new provider call was made for implementation or local tests. Deployment-time
+checks must use the normal source gate and preserve any busy/blocked/cooling state.

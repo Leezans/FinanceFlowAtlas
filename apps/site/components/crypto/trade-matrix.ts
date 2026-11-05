@@ -16,7 +16,7 @@ export function tradeMatrixGroups(snapshot:KrakenTradeSnapshot|null):MatrixGroup
   amount:{value:row.coverage==='capped_response'||row.imbalance_usd===null?null:Number(row.imbalance_usd),currency:'USD',comparisonKey:`kraken:trade-imbalance:${snapshot.window_started_at}:${snapshot.window_ended_at}:usd-spot`},
   displayValue:row.coverage==='capped_response'?'覆盖不完整 · 金额不展示':`${formatCryptoNumber(row.imbalance_usd!)} USD`,
   colorValue:row.coverage==='capped_response'?null:row.imbalance_pct,
-  detail:row.coverage==='capped_response'?`返回 ${row.returned_count} / ${snapshot.trade_limit} 笔，触及上限；不是零`:
+  detail:row.coverage==='capped_response'?`已获取 ${row.page_count??1} 页，累计返回 ${row.returned_count} 笔；末页 ${row.last_page_count??row.returned_count} / ${snapshot.trade_limit} 笔，触及上限，覆盖未知；不是零`:
    `买标记成交额 − 卖标记成交额 · 买卖差额比 ${row.imbalance_pct===null?'无可计算成交额':formatDeviation(row.imbalance_pct)} · 区间内 ${row.trade_count} 笔`,
  }));
  return items.length?[{id:'kraken-trade-imbalance',label:'Kraken · 所选 USD 现货交易对 · 不推断行业',items}]:[];

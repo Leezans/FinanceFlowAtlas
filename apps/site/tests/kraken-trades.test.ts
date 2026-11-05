@@ -101,7 +101,7 @@ function setup() {
     if (url === KRAKEN_PAIRS_URL) return Response.json({error: [], result: {...catalog().result, SOLUSD: pairMetadata('SOL')}});
     if (url === KRAKEN_URL) return Response.json(ticks());
     const query = new URL(url).searchParams, begin = Number(BigInt(query.get('since')!) / BigInt(1_000_000));
-    return Response.json(payload([trade(['0.1', '0.2', (begin + 1000) / 1000])], query.get('pair')!));
+    return Response.json({error:[],result:{[query.get('pair')!]:[trade(['0.1', '0.2', (begin + 1000) / 1000])],last:(BigInt(query.get('since')!)+BigInt(1_000_000_000)).toString()}});
   });
   return {gate, calls, fetcher, handler: createKrakenHandler({gate, fetcher, includeTradeImbalance: true, isolatedForTests: true})};
 }
