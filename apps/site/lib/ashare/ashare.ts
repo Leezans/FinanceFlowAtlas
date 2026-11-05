@@ -292,9 +292,10 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     return {code:safeSourceCode(code)??'collection_failed',stopped:state.denied,
       retrySeconds:state.denied?0:Math.max(1,Math.ceil((Math.max(entry?.retryAt??0,state.backoffUntil)-now())/1000))};
   }
-  function reply(status:number,payload?:unknown,etag?:string,issue?:Diagnostic){
+  function reply(status:number,payload?:unknown,etag?:string,issue?:Diagnostic,refreshSeconds?:number){
     const headers:Record<string,string>={'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
     if(etag)headers.ETag=etag;
+    if(refreshSeconds!==undefined)headers['X-Ashare-Refresh-After']=String(refreshSeconds);
     // These headers accompany stale 200 and 304 too. They do not alter snapshot
     // bytes/ETags and never expose upstream bodies, URLs, credentials or leases.
     if(issue){headers['X-Ashare-Error-Code']=issue.code;headers['X-Ashare-Recovery']=issue.stopped?'stopped':'retry';
@@ -379,7 +380,12 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     }
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     if(state.denied){const stopped=diagnostic(entry)!;return reply(503,{state:'unavailable',error_code:stopped.code,message:failureMessage(stopped.code)},undefined,stopped);}
-    if(request.headers.get('if-none-match')===etag)return reply(304,undefined,etag,issue);
-    return reply(200,payload,etag,issue);
+    // Relative to the authoritative oldest-page age, not the browser wall clock.
+    // A mount-time 60s poll can land just before expiry and otherwise reuse the
+    // same bytes for another full minute. This is scheduling, never source age
+    // evidence or permission to bypass the shared gate. Diagnostics take priority.
+    const refreshSeconds=issue?undefined:Math.max(1,Math.min(60,Math.ceil((TTL-(now()-entry.published))/1000)));
+    if(request.headers.get('if-none-match')===etag)return reply(304,undefined,etag,issue,refreshSeconds);
+    return reply(200,payload,etag,issue,refreshSeconds);
   };
 }

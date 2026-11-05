@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url),wranglerRequire=createRequire(require.resolve('wrangler/package.json'));
-const {Miniflare,createFetchMock}=wranglerRequire('miniflare'),{build}=wranglerRequire('esbuild');
+const {Miniflare,createFetchMock,fetch:mockFetch}=wranglerRequire('miniflare'),{build}=wranglerRequire('esbuild');
 const root=fileURLToPath(new URL('..',import.meta.url));
 const {outputFiles}=await build({stdin:{contents:`import {ashareHandler} from './lib/ashare/host';export default {fetch:ashareHandler};`,resolveDir:root,sourcefile:'offline-ashare-staged.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
 const migrations=await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')));
@@ -13,15 +13,16 @@ const endpoint='https://offline.invalid/api/v1/ashare/snapshot?scope=BK1216';
 const fields=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];
 const row=id=>({f12:String(id).padStart(6,'0'),f14:'Synthetic '+id,...Object.fromEntries(fields.map(f=>[f,f==='f62'?(id%2?-id:id):1]))});
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-async function fixture(total,check){
+async function fixture(total,check,{redirect=false}={}){
  const calls=[];let mode='good';const mock=createFetchMock();mock.disableNetConnect();
  for(const hostname of ['push2.eastmoney.com','push2delay.eastmoney.com'])mock.get('https://'+hostname).intercept({method:'GET',path:/^\/api\/qt\/clist\/get\?/}).reply(options=>{
   const u=new URL(options.path,'https://'+hostname),page=Number(u.searchParams.get('pn'));calls.push({page,hostname,at:Date.now()});
+  if(redirect&&hostname==='push2.eastmoney.com')return {statusCode:302,data:'',responseOptions:{headers:{location:'https://push2delay.eastmoney.com/api/qt/clist/get'}}};
   if(mode==='denied')return {statusCode:403,data:'',responseOptions:{headers:{'content-type':'application/json'}}};
   const count=mode==='drift'?total+1:total,start=(page-1)*100;
   return {statusCode:200,data:JSON.stringify({rc:0,data:{total:count,diff:Array.from({length:Math.min(100,count-start)},(_,i)=>row(count-start-i))}}),responseOptions:{headers:{'content-type':'application/json'}}};
  }).persist();
- const names=['first','second','third'],mf=new Miniflare({workers:names.map(name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-staged'},fetchMock:mock}))});
+ const names=['first','second','third'],mf=new Miniflare({workers:names.map(name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-staged'},outboundService:request=>mockFetch(request,{dispatcher:mock,redirect:'manual'})}))});
  try{
   const db=await mf.getD1Database('DB','first');for(const migration of migrations)for(const sql of migration.split('--> statement-breakpoint'))if(sql.trim())await db.prepare(sql).run();
   const fetchers=[(url,init)=>mf.dispatchFetch(url,init),...(await Promise.all(names.slice(1).map(n=>mf.getWorker(n)))).map(worker=>(url,init)=>worker.fetch(url,init))];
@@ -57,3 +58,22 @@ await fixture(401,async({db,fetchers,calls,gate,stages,snapshots,waitPacing})=>{
  const count=calls.length;const cold=await fetchers[2](endpoint);assert.equal(cold.status,503);assert.equal((await cold.json()).error_code,'source_busy');assert.equal(calls.length,count);
 });
 console.log('PASS native failed final commit rolls back snapshot, stage deletion and lease release; no retry after uncertain publication');
+
+await fixture(512,async({fetchers,calls,gate,stages,snapshots})=>{
+ const started=Date.now(),first=await fetchers[0](endpoint);
+ assert.equal(first.status,503);assert.equal((await first.json()).error_code,'collection_in_progress');
+ assert.equal((await snapshots()).results.length,0);assert.equal(JSON.parse((await stages()).results[0].payload).rows.length,300);
+ // Follow only the endpoint's ordinary Retry-After, without manual inspection
+ // pauses, clock rewrites, gate resets, background work or parallel requests.
+ const retrySeconds=Number(first.headers.get('retry-after'));assert.ok(retrySeconds>=1&&retrySeconds<=3);
+ await sleep(retrySeconds*1000+100);
+ const final=await fetchers[1](endpoint);assert.equal(final.status,200,await final.clone().text());const snapshot=await final.json();
+ assert.equal(snapshot.rows.length,512);assert.equal(new Set(snapshot.rows.map(row=>row.f12)).size,512);assert.equal(snapshot.page_count,6);
+ assert.equal(snapshot.stale,false);assert.equal(snapshot.has_error,false);assert.equal(snapshot.source_observed_at,null);assert.equal(snapshot.trade_date,null);
+ assert.deepEqual(calls.map(call=>call.page),[1,1,2,3,4,5,6]);for(let n=1;n<calls.length;n++)assert.ok(calls[n].at-calls[n-1].at>=2950,'source pacing not preserved');
+ const seconds=Number(final.headers.get('x-ashare-refresh-after'));assert.ok(seconds>=1&&seconds<=60);
+ const age=Date.now()-Date.parse(snapshot.collection_started_at);assert.ok(Math.abs(seconds*1000-(60000-age))<2000,'next check must use oldest-page age');
+ assert.equal((await gate()).status,'idle');assert.equal((await stages()).results.length,0);assert.equal((await snapshots()).results.length,1);
+ const cached=await fetchers[2](endpoint,{headers:{'if-none-match':final.headers.get('etag')}});assert.equal(cached.status,304);assert.ok(Number(cached.headers.get('x-ashare-refresh-after'))<=seconds);assert.equal(calls.length,7);
+ console.log('PASS native 512-stock / six-page auto-continuation with one official redirect: '+(Date.now()-started)+'ms total; next check in '+seconds+'s; original timing and pacing preserved');
+},{redirect:true});
