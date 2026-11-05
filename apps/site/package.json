@@ -21,7 +21,8 @@
     "test:tpex-runtime": "node scripts/test-tpex-runtime.mjs",
     "test:asean-runtime": "node scripts/test-asean-runtime.mjs",
     "test:cvm-runtime": "node scripts/test-cvm-runtime.mjs",
-    "test:equity-runtime": "node scripts/test-equity-runtime.mjs"
+    "test:equity-runtime": "node scripts/test-equity-runtime.mjs",
+    "test:ashare-snapshots-runtime": "node scripts/test-ashare-snapshots-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

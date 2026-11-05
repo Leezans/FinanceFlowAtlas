@@ -23,8 +23,8 @@ export interface GateD1 {
   prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<D1Result> } };
 }
 // Database clock, not independently skewed isolate clocks.
-const NOW = "(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
-const SUCCESS_QUIET_MS = 3_000;
+export const NOW = "(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
+export const SUCCESS_QUIET_MS = 3_000;
 // In-memory exponential backoff does not survive a new isolate. Keep its first
 // 60s failure window in shared metadata so cold isolates cannot retry after 3s.
 const TEMPORARY_FAILURE_QUIET_MS = 60_000;
@@ -74,6 +74,21 @@ export class D1SourceGate implements SourceGate {
   /** Read-only shared status: does not acquire, expire, clear, or retry anything. */
   async inspect(): Promise<SourceGateCode | null> {
     const state = (await this.run(SQL.inspect)).results?.[0];
+    return inspectGateState(state);
+  }
+  async release(token: string, outcome: SourceOutcome): Promise<void> {
+    if (!token || !['success', 'temporary_failure', 'denied'].includes(outcome.kind))
+      throw new SourceGateError('source_gate_unavailable');
+    // Denial is persisted atomically WITH releasing ownership, never after it.
+    const quietMs = outcome.kind === 'temporary_failure' ? TEMPORARY_FAILURE_QUIET_MS : SUCCESS_QUIET_MS;
+    const result = await this.run(SQL.finish, outcome.kind === 'denied' ? 'blocked' : 'idle', reasonCode(outcome), quietMs, token);
+    if (result.meta?.changes === 0) throw new SourceGateError('source_stale_lease');
+    if (result.meta?.changes !== 1) throw new SourceGateError('source_gate_unavailable');
+  }
+}
+
+/** Shared fail-closed classification; never mutates or expires a lease. */
+export function inspectGateState(state:Record<string,unknown>|undefined):SourceGateCode|null {
     if (state?.status === 'blocked') return 'source_denied';
     // A busy operation may be crashed or still active. Never guess or take over.
     if (state?.status === 'busy') {
@@ -89,14 +104,4 @@ export class D1SourceGate implements SourceGate {
       return state.not_before_ms > state.now_ms ? 'source_cooldown' : null;
     // Concurrent changes or absent/malformed row are fail-closed too.
     throw new SourceGateError('source_gate_unavailable');
-  }
-  async release(token: string, outcome: SourceOutcome): Promise<void> {
-    if (!token || !['success', 'temporary_failure', 'denied'].includes(outcome.kind))
-      throw new SourceGateError('source_gate_unavailable');
-    // Denial is persisted atomically WITH releasing ownership, never after it.
-    const quietMs = outcome.kind === 'temporary_failure' ? TEMPORARY_FAILURE_QUIET_MS : SUCCESS_QUIET_MS;
-    const result = await this.run(SQL.finish, outcome.kind === 'denied' ? 'blocked' : 'idle', reasonCode(outcome), quietMs, token);
-    if (result.meta?.changes === 0) throw new SourceGateError('source_stale_lease');
-    if (result.meta?.changes !== 1) throw new SourceGateError('source_gate_unavailable');
-  }
 }

@@ -1,0 +1,875 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "be4f599d-f035-4af1-9d3f-dd64ff436238",
+  "prevId": "f525cc41-1d33-4200-903e-caf829d87dbb",
+  "tables": {
+    "asean_source_gate": {
+      "name": "asean_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "asean_gate_id": {
+          "name": "asean_gate_id",
+          "value": "\"asean_source_gate\".\"id\" = 'annual_sector_fdi'"
+        },
+        "asean_gate_status": {
+          "name": "asean_gate_status",
+          "value": "\"asean_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "asean_gate_lease": {
+          "name": "asean_gate_lease",
+          "value": "(\"asean_source_gate\".\"status\" = 'busy' AND \"asean_source_gate\".\"lease_token\" IS NOT NULL) OR (\"asean_source_gate\".\"status\" != 'busy' AND \"asean_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "ashare_recovery_audit": {
+      "name": "ashare_recovery_audit",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prior_status": {
+          "name": "prior_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prior_lease_token": {
+          "name": "prior_lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prior_acquired_ms": {
+          "name": "prior_acquired_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prior_finished_ms": {
+          "name": "prior_finished_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prior_updated_ms": {
+          "name": "prior_updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prior_not_before_ms": {
+          "name": "prior_not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prior_reason_code": {
+          "name": "prior_reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reconciled_ms": {
+          "name": "reconciled_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "invocation_outcome": {
+          "name": "invocation_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_outcome": {
+          "name": "source_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ashare_snapshot_cache": {
+      "name": "ashare_snapshot_cache",
+      "columns": {
+        "scope_key": {
+          "name": "scope_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "format_version": {
+          "name": "format_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "committed_ms": {
+          "name": "committed_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_ms": {
+          "name": "expires_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ashare_snapshot_scope": {
+          "name": "ashare_snapshot_scope",
+          "value": "\"ashare_snapshot_cache\".\"scope_key\" = 'level1' OR \"ashare_snapshot_cache\".\"scope_key\" GLOB 'BK[0-9][0-9][0-9][0-9]'"
+        },
+        "ashare_snapshot_version": {
+          "name": "ashare_snapshot_version",
+          "value": "\"ashare_snapshot_cache\".\"format_version\" = 1"
+        },
+        "ashare_snapshot_payload": {
+          "name": "ashare_snapshot_payload",
+          "value": "json_valid(\"ashare_snapshot_cache\".\"payload\") AND length(CAST(\"ashare_snapshot_cache\".\"payload\" AS BLOB)) <= 2000000"
+        },
+        "ashare_snapshot_retention": {
+          "name": "ashare_snapshot_retention",
+          "value": "\"ashare_snapshot_cache\".\"committed_ms\" >= 0 AND \"ashare_snapshot_cache\".\"expires_ms\" = \"ashare_snapshot_cache\".\"committed_ms\" + 86400000"
+        }
+      }
+    },
+    "ashare_source_gate": {
+      "name": "ashare_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "acquired_ms": {
+          "name": "acquired_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "finished_ms": {
+          "name": "finished_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ashare_gate_id": {
+          "name": "ashare_gate_id",
+          "value": "\"ashare_source_gate\".\"id\" = 'single_upstream'"
+        },
+        "ashare_gate_status": {
+          "name": "ashare_gate_status",
+          "value": "\"ashare_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "ashare_gate_reason": {
+          "name": "ashare_gate_reason",
+          "value": "\"ashare_source_gate\".\"reason_code\" IS NULL OR \"ashare_source_gate\".\"reason_code\" IN ('http_403','http_429','challenge','captcha','access_denied','login_required')"
+        },
+        "ashare_gate_lease": {
+          "name": "ashare_gate_lease",
+          "value": "(\"ashare_source_gate\".\"status\" = 'busy' AND \"ashare_source_gate\".\"lease_token\" IS NOT NULL) OR (\"ashare_source_gate\".\"status\" != 'busy' AND \"ashare_source_gate\".\"lease_token\" IS NULL)"
+        },
+        "ashare_gate_block": {
+          "name": "ashare_gate_block",
+          "value": "(\"ashare_source_gate\".\"status\" = 'blocked' AND \"ashare_source_gate\".\"reason_code\" IS NOT NULL) OR (\"ashare_source_gate\".\"status\" != 'blocked' AND \"ashare_source_gate\".\"reason_code\" IS NULL)"
+        }
+      }
+    },
+    "cftc_source_gate": {
+      "name": "cftc_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cftc_gate_id": {
+          "name": "cftc_gate_id",
+          "value": "\"cftc_source_gate\".\"id\" = 'legacy_futures'"
+        },
+        "cftc_gate_status": {
+          "name": "cftc_gate_status",
+          "value": "\"cftc_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "cftc_gate_lease": {
+          "name": "cftc_gate_lease",
+          "value": "(\"cftc_source_gate\".\"status\" = 'busy' AND \"cftc_source_gate\".\"lease_token\" IS NOT NULL) OR (\"cftc_source_gate\".\"status\" != 'busy' AND \"cftc_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "cvm_source_gate": {
+      "name": "cvm_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cvm_gate_id": {
+          "name": "cvm_gate_id",
+          "value": "\"cvm_source_gate\".\"id\" = 'monthly_fund_equity'"
+        },
+        "cvm_gate_status": {
+          "name": "cvm_gate_status",
+          "value": "\"cvm_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "cvm_gate_lease": {
+          "name": "cvm_gate_lease",
+          "value": "(\"cvm_source_gate\".\"status\" = 'busy' AND \"cvm_source_gate\".\"lease_token\" IS NOT NULL) OR (\"cvm_source_gate\".\"status\" != 'busy' AND \"cvm_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "ecb_fx_source_gate": {
+      "name": "ecb_fx_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_ms": {
+          "name": "expires_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "checked_ms": {
+          "name": "checked_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ecb_fx_gate_id": {
+          "name": "ecb_fx_gate_id",
+          "value": "\"ecb_fx_source_gate\".\"id\" = 'daily_reference'"
+        },
+        "ecb_fx_gate_status": {
+          "name": "ecb_fx_gate_status",
+          "value": "\"ecb_fx_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "ecb_fx_gate_lease": {
+          "name": "ecb_fx_gate_lease",
+          "value": "(\"ecb_fx_source_gate\".\"status\" = 'busy' AND \"ecb_fx_source_gate\".\"lease_token\" IS NOT NULL) OR (\"ecb_fx_source_gate\".\"status\" != 'busy' AND \"ecb_fx_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "kraken_source_gate": {
+      "name": "kraken_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "kraken_gate_id": {
+          "name": "kraken_gate_id",
+          "value": "\"kraken_source_gate\".\"id\" = 'spot_usd'"
+        },
+        "kraken_gate_status": {
+          "name": "kraken_gate_status",
+          "value": "\"kraken_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "kraken_gate_lease": {
+          "name": "kraken_gate_lease",
+          "value": "(\"kraken_source_gate\".\"status\" = 'busy' AND \"kraken_source_gate\".\"lease_token\" IS NOT NULL) OR (\"kraken_source_gate\".\"status\" != 'busy' AND \"kraken_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "sina_source_gate": {
+      "name": "sina_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "sina_gate_id": {
+          "name": "sina_gate_id",
+          "value": "\"sina_source_gate\".\"id\" = 'industry_0'"
+        },
+        "sina_gate_status": {
+          "name": "sina_gate_status",
+          "value": "\"sina_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "sina_gate_lease": {
+          "name": "sina_gate_lease",
+          "value": "(\"sina_source_gate\".\"status\" = 'busy' AND \"sina_source_gate\".\"lease_token\" IS NOT NULL) OR (\"sina_source_gate\".\"status\" != 'busy' AND \"sina_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "tic_snapshot_cache": {
+      "name": "tic_snapshot_cache",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_attempt_ms": {
+          "name": "last_attempt_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_success_ms": {
+          "name": "last_success_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_until_ms": {
+          "name": "lease_until_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "tpex_source_gate": {
+      "name": "tpex_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "tpex_gate_id": {
+          "name": "tpex_gate_id",
+          "value": "\"tpex_source_gate\".\"id\" = 'institutional_shares'"
+        },
+        "tpex_gate_status": {
+          "name": "tpex_gate_status",
+          "value": "\"tpex_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "tpex_gate_lease": {
+          "name": "tpex_gate_lease",
+          "value": "(\"tpex_source_gate\".\"status\" = 'busy' AND \"tpex_source_gate\".\"lease_token\" IS NOT NULL) OR (\"tpex_source_gate\".\"status\" != 'busy' AND \"tpex_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    },
+    "worldbank_equity_source_gate": {
+      "name": "worldbank_equity_source_gate",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_ms": {
+          "name": "updated_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "not_before_ms": {
+          "name": "not_before_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "worldbank_equity_gate_id": {
+          "name": "worldbank_equity_gate_id",
+          "value": "\"worldbank_equity_source_gate\".\"id\" = 'annual_equity'"
+        },
+        "worldbank_equity_gate_status": {
+          "name": "worldbank_equity_gate_status",
+          "value": "\"worldbank_equity_source_gate\".\"status\" IN ('idle','busy','blocked')"
+        },
+        "worldbank_equity_gate_lease": {
+          "name": "worldbank_equity_gate_lease",
+          "value": "(\"worldbank_equity_source_gate\".\"status\" = 'busy' AND \"worldbank_equity_source_gate\".\"lease_token\" IS NOT NULL) OR (\"worldbank_equity_source_gate\".\"status\" != 'busy' AND \"worldbank_equity_source_gate\".\"lease_token\" IS NULL)"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

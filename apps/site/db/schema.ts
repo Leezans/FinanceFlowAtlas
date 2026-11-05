@@ -129,3 +129,14 @@ export const worldbankEquitySourceGate=sqliteTable('worldbank_equity_source_gate
  check('worldbank_equity_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
  check('worldbank_equity_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
+
+/** Private validated A-share evidence; one last-good version per bounded scope. */
+export const ashareSnapshotCache=sqliteTable('ashare_snapshot_cache',{
+ scopeKey:text('scope_key').primaryKey(),formatVersion:integer('format_version').notNull(),
+ payload:text('payload').notNull(),committedMs:integer('committed_ms').notNull(),expiresMs:integer('expires_ms').notNull(),
+},t=>[
+ check('ashare_snapshot_scope',sql`${t.scopeKey} = 'level1' OR ${t.scopeKey} GLOB 'BK[0-9][0-9][0-9][0-9]'`),
+ check('ashare_snapshot_version',sql`${t.formatVersion} = 1`),
+ check('ashare_snapshot_payload',sql`json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000`),
+ check('ashare_snapshot_retention',sql`${t.committedMs} >= 0 AND ${t.expiresMs} = ${t.committedMs} + 86400000`),
+]);

@@ -34,7 +34,7 @@ See [HOSTED_PROOF.md](HOSTED_PROOF.md) for cache validation and endpoint details
 
 The separate `/ashare` page provides industry/stock provider evidence using bounded access to public Eastmoney endpoints. It does not replace TIC or assert general market-data redistribution rights. Source observation time, trading date and latency remain unknown; acquisition time is labeled separately. Provider order-classified main-net figures are estimates, not actual market-wide net money creation.
 
-A-share payloads remain ephemeral in process memory. D1 stores only shared acquisition coordination and permanent denial metadata in `ashare_source_gate`; it never stores A-share market observations. Apply the additional `0001_wild_jigsaw.sql` migration through the deployment's supported migration workflow. Authentication remains owner-only. Denials/challenges stop acquisition persistently rather than triggering alternate-route retries. Temporary collection failures enforce a shared minimum 60-second pause across isolates; successful acquisitions retain the 3-second quiet interval. The longer in-isolate exponential backoff remains in place. See HOSTED_PROOF.md for limitations; actual authenticated production source access is not claimed to have been verified.
+Validated A-share snapshots are shared in primary D1 `ashare_snapshot_cache` alongside the unchanged `ashare_source_gate`. Apply migration `0012_ashare_shared_snapshots.sql` after the existing migrations through the deployment’s supported workflow. One complete snapshot per scope is committed atomically with lease release; cold workers reuse it without another provider fetch. Freshness remains 60 seconds. Last-good evidence can survive temporary failures for at most 24 hours, retaining its original acquisition timestamp and explicit stale/error status. Storage is limited to 32 scopes (industry ranking plus up to 31 constituent scopes), each at most 2 MB; obsolete versions are replaced and expired entries pruned on successful publication. Busy, unknown, denied or unreadable permission state never returns persisted rows. Source observation time and trading date remain unknown. Authentication remains owner-only. Denials/challenges stop acquisition persistently rather than triggering alternate-route retries. Temporary collection failures enforce a shared minimum 60-second pause across isolates; successful acquisitions retain the 3-second quiet interval. The longer in-isolate exponential backoff remains in place. See HOSTED_PROOF.md for limitations; actual authenticated production source access is not claimed to have been verified.
 
 ### A-share exploration
 
@@ -48,7 +48,7 @@ coverage outside 2026 is explicitly unknown. See
 
 The treemap remains the primary view. Search and provider-net-direction filters apply to both the chart and its collapsed **数值明细** panel. The optional panel shows unscaled CNY amounts, deterministic magnitude/buy/sell/name sorting, and drilldown for zero/missing rows that have no treemap area. Missing amounts never become zero; area shares use only the absolute nonzero amounts in the current filter, not a whole-market denominator.
 
-Same-scope refreshes preserve search, palette, filters, sorting, the expanded panel and selected stock evidence. If a selected stock changes direction, its detail updates even when it no longer matches the filter. Changing scope resets exploration. Temporary network/5xx errors retain only the currently selected scope’s validated in-memory snapshot, with an explicit browser-stale warning and its original acquisition time and ETag. Authorization failures, known source denials and invalid successful payloads clear displayed evidence. Tests use synthetic observations only. This UI increment neither changes acquisition permissions nor verifies live source access, and a repository commit does not deploy it.
+Same-scope refreshes preserve search, palette, filters, sorting, the expanded panel and selected stock evidence. If a selected stock changes direction, its detail updates even when it no longer matches the filter. Changing scope resets exploration. Temporary browser network/5xx errors retain only the currently selected scope’s validated browser snapshot, with an explicit browser-stale warning and its original acquisition time and ETag. Authorization failures, known source denials and invalid successful payloads clear displayed evidence. Tests use synthetic observations only. This UI increment neither changes acquisition permissions nor verifies live source access, and a repository commit does not deploy it.
 
 ### A-share heatmap readability
 
@@ -58,11 +58,11 @@ Compact tiles retain signed amounts where they fit, and hover or keyboard focus 
 
 ### Offline A-share runtime checks
 
-`npm run test:ashare-runtime` exercises the checked-in A-share host in native
+`npm run test:ashare-runtime` and `npm run test:ashare-snapshots-runtime` exercise the checked-in A-share host in native
 workerd with a shared D1 database and separate warm/cold workers. Synthetic
 plain/gzip/Brotli responses verify decoding and cache behavior. Temporary
 failures must preserve a 60-second shared cooldown across workers and scopes;
-a denial must remain blocked. All external network access is disabled. These
+a denial must remain blocked. All external network access is disabled. The shared-snapshot suite additionally covers multi-scope cold reads, expiry, corruption, denial with warm ETags, transactional rollback, stale tokens, retained late commits, cancellation, and bounded retention. These
 checks do not establish live provider availability or authenticated production
 access. No database migration is needed for the cooldown change.
 

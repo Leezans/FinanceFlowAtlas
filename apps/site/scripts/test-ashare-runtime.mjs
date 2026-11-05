@@ -23,13 +23,21 @@ const {outputFiles}=await build({
         fetcher:async()=>new Response(new ReadableStream({cancel(){return new Promise(()=>{});}}),
           {status:403,headers:{'content-type':'application/json'}})});
       let releaseAbort;
-      export default {fetch(request){
+      export default {async fetch(request){
         if(new URL(request.url).pathname==='/offline/hanging-denial')return hangingDenial(new Request(new URL('/api/v1/ashare/snapshot',request.url)));
         if(new URL(request.url).pathname==='/offline/abort'){releaseAbort?.();return new Response('synthetic cancellation released');}
         if(new URL(request.url).pathname==='/offline/cancel-after-response'){
           const controller=new AbortController();
           void ashareHandler(new Request(new URL('/api/v1/ashare/snapshot',request.url),{signal:controller.signal})).then(response=>response.body?.cancel());
           void new Promise(resolve=>{releaseAbort=resolve;}).then(()=>controller.abort());
+          // A real host awaits the handler. This artificial early-response
+          // wrapper must first allow its cache read and retained admission to
+          // start, then test cancellation while the acquisition is in flight.
+          const deadline=Date.now()+3000;
+          while(Date.now()<deadline){
+            if((await env.DB.prepare('SELECT status FROM ashare_source_gate').first()).status==='busy')break;
+            await new Promise(resolve=>setTimeout(resolve,10));
+          }
           return new Response('synthetic early response',{status:202});
         }
         return ashareHandler(request);
@@ -44,7 +52,7 @@ const {outputFiles}=await build({
   external:['cloudflare:workers'],
   write:false,
 });
-const migration=await readFile(new URL('../drizzle/0001_wild_jigsaw.sql',import.meta.url),'utf8');
+const migration=(await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
 const endpoint='https://offline.invalid/api/v1/ashare/snapshot';
 const numericFields=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];
 const syntheticRow={f12:'BK0001',f14:'合成行业',...Object.fromEntries(numericFields.map(field=>[field,1]))};
@@ -132,11 +140,11 @@ console.log('PASS temporary failure: shared 60s cooldown; cold isolate/different
 await withWorkers('denied',async(mf,db,calls)=>{
   const first=await mf.dispatchFetch(endpoint);
   assert.equal(first.status,503);
-  assert.equal((await first.json()).error_code,'source_access_denied');
+  assert.equal((await first.json()).error_code,'source_denied');
   const cold=await mf.getWorker('cold');
   const result=await cold.fetch(`${endpoint}?scope=BK0001`);
   assert.equal(result.status,503);
-  assert.equal((await result.json()).error_code,'persistent_source_denial');
+  assert.equal((await result.json()).error_code,'source_denied');
   assert.equal(calls(),1);
   assert.equal((await db.prepare('SELECT status FROM ashare_source_gate').first()).status,'blocked');
 });
@@ -187,7 +195,7 @@ await withWorkers('plain',async(mf,db,calls)=>{
     assert.equal(result.status,503);assert.equal((await result.json()).error_code,'source_access_denied');
   }finally{clearTimeout(timer);}
   const cold=await mf.getWorker('cold');const result=await cold.fetch(endpoint);
-  assert.equal(result.status,503);assert.equal((await result.json()).error_code,'persistent_source_denial');
+  assert.equal(result.status,503);assert.equal((await result.json()).error_code,'source_denied');
   assert.equal(calls(),0,'denied fixtures must not result in an external mock or actual source call');
 });
 console.log('PASS native hanging body cancellation cannot delay durable denial; cold isolate remains blocked');
