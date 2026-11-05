@@ -266,6 +266,35 @@ await withWorkers('plain',async(mf,db,calls)=>{
 console.log('PASS native one-time audited repair: exact legacy lease only, shared cooldown, synthetic cold-start snapshot, replay no-op');
 
 
+await withWorkers('plain',async(mf,db,calls)=>{
+  // Only synthetic operation metadata; no production mutation or provider data.
+  const prior=await readFile(new URL('../drizzle/0010_ashare_legacy_reconciliation.sql',import.meta.url),'utf8');
+  await db.prepare(prior.split('--> statement-breakpoint')[0].trim()).run();
+  await db.prepare("UPDATE ashare_source_gate SET status='busy',lease_token='d40b43df-beb2-4d2e-a839-c6298519f450',acquired_ms=1793871300854,finished_ms=1793871239340,updated_ms=1793871300854,not_before_ms=1793871299340,reason_code=NULL WHERE id='single_upstream'").run();
+  const before=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  const migration=await readFile(new URL('../drizzle/0013_ashare_terminal_reconciliation.sql',import.meta.url),'utf8');
+  const apply=async()=>{for(const sql of migration.split('--> statement-breakpoint'))await db.prepare(sql.trim()).run();};
+  await apply();const gate=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  assert.equal(gate.status,'idle');assert.equal(gate.lease_token,null);assert.equal(gate.not_before_ms-gate.finished_ms,60_000);
+  const audit=await db.prepare('SELECT * FROM ashare_recovery_audit').first();
+  for(const key of ['status','lease_token','acquired_ms','finished_ms','updated_ms','not_before_ms','reason_code'])assert.equal(audit[`prior_${key}`],before[key]);
+  assert.match(audit.evidence,/Gate id single_upstream/);
+  assert.equal(audit.source_outcome,'unknown');assert.equal(audit.invocation_outcome,'waituntil_canceled_terminal');
+  assert.equal(audit.reconciled_ms,gate.updated_ms);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM ashare_snapshot_cache').first()).n,0);
+  const blockedByCooldown=await mf.dispatchFetch(endpoint);assert.equal(blockedByCooldown.status,503);assert.equal(calls(),0);
+  await apply();assert.deepEqual(await db.prepare('SELECT * FROM ashare_source_gate').first(),gate);
+  // Elapse cooldown only in this isolated fixture, then use a cold runtime.
+  await db.prepare("UPDATE ashare_source_gate SET not_before_ms=0 WHERE status='idle'").run();
+  const cold=await mf.getWorker('cold');const snapshot=await cold.fetch(endpoint);assert.equal(snapshot.status,200);
+  assert.equal((await snapshot.json()).rows.length,1);assert.equal(calls(),1);
+  const finished=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  await apply();assert.deepEqual(await db.prepare('SELECT * FROM ashare_source_gate').first(),finished);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM ashare_recovery_audit').first()).n,1);
+});
+console.log('PASS native terminal reconciliation: exact audited unknown outcome, cooldown, cold synthetic snapshot, replay no-op');
+
+
 for(const mode of ['deadline_initial','deadline_redirect'])await withWorkers(mode,async(mf,db,calls)=>{
   const started=Date.now();
   const early=await mf.dispatchFetch('https://offline.invalid/offline/early-without-cancel');
