@@ -8,10 +8,10 @@ import s from './matrix.module.css';
 export type {MatrixItem,MatrixGroup} from '@/lib/matrix/model';
 export {readableGridColumns} from '@/lib/matrix/model';
 
-export type MatrixHeatmapProps={groups:MatrixGroup[];title:string;description?:string;colorMeaning:string;areaMeaning:string;colorMode?:MatrixColorMode;colorMaxAbs?:number;layout?:'treemap'|'readable-grid';emptyTitle?:string;emptyMessage?:string;emptyNote?:string;onSelect?:(item:MatrixItem,group:MatrixGroup)=>void};
+export type MatrixHeatmapProps={groups:MatrixGroup[];title:string;description?:string;colorMeaning:string;areaMeaning:string;colorMode?:MatrixColorMode;colorPalette?:'china'|'global';colorMaxAbs?:number;layout?:'treemap'|'readable-grid';emptyTitle?:string;emptyMessage?:string;emptyNote?:string;onSelect?:(item:MatrixItem,group:MatrixGroup)=>void};
 type Node={id:string;label:string;item?:MatrixItem;group?:MatrixGroup;children?:Node[]};
 /** Presentation only. No observations, classification inference, source requests, or monetary conversion. */
-export default function MatrixHeatmap({groups,title,description,colorMeaning,areaMeaning,colorMode='signed',colorMaxAbs,layout:layoutMode='treemap',emptyTitle='矩阵暂无可核验数据',emptyNote='不以价格、持仓或模拟数值填充资金流。',emptyMessage='尚无通过核验的数据。缺失不是零，矩阵不会用示例数值填满。',onSelect}:MatrixHeatmapProps){
+export default function MatrixHeatmap({groups,title,description,colorMeaning,areaMeaning,colorMode='signed',colorPalette='china',colorMaxAbs,layout:layoutMode='treemap',emptyTitle='矩阵暂无可核验数据',emptyNote='不以价格、持仓或模拟数值填充资金流。',emptyMessage='尚无通过核验的数据。缺失不是零，矩阵不会用示例数值填满。',onSelect}:MatrixHeatmapProps){
  const host=useRef<HTMLDivElement>(null),prefix=useId().replace(/:/g,'');
  const [width,setWidth]=useState(1100),[inspected,setInspected]=useState<string|null>(null);
  useEffect(()=>{if(!host.current)return;const measure=()=>{const next=host.current?.clientWidth;if(next&&next>0)setWidth(Math.round(next))};measure();if(typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(measure);observer.observe(host.current);return()=>observer.disconnect()},[]);
@@ -24,7 +24,7 @@ export default function MatrixHeatmap({groups,title,description,colorMeaning,are
  const inspectedEntry=entries.find(entry=>entry.id===inspected),active=inspectedEntry?.item;
  const color=(item:MatrixItem)=>matrixColor(item,colorMode,maximum);
  const describe=describeMatrixItem;
- return <section className={s.root} aria-label={title}>
+ return <section className={s.root} aria-label={title} data-palette={colorPalette}>
   <header className={s.heading}><div><p className={s.eyebrow}>MATRIX VIEW</p><h2>{title}</h2>{description&&<p>{description}</p>}</div><span className={s.viewLabel}>矩形热力矩阵</span></header>
   <div className={s.meanings}><span>面积：{areaMeaning}</span><span>颜色：{colorMeaning}</span></div>
   {layoutMode==='readable-grid'&&entries.length>0&&<p className={s.gridHint}>全部 {entries.length} 个区块 · 在矩阵内滚动查看，或按 Tab 逐项选择</p>}

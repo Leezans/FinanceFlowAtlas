@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {validateTic,signedMillions,selectTicRows,flowDirection} from '../components/atlas/ticModel';
+import {validateTic,signedMillions,selectTicRows,flowDirection} from '../lib/tic/model';
 import {ticFixture} from './ticTestFixture';
 describe('TIC units and signed transactions',()=>{
  it('accepts negative and zero transactions without changing identities',()=>{const s=validateTic(ticFixture);expect(s.country_flows[1].net_foreign_purchases_usd).toBe(-3000000);expect(s.country_flows[1].issuer_economy_iso3).toBe('USA');expect(s.country_flows[1].foreign_economy_iso3).toBe('GBR');expect(s.country_flows[2].net_foreign_purchases_usd).toBe(0)});

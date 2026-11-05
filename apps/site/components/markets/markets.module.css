@@ -5,3 +5,10 @@
 @media(prefers-reduced-motion:reduce){.country{transition:none}}
 
 .assetLinks{margin-top:22px;padding:20px 24px;border:1px solid #dce4e8;border-radius:12px;background:#fff;display:flex;gap:18px;align-items:center;justify-content:space-between}.assetLinks div{display:flex;flex-direction:column;gap:8px}.assetLinks strong{font-size:13px}.assetLinks span{font-size:11px;color:#627185}.assetLinks a{font-size:12px;white-space:nowrap;color:#146b68}@media(max-width:760px){.assetLinks{align-items:start;flex-direction:column;padding:18px}.assetLinks span{line-height:1.8}}
+
+.sourceScope{background:#fff;border:1px solid #dce4ed;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px}.sourceScope strong{color:#274c70}.sourceScope span{color:#596c80;line-height:1.6}.sourceScope nav{display:flex;flex-wrap:wrap;gap:8px 16px;width:100%;font-size:11px}.sourceScope a{color:#345bac;text-decoration:underline;text-underline-offset:3px}.globalEvidence{background:#0b1420;color:#dce6ee;border-radius:12px;padding:16px;min-width:0}.geographyDisclosure{margin-top:22px;border-top:1px solid #dce4ed;padding-top:18px}.geographyDisclosure>summary{font-size:15px;font-weight:600;padding:6px 0 20px;color:#304763}.geographyDisclosure>summary span{font-weight:400;font-size:11px;color:#63738a;margin-left:16px}.geography{min-width:0}.geography .searchWrap input{color:#182535;color-scheme:light}.geography .results button{color:#304763}
+@media(max-width:760px){.sourceScope{padding:12px;font-size:11px}.sourceScope nav{gap:8px 12px}.globalEvidence{padding:10px}.geographyDisclosure>summary span{display:block;margin:8px 0 0;font-size:10px}}
+
+/* Keep the evidence matrix in the first screen; geography is secondary. */
+.header{height:56px}.intro{padding:20px 0 14px}.intro h1{font-size:30px;margin-bottom:8px;letter-spacing:-1px}.intro .eyebrow{margin-bottom:8px}.intro .subtitle{font-size:12px}
+@media(max-width:760px){.header{height:52px}.intro{padding:15px 0 12px}.intro h1{font-size:26px}.sourceScope{margin-bottom:10px}.sourceScope span{font-size:10px}}

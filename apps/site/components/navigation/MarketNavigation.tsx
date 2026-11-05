@@ -8,7 +8,7 @@ export const marketLinks = [
   {href: '/ashare', label: 'A 股热力图'},
   {href: '/taiwan', label: '台股法人矩阵'},
   {href: '/brazil', label: '巴西基金矩阵'},
-  {href: '/markets', label: '全球市场'},
+  {href: '/markets', label: '全球市场矩阵'},
   {href: '/asean', label: '东盟 FDI 行业'},
   {href: '/crypto', label: '加密现货'},
   {href: '/futures', label: '期货持仓'},
