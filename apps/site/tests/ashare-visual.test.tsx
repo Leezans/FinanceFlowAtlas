@@ -15,7 +15,7 @@ const rows=[100,-100,60,-60,20,-20,0,null].map((value,index)=>({
 function state(sourceRows:EvidenceRow[]=rows,stock=false):EvidenceState {
  const snapshot={schema:'ashare-provider-evidence/1',rows:sourceRows.map(row=>({...row,f12:stock?row.f12.slice(2).padStart(6,'0'):row.f12})),source_total:sourceRows.length,
   fetched_at:'2026-11-04T08:00:00Z',scope:stock?{kind:'industry_stocks',fs:'b:BK0001',classification_level:'unknown_may_mix_levels'}:{kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},
-  page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'仅合成测试',stale:false,has_error:false} as EvidenceSnapshot;
+  page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:stock?'CNY':'index_points'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'仅合成测试',stale:false,has_error:false} as EvidenceSnapshot;
  return {snapshot:validateEvidence(snapshot),etag:'synthetic',status:'ready',message:''};
 }
 const preview=()=>screen.getByRole('region',{name:'区块数值预览'});

@@ -16,7 +16,7 @@ const rows: EvidenceRow[] = [
 function snapshot(stocks=false): EvidenceSnapshot {
  return {schema:'ashare-provider-evidence/1',rows:rows.map(row=>({...row,f12:stocks?row.f12.slice(2).padStart(6,'0'):row.f12})),source_total:4,
   fetched_at:'2026-11-04T08:00:00Z',scope:stocks?{kind:'industry_stocks',fs:'b:BK0001',classification_level:'unknown_may_mix_levels'}:{kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},
-  page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'仅合成测试',stale:false,has_error:false};
+  page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:stocks?'CNY':'index_points'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'仅合成测试',stale:false,has_error:false};
 }
 function state(data=snapshot()): EvidenceState {
  return {snapshot:validateEvidence(data),etag:data.fetched_at,status:data.stale?'stale':'ready',message:''};
@@ -49,6 +49,12 @@ describe('evidence selection without fabricated amounts',()=>{
 });
 
 describe('complete reachable A-share evidence list',()=>{
+ it('explains that a board index and a stock quote have different units',()=>{
+  const view=render(<EvidenceHeatmap state={state()}/>);
+  expect(screen.getByText('f2 报价口径：行业指数（点），不是股票价格或资金金额。')).toBeTruthy();
+  view.rerender(<EvidenceHeatmap state={state(snapshot(true))}/>);
+  expect(screen.getByText('f2 报价口径：成分股价格（人民币元）。')).toBeTruthy();
+ });
  it('keeps the treemap primary and hides the supplementary table until requested',()=>{
   const {container}=render(<EvidenceHeatmap state={state()}/>);
   expect(screen.getByRole('group',{name:'当前筛选范围的主力净额矩形热力图'})).toBeTruthy();

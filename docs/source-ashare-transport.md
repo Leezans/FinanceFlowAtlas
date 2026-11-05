@@ -41,3 +41,22 @@ bytes that were not decoded by the runtime. These tests establish adapter
 behavior, not live availability. A successful real production snapshot and
 constituent drilldown must still be observed through the authenticated private
 Site before claiming that the production source is working.
+
+## Scope-specific quote units
+
+Eastmoney's [board-index explanation](https://baike.eastmoney.com/item/%E6%9D%BF%E5%9D%97%E6%8C%87%E6%95%B0)
+describes an index as a point level rather than a currency amount. `f2` is the
+current quote of the requested object: an industry board
+index level in an industry-rank response, or a stock price in a constituent
+response. It is not a currency amount merely because `f62` in the same row is
+CNY. Snapshot metadata now declares `field_units.f2 = index_points` for
+`industry_rank`, and `CNY` for `industry_stocks`. `f62` remains CNY and `f3`
+remains percent. No value is rescaled, and the monetary treemap still uses only
+`f62`.
+
+The visualization validates the combination of scope and quote unit, rejecting
+old/mislabeled industry snapshots that claim a CNY index quote, stock snapshots
+that claim index points, and unknown quote units. Source details also explain
+the two meanings. Synthetic regression tests cover both valid scopes, incorrect
+units in both directions, and null/missing quotes. This corrects the contract;
+it does not establish the quote's observation time or live source availability.

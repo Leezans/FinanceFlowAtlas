@@ -92,5 +92,5 @@ function Heatmap({snapshot:s,onIndustrySelect}:{snapshot:ValidEvidence;onIndustr
   </div>
  </details>
  {chosen&&<article aria-label="股票原始证据">{!scopeRows.some(row=>row.f12===chosen.f12)&&<p role="status">所选股票已不符合当前筛选，仍显示其最新来源记录。</p>}<h3>{chosen.f14} · 供应商代码 {chosen.f12}</h3><p>f62：{exactAmount(numeric(chosen.f62))} 元；f3：{numeric(chosen.f3)===null?'未提供':`${exactAmount(numeric(chosen.f3))}%`}；未推断交易所MIC。</p><button type="button" onClick={()=>setSelected(null)}>关闭原始证据</button></article>}
- <details><summary>来源与范围说明</summary><p>来源范围：{s.scope.fs} · {s.scope.classification_level}；主力净额字段 f62，涨跌幅字段 f3。</p><p>分类成员互斥性：not_established。不宣称完整全市场行业归属，不推导行业总量。</p><p>抓取时间：{s.fetched_at}（不是行情时间）；source_observed_at / trade_date 未提供；page_count={s.page_count}。</p><p>{s.notice}</p><p>行业点击仅在调用者提供范围请求回调时启用；本组件没有请求、权限批准或历史行情功能。</p></details></section>
+ <details><summary>来源与范围说明</summary><p>来源范围：{s.scope.fs} · {s.scope.classification_level}；主力净额字段 f62，涨跌幅字段 f3。</p><p>f2 报价口径：{industry?'行业指数（点），不是股票价格或资金金额':'成分股价格（人民币元）'}。</p><p>分类成员互斥性：not_established。不宣称完整全市场行业归属，不推导行业总量。</p><p>抓取时间：{s.fetched_at}（不是行情时间）；source_observed_at / trade_date 未提供；page_count={s.page_count}。</p><p>{s.notice}</p><p>行业点击仅在调用者提供范围请求回调时启用；本组件没有请求、权限批准或历史行情功能。</p></details></section>
 }

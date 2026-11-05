@@ -1,6 +1,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {createAshareHandler,FIELDS,parseScope} from '../lib/ashare/ashare';
 import {strictJSON} from '../lib/ashare/strict-json';
+import {validateEvidence} from '../components/ashare/model';
 const request=(scope='level1',path='snapshot',headers?:HeadersInit)=>new Request(`https://private.example/api/v1/ashare/${path}?scope=${scope}`,{headers});
 const item=(i=1,stock=false)=>Object.fromEntries(FIELDS.map(f=>[f,f==='f12'?(stock?String(i).padStart(6,'0'):`BK${String(i).padStart(4,'0')}`):f==='f14'?'合成行业':1]));
 const upstream=(rows:unknown[]=[item()],total=rows.length)=>new Response(JSON.stringify({rc:0,data:{total,diff:rows}}),{headers:{'content-type':'application/json'}});
@@ -16,7 +17,7 @@ describe('scope and private access',()=>{
  it('status never acquires and is truthful',async()=>{const f=vi.fn();const r=await make(f)(request('level1','status'));expect(await r.json()).toMatchObject({acquisition_is_separate:false,refresh_interval_seconds:60});expect(f).not.toHaveBeenCalled();});
 });
 describe('controlled transport and contract',()=>{
- it('emits exact schema, cache and 304, without source freshness claims',async()=>{const f=vi.fn(async()=>upstream());const h=make(f);const r=await h(request());expect(r.status).toBe(200);const p=await r.json();expect(p).toMatchObject({schema:'ashare-provider-evidence/1',scope:{fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},source_observed_at:null,trade_date:null,delay_status:'not_provided',stale:false,has_error:false,field_units:{f62:'CNY',f3:'percent',f2:'CNY'}});expect(Object.keys(p as Record<string,unknown>).sort()).toEqual(['schema','rows','source_total','fetched_at','scope','page_count','source_observed_at','trade_date','metric_kind','metric_field','unit','field_units','delay_status','classification_exclusivity','notice','stale','has_error'].sort());const etag=r.headers.get('etag')!;const cached=await h(request('level1','snapshot',{'If-None-Match':etag}));expect(cached.status).toBe(304);expect(await cached.text()).toBe('');expect(f).toHaveBeenCalledTimes(1);const [url,init]=f.mock.calls[0] as unknown as [string,RequestInit];expect(new URL(url).origin).toBe('https://push2.eastmoney.com');expect(new URL(url).searchParams.get('pz')).toBe('100');expect(init).toMatchObject({method:'GET',redirect:'manual',credentials:'omit',cache:'no-store'});});
+ it('emits exact schema, cache and 304, without source freshness claims',async()=>{const f=vi.fn(async()=>upstream());const h=make(f);const r=await h(request());expect(r.status).toBe(200);const p=await r.json();expect(p).toMatchObject({schema:'ashare-provider-evidence/1',scope:{fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},source_observed_at:null,trade_date:null,delay_status:'not_provided',stale:false,has_error:false,field_units:{f62:'CNY',f3:'percent',f2:'index_points'}});expect(Object.keys(p as Record<string,unknown>).sort()).toEqual(['schema','rows','source_total','fetched_at','scope','page_count','source_observed_at','trade_date','metric_kind','metric_field','unit','field_units','delay_status','classification_exclusivity','notice','stale','has_error'].sort());const etag=r.headers.get('etag')!;const cached=await h(request('level1','snapshot',{'If-None-Match':etag}));expect(cached.status).toBe(304);expect(await cached.text()).toBe('');expect(f).toHaveBeenCalledTimes(1);const [url,init]=f.mock.calls[0] as unknown as [string,RequestInit];expect(new URL(url).origin).toBe('https://push2.eastmoney.com');expect(new URL(url).searchParams.get('pz')).toBe('100');expect(init).toMatchObject({method:'GET',redirect:'manual',credentials:'omit',cache:'no-store'});});
  it('allows one normal redirect preserving every parameter and 3s pacing',async()=>{const times:number[]=[];const f=vi.fn(async()=>{times.push(Date.now());return times.length===1?new Response('',{status:302,headers:{location:'https://push2delay.eastmoney.com/api/qt/clist/get'}}):upstream();});const r=await settle(make(f)(request()));expect(r.status).toBe(200);expect(times[1]-times[0]).toBeGreaterThanOrEqual(3000);const calls=f.mock.calls as unknown as [string,RequestInit][];expect(new URL(calls[1][0]).search).toBe(new URL(calls[0][0]).search);expect(new URL(calls[1][0]).host).toBe('push2delay.eastmoney.com');});
  it.each(['https://evil.test/api/qt/clist/get','http://push2delay.eastmoney.com/api/qt/clist/get','https://push2delay.eastmoney.com/api/qt/clist/get?fs=evil','https://user@push2delay.eastmoney.com/api/qt/clist/get','https://push2delay.eastmoney.com/api/qt/clist/get#fragment','https://push2delay.eastmoney.com:443/api/qt/clist/get','https://push2delay.eastmoney.com/api/qt/x/../clist/get','https://%70ush2delay.eastmoney.com/api/qt/clist/get'])('denies unsafe redirect %s',async location=>{const f=vi.fn(async()=>new Response('',{status:302,headers:{location}}));expect((await make(f)(request())).status).toBe(503);expect(f).toHaveBeenCalledTimes(1);});
  it('does not follow second redirect or retry denial/challenge',async()=>{for(const status of [302,403,429,500]){const f=vi.fn(async()=>new Response('',{status,headers:{location:'https://push2delay.eastmoney.com/api/qt/clist/get'}}));const h=make(f);expect((await settle(h(request()))).status).toBe(503);expect(f).toHaveBeenCalledTimes(status===302?2:1);await h(request());expect(f).toHaveBeenCalledTimes(status===302?2:1);}});
@@ -42,6 +43,25 @@ describe('persistent source gate integration',()=>{
  it('observed denial is persisted even when body cancellation rejects',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};const body=new ReadableStream({cancel(){throw new Error('cancel failed');}});expect((await make(async()=>new Response(body,{status:403}),{sourceGate:gate})(request())).status).toBe(503);expect(gate.release).toHaveBeenCalledWith('one',{kind:'denied',reason:'source_denial'});});
  it('temporary failure releases as temporary, not denial',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};expect((await make(async()=>new Response('{\"error\":\"temporary\"}',{status:500,headers:{'content-type':'application/json'}}),{sourceGate:gate})(request())).status).toBe(503);expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'collection_failed'});});
 });
+describe('scope-specific quote units',()=>{
+ it.each([false,true])('retains the raw quote and rejects incompatible metadata for stocks=%s',async stocks=>{
+  const quote=stocks?12.34:5432.1;
+  const response=await make(async()=>upstream([{...item(1,stocks),f2:quote}]))(request(stocks?'BK0001':'level1'));
+  expect(response.status).toBe(200);
+  const snapshot=validateEvidence(await response.json());
+  expect(snapshot.field_units).toEqual({f62:'CNY',f3:'percent',f2:stocks?'CNY':'index_points'});
+  expect(validateEvidence(snapshot).rows[0].f2).toBe(quote);
+  expect(()=>validateEvidence({...snapshot,field_units:{...snapshot.field_units,f2:stocks?'index_points':'CNY'}})).toThrow('Quote unit differs from source scope');
+  expect(()=>validateEvidence({...snapshot,field_units:{...snapshot.field_units,f2:'unknown'}})).toThrow();
+ });
+ it.each([null,'-','--',''])('does not manufacture an industry quote from missing value %s',async f2=>{
+  const response=await make(async()=>upstream([{...item(),f2}]))(request());
+  const snapshot=validateEvidence(await response.json());
+  expect(validateEvidence(snapshot).rows[0].f2).toBe(f2);
+  expect(snapshot.field_units.f2).toBe('index_points');
+ });
+});
+
 describe('validation and publication',()=>{
  it('collects all pages with stable total and unique IDs',async()=>{const f=vi.fn(async(url:string)=>new URL(url).searchParams.get('pn')==='1'?upstream(Array.from({length:100},(_,i)=>item(i+1)),101):upstream([item(101)],101));const r=await settle(make(f)(request()));expect(r.status).toBe(200);expect(await r.json()).toMatchObject({source_total:101,page_count:2});});
  it.each(['changed','duplicate','truncated'])('rejects %s pagination without partial data',async mode=>{let n=0;const f=vi.fn(async()=>++n===1?upstream(Array.from({length:100},(_,i)=>item(i+1)),101):upstream(mode==='truncated'?[]:[item(mode==='duplicate'?1:101)],mode==='changed'?102:101));const r=await settle(make(f)(request()));expect(r.status).toBe(503);expect(await r.text()).not.toContain('合成');});

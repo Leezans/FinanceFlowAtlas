@@ -11,7 +11,7 @@ function state(overrides:Record<string,unknown>={}):EvidenceState {
  const snapshot = validateEvidence({schema:'ashare-provider-evidence/1',rows:[],source_total:0,
   fetched_at:'2026-11-05T02:00:00Z',scope:{kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},
   page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',
-  field_units:{f62:'CNY',f3:'percent',f2:'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',
+  field_units:{f62:'CNY',f3:'percent',f2:'index_points'},delay_status:'not_provided',classification_exclusivity:'not_established',
   notice:'Synthetic fixture only',stale:false,has_error:false,...overrides});
  return {snapshot,etag:null,status:snapshot.stale?'stale':'ready',message:''};
 }
