@@ -13,9 +13,9 @@ export type MatrixItem = {
   weight?: number | null;
 };
 export type MatrixGroup = { id: string; label: string; items: MatrixItem[] };
-export type MatrixColorMode = 'signed' | 'neutral';
+export type MatrixColorMode = 'signed' | 'neutral' | 'sequential';
 export type MatrixEntry = { id: string; item: MatrixItem; group: MatrixGroup };
-export type MatrixColor = 'missing' | 'zero' | `positive-${1 | 2 | 3}` | `negative-${1 | 2 | 3}`;
+export type MatrixColor = 'missing' | 'zero' | `positive-${1 | 2 | 3}` | `negative-${1 | 2 | 3}` | `magnitude-${1 | 2 | 3}`;
 
 export function matrixEntries(groups: readonly MatrixGroup[]): MatrixEntry[] {
   return groups.flatMap(group => group.items.map(item => ({
@@ -37,8 +37,10 @@ export function matrixColorMaximum(entries: readonly MatrixEntry[], fixedMaximum
 export function matrixColor(item: MatrixItem, mode: MatrixColorMode, maximum: number): MatrixColor {
   const value = item.colorValue;
   if (mode === 'neutral' || value == null || !Number.isFinite(value)) return 'missing';
+  if (mode === 'sequential' && value < 0) return 'missing';
   if (value === 0) return 'zero';
   const band = Math.min(3, Math.max(1, Math.ceil(Math.abs(value) / maximum * 3))) as 1 | 2 | 3;
+  if (mode === 'sequential') return `magnitude-${band}`;
   return `${value > 0 ? 'positive' : 'negative'}-${band}`;
 }
 

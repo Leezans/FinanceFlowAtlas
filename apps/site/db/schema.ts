@@ -119,3 +119,13 @@ export const ashareRecoveryAudit=sqliteTable('ashare_recovery_audit',{
  sourceOutcome:text('source_outcome').notNull(),
  evidence:text('evidence').notNull(),
 });
+
+/** Public annual World Bank/WFE cache. No private accounts, credentials or synthetic values. */
+export const worldbankEquitySourceGate=sqliteTable('worldbank_equity_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('worldbank_equity_gate_id',sql`${t.id} = 'annual_equity'`),
+ check('worldbank_equity_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('worldbank_equity_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);

@@ -43,6 +43,16 @@ describe('opt-in readable matrix density',()=>{
   rerender(<MatrixHeatmap {...props} groups={dense(28)} layout="readable-grid"/>);expect(canvas.scrollTop).toBe(900);
   rerender(<MatrixHeatmap {...props} title="选中行业公司" groups={dense(200)} layout="readable-grid"/>);expect(canvas.scrollTop).toBe(0);
  });
+ it('stretches a small metric group only when explicitly requested',()=>{
+  vi.spyOn(HTMLElement.prototype,'clientWidth','get').mockReturnValue(1100);
+  const {container}=render(<MatrixHeatmap {...props} groups={dense(2)} layout="readable-grid" stretchSmallGroups/>);
+  expect((container.querySelector('[style*="grid-template-columns"]') as HTMLElement).style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+ });
+ it('keeps equal country column widths across groups of different sizes by default',()=>{
+  vi.spyOn(HTMLElement.prototype,'clientWidth','get').mockReturnValue(1100);
+  const {container}=render(<MatrixHeatmap {...props} groups={[...dense(20),{...dense(5)[0],id:'small'}]} layout="readable-grid"/>);
+  for(const grid of container.querySelectorAll<HTMLElement>('[style*="grid-template-columns"]'))expect(grid.style.gridTemplateColumns).toBe('repeat(8, minmax(0, 1fr))');
+ });
  it('bounds scrolling instead of hiding labels or shrinking them below readable sizes',()=>{
   const css=readFileSync('components/matrix/matrix.module.css','utf8');
   expect(css).toContain('max-height:560px');expect(css).toContain('overflow:auto');expect(css).toContain('.gridName,.gridValue,.gridDetail{white-space:normal}');expect(css).toContain('grid-auto-rows:minmax(140px,1fr)');expect(css).toContain('.gridName,.gridValue{font-size:14px}');
