@@ -1,8 +1,8 @@
 import {type Scope,type ValidEvidence,scopeKey,validateEvidence} from './model';
 import {safeSourceCode,isSourceStopped,describeRecovery} from '@/lib/ashare/recovery';
 export type Recovery={code:string;mode:'retry'|'stopped';retryAt:number|null;httpStatus:number|null};
-export type EvidenceState={snapshot:ValidEvidence|null;etag:string|null;status:'ready'|'stale'|'blocked'|'error'|'empty';message:string;recovery?:Recovery;retainedAfterFailure?:boolean;retainedDuringCollection?:boolean};
-export type WireReply={status:number;etag?:string;payload?:unknown;errorCode?:string;recoveryMode?:string;retryAfter?:string};
+export type EvidenceState={snapshot:ValidEvidence|null;etag:string|null;status:'ready'|'stale'|'blocked'|'error'|'empty';message:string;recovery?:Recovery;retainedAfterFailure?:boolean;retainedDuringCollection?:boolean;nextCheckAt?:number};
+export type WireReply={status:number;etag?:string;payload?:unknown;errorCode?:string;recoveryMode?:string;retryAfter?:string;refreshAfter?:string};
 export type Transport=(request:{ifNoneMatch?:string;scope:Scope})=>Promise<WireReply>;
 export const emptyState=():EvidenceState=>({snapshot:null,etag:null,status:'empty',message:'尚未接入来源'});
 /** Retry-After can be seconds or an HTTP date. Never shorten a valid cooldown. */
@@ -10,6 +10,12 @@ export function retryAt(value:string|undefined,now:number):number {
  if(value&&/^\d+$/.test(value)){const seconds=Number(value);if(Number.isSafeInteger(seconds)&&Number.isSafeInteger(now+seconds*1000))return now+Math.max(1000,seconds*1000);}
  const date=value&&!/^\d+$/.test(value)?Date.parse(value):NaN;
  return Number.isFinite(date)?Math.max(now+1000,date):now+60_000;
+}
+/** A server-relative cache check hint, not a market observation timestamp.
+ * Ignore malformed/out-of-range hints; recovery and Retry-After always win. */
+function checkTime(reply:WireReply,now:number):{nextCheckAt?:number} {
+ const seconds=reply.refreshAfter&&/^[0-9]{1,2}$/.test(reply.refreshAfter)?Number(reply.refreshAfter):NaN;
+ return Number.isInteger(seconds)&&seconds>=1&&seconds<=60&&Number.isSafeInteger(now+seconds*1000)?{nextCheckAt:now+seconds*1000}:{};
 }
 function recoveryFor(reply:WireReply,now:number,fallback?:string):Recovery|undefined {
  const payload=reply.payload;
@@ -36,7 +42,7 @@ export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,
   // revalidation removes only the browser's temporary failure marker.
   const snapshot=previous.snapshot;
   const issue=recovery??(snapshot.has_error?recoveryFor(reply,now,'collection_failed'):undefined);
-  return {snapshot,etag:reply.etag||previous.etag,status:snapshot.stale||issue?'stale':'ready',message:snapshot.stale?'明确标记的陈旧快照；不是最新行情':'',...(issue?{recovery:issue}:{})};
+  return {snapshot,etag:reply.etag||previous.etag,status:snapshot.stale||issue?'stale':'ready',message:snapshot.stale?'明确标记的陈旧快照；不是最新行情':'',...(issue?{recovery:issue}:checkTime(reply,now))};
  }
  if(reply.status>=500&&reply.status<=599)return failure(previous,scope,recovery??recoveryFor(reply,now,'collection_failed')!);
  if(reply.status!==200)return clear('error',`来源响应失败（HTTP ${reply.status}），已清空缓存数据`);
@@ -44,7 +50,7 @@ export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,
   const snapshot=validateEvidence(reply.payload,scope);
   if(snapshot.has_error&&!snapshot.stale)return clear('error','错误响应没有明确标记stale，已清空');
   const issue=recovery??(snapshot.has_error?recoveryFor(reply,now,'collection_failed'):undefined);
-  return {snapshot,etag:reply.etag||null,status:snapshot.stale||issue?'stale':'ready',message:snapshot.stale?'明确标记的陈旧快照；不是最新行情':'',...(issue?{recovery:issue}:{})};
+  return {snapshot,etag:reply.etag||null,status:snapshot.stale||issue?'stale':'ready',message:snapshot.stale?'明确标记的陈旧快照；不是最新行情':'',...(issue?{recovery:issue}:checkTime(reply,now))};
  }catch{return clear('error','来源数据校验失败，已清空缓存数据');}
 }
 /** Memory-only, same-scope retention. No local storage or new source access. */

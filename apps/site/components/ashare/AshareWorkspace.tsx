@@ -12,7 +12,7 @@ function createSession(){
   abort?.abort();const controller=new AbortController();abort=controller;
   const key=requested.kind==='industry_rank'?'level1':requested.fs.slice(2);
   const response=await fetch(`/api/v1/ashare/snapshot?scope=${encodeURIComponent(key)}`,{signal:controller.signal,cache:'no-store',headers:ifNoneMatch?{'If-None-Match':ifNoneMatch}:{}});
-  return {errorCode:response.headers.get('x-ashare-error-code')||undefined,recoveryMode:response.headers.get('x-ashare-recovery')||undefined,retryAfter:response.headers.get('retry-after')||undefined,status:response.status,etag:response.headers.get('etag')||undefined,payload:response.status===304?undefined:await response.json().catch(()=>undefined)};
+  return {refreshAfter:response.headers.get('x-ashare-refresh-after')||undefined,errorCode:response.headers.get('x-ashare-error-code')||undefined,recoveryMode:response.headers.get('x-ashare-recovery')||undefined,retryAfter:response.headers.get('retry-after')||undefined,status:response.status,etag:response.headers.get('etag')||undefined,payload:response.status===304?undefined:await response.json().catch(()=>undefined)};
  });
  return {client,cancel:()=>abort?.abort()};
 }
@@ -21,16 +21,25 @@ export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
  const [{client,cancel}]=useState(createSession);
  const retry=useRef<()=>void>(()=>{});
  useEffect(()=>{
-  let live=true,busy=false,continuation:ReturnType<typeof setTimeout>|undefined;
-  async function load(){if(busy||!client.canLoad(scope))return;busy=true;if(live)setLoading(true);const pending=client.load(scope);if(live)setState(client.getState());const next=await pending;if(live){setState(next);setLoading(false)}busy=false;
-   if(live&&next.recovery?.code==='collection_in_progress'&&next.recovery.mode==='retry'){
-    if(continuation)clearTimeout(continuation);
-    continuation=setTimeout(()=>void load(),Math.max(1000,(next.recovery.retryAt??Date.now()+3000)-Date.now()+100));
-   }
+  let live=true,busy=false,timer:ReturnType<typeof setTimeout>|undefined;
+  function schedule(delay:number){if(timer!==undefined)clearTimeout(timer);if(live)timer=setTimeout(()=>{timer=undefined;void load();},delay);}
+  async function load(){
+   if(!live||busy)return;
+   if(!client.canLoad(scope)){if(timer===undefined&&client.getState().recovery?.mode!=='stopped')schedule(60_000);return;}
+   if(timer!==undefined){clearTimeout(timer);timer=undefined;}
+   busy=true;setLoading(true);const pending=client.load(scope);setState(client.getState());const next=await pending;busy=false;
+   if(!live)return;
+   setState(next);setLoading(false);
+   if(next.recovery?.mode==='stopped')return;
+   // One timer and one in-flight request per selected scope. Staged pages keep
+   // their server cooldown; healthy caches schedule from their remaining TTL.
+   // The fallback preserves older-server and temporary-failure minute checks.
+   const deadline=next.recovery?.code==='collection_in_progress'&&next.recovery.mode==='retry'
+    ?next.recovery.retryAt:!next.recovery?next.nextCheckAt:undefined;
+   schedule(deadline!==undefined&&deadline!==null?Math.max(1000,deadline-Date.now()+100):60_000);
   }
-  retry.current=()=>void load();
-  const start=setTimeout(()=>void load(),0);const timer=setInterval(()=>void load(),60_000);
-  return()=>{live=false;clearTimeout(start);if(continuation)clearTimeout(continuation);clearInterval(timer);cancel();client.clear()};
+  retry.current=()=>void load();schedule(0);
+  return()=>{live=false;if(timer!==undefined)clearTimeout(timer);cancel();client.clear()};
  },[client,cancel,scope]);
  return <section aria-label="A 股行业与个股矩阵工作区" style={{minHeight:embedded?undefined:'100vh',background:'#07111b',padding:embedded?'0':'16px',color:'#d9e7ec'}}>
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:12}}><strong>FinanceFlowAtlas · A股</strong><span style={{fontSize:12,color:'#92aabd'}}>个人研究视图</span></div>

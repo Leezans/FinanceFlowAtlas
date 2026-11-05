@@ -79,3 +79,23 @@ describe('retry timing',()=>{
  });
  it.each([undefined,'nonsense','Infinity','99999999999999999999999999'])('uses safe default for %s',value=>expect(retryAt(value,now)).toBe(now+60000));
 });
+
+describe('relative healthy-cache check hints',()=>{
+ it.each(['1','40','60'])('uses bounded %s-second hints on 200 and 304 without editing evidence',refreshAfter=>{
+  const previous=ready();
+  for(const status of [200,304]){
+   const next=consumeReply(previous,{status,payload:snapshot,refreshAfter},scope,1000);
+   expect(next.nextCheckAt).toBe(1000+Number(refreshAfter)*1000);expect(next.snapshot?.fetched_at).toBe(snapshot.fetched_at);
+  }
+ });
+ it.each([undefined,'','0','61','-1','1.5','Infinity','99999999999999','1e0'])('ignores invalid hint %s',refreshAfter=>{
+  expect(consumeReply(ready(),{status:200,payload:snapshot,refreshAfter},scope,0).nextCheckAt).toBeUndefined();
+ });
+ it.each(['collection_in_progress','source_cooldown','source_access_denied'])('never replaces %s recovery or cooldown with a refresh hint',errorCode=>{
+  for(const status of [200,304,503]){
+   const next=consumeReply(ready(),{status,payload:{...snapshot,stale:true,has_error:false},errorCode,refreshAfter:'1',retryAfter:'75'},scope,1000);
+   expect(next.nextCheckAt).toBeUndefined();expect(next.recovery?.code).toBe(errorCode);
+   expect(next.recovery?.retryAt).toBe(errorCode==='source_access_denied'?null:76000);
+  }
+ });
+});
