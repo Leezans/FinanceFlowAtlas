@@ -26,15 +26,21 @@ function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
  return Promise.race([operation,deadline]).finally(()=>signal.removeEventListener('abort',cancel));
 }
 function retryAfter(value:string|null,now:number){if(value===null)return 0;if(/^\d+$/.test(value))return Math.min(Number.MAX_SAFE_INTEGER,Number(value)*1000);const date=Date.parse(value);return Number.isFinite(date)?Math.max(0,date-now):0;}
-export function createCftcHandler(options:{gate:CftcGate;fetcher?:typeof fetch;now?:()=>number}){
+export function createCftcHandler(options:{gate:CftcGate;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean}){
  const now=options.now??Date.now,fetcher=options.fetcher??fetch;
  let snapshot:CftcSnapshot|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
- async function refresh(){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),DEADLINE_MS);let token:string|undefined,releasing=false;
+ async function refresh(requestSignal:AbortSignal,lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>){
+  const controller=new AbortController(),deadline=new AbortController();
+  const abort=()=>controller.abort();requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
+  const timer=setTimeout(()=>{deadline.abort();controller.abort();},DEADLINE_MS);let token:string|undefined,releasing=false;
   const started=now();lastAttempt=started;
   try{
-   const lease=await settleGate(options.gate.acquire(controller.signal),controller.signal);token=lease.token;
-   if(!token)fail('source_gate_unavailable');if(controller.signal.aborted)fail('timeout');
+   if(!lifetimeReady())fail('runtime_lifetime_unverified');
+   if(controller.signal.aborted)fail('source_aborted');
+   // A request abort cancels collection, but cannot abandon a pending D1 write.
+   // The retained lifetime also waits for late admission/release settlement.
+   const lease=await settleGate(track(options.gate.acquire(controller.signal)),deadline.signal);token=lease.token;
+   if(!token)fail('source_gate_unavailable');if(controller.signal.aborted)fail(requestSignal.aborted?'source_aborted':'timeout');
    const response=await fetcher(CFTC_URL,{method:'GET',headers:{Accept:'application/json'},credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal});
    let candidate:CftcSnapshot;
    try{
@@ -44,21 +50,34 @@ export function createCftcHandler(options:{gate:CftcGate;fetcher?:typeof fetch;n
     if(response.status!==200)throw new CftcError('upstream_http',false,retryAfter(response.headers.get('retry-after'),now()));
     candidate=parseCftc(await readJSON(response,controller.signal),new Date(started).toISOString(),new Date(now()).toISOString());
    }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
-   releasing=true;await settleGate(options.gate.release(token,{kind:'success',snapshot:candidate}),controller.signal);token=undefined;
+   releasing=true;await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate})),deadline.signal);token=undefined;
    snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
-   const code=caught instanceof CftcError?caught.code:typeof (caught as {code?:unknown})?.code==='string'&&gateErrors.has((caught as {code:string}).code)?(caught as {code:string}).code:controller.signal.aborted?'timeout':'source_unavailable';
+   const code=caught instanceof CftcError?caught.code:typeof (caught as {code?:unknown})?.code==='string'&&gateErrors.has((caught as {code:string}).code)?(caught as {code:string}).code:requestSignal.aborted?'source_aborted':controller.signal.aborted?'timeout':'source_unavailable';
    denied=denied||(caught instanceof CftcError&&caught.denied)||code==='source_denied';error=code;
    const coordinating=code==='source_busy'||code==='source_cooldown';
    if(!coordinating)failures++;
    const pause=coordinating?60_000:Math.max(Math.min(REFRESH_MS*2**Math.min(failures-1,4),MAX_CACHE_AGE_MS),caught instanceof CftcError?caught.retryAfterMs:0);
    retryAt=now()+pause;
    if(token&&!releasing){
-    try{await settleGate(options.gate.release(token,{kind:denied?'denied':'temporary_failure',retryAfterMs:pause}),AbortSignal.timeout(2_000));}
+    try{await settleGate(track(options.gate.release(token,{kind:denied?'denied':'temporary_failure',retryAfterMs:pause})),AbortSignal.timeout(2_000));}
     catch{denied=true;error='source_gate_outcome_unconfirmed';}
    }else if(releasing){denied=true;error='source_gate_outcome_unconfirmed';}
    if(denied)snapshot=null;
-  }finally{clearTimeout(timer);}
+  }finally{clearTimeout(timer);requestSignal.removeEventListener('abort',abort);controller.abort();}
+ }
+ function retainedRefresh(requestSignal:AbortSignal):Promise<void>{
+  const operations:Promise<unknown>[]=[];
+  const track=<T,>(operation:Promise<T>):Promise<T>=>{operations.push(operation);return operation;};
+  let retained=options.isolatedForTests===true&&!options.waitUntil;
+  // Defer admission until waitUntil synchronously accepts the complete lifetime.
+  const work=Promise.resolve().then(()=>refresh(requestSignal,()=>retained,track));
+  // A response deadline may win a DB race, but its owned operation is still
+  // retained through settlement (including acquire's late-abort release).
+  const lifetime=work.then(()=>Promise.allSettled(operations)).then(()=>{});
+  try{if(options.waitUntil){options.waitUntil(lifetime);retained=true;}}
+  catch{retained=false;}
+  return work;
  }
  function reply():CftcReply{
   const at=now(),age=snapshot?at-Date.parse(snapshot.fetched_at):null;
@@ -81,7 +100,7 @@ export function createCftcHandler(options:{gate:CftcGate;fetcher?:typeof fetch;n
    }
   }
   catch{error='source_gate_unavailable';const status={...reply().status,state:'unavailable'};return Response.json(mode==='status'?status:{status,snapshot:null},{status:503,headers:{'Cache-Control':'no-store'}});}
-  if(mode==='snapshot'&&!denied&&!busy&&now()>=retryAt){pending??=refresh().finally(()=>{pending=undefined;});await pending;}
+  if(mode==='snapshot'&&!denied&&!busy&&now()>=retryAt){pending??=retainedRefresh(request.signal).finally(()=>{pending=undefined;});await pending;}
   const result=reply();return Response.json(mode==='status'?result.status:result,{status:mode==='status'||result.snapshot?200:503,headers:{'Cache-Control':'no-store','X-Data-Status':result.status.state}});
  };
 }

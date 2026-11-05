@@ -32,7 +32,7 @@ export default function FuturesPositioning(){
  const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
  const stale=!!snapshot&&(failure==='network'||data?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||days!>STALE_REPORT_DAYS);
  const groupLabel=GROUPS.find(g=>g.id===group)!.label;
- return <main className={s.root}>
+ return <div className={s.surface}><main className={s.root}>
   <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/ashare">A 股热力图 ↗</a></header>
   <section className={s.intro}><p className={s.eyebrow}>FUTURES / CFTC COMMITMENTS OF TRADERS</p><h1>期货，看持仓的两面。</h1><p className={s.subtitle}>4 个精选美国 CFTC 期货市场 · 官方公开数据 · 不需要账户或密钥</p><p className={s.notice}>这是有发布滞后的定期持仓报告，不是实时资金流。多头减空头是该类交易者的净持仓；持仓变化不等于资金净流入。</p></section>
   <section className={s.status} aria-live="polite"><div><strong>{failure==='permission'?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取 CFTC 报告':snapshot?stale?'已保留报告 · 请注意陈旧状态':'已取得可校验报告':'暂无可验证的持仓报告'}</strong><p>{failure==='permission'?'已清空浏览器证据并停止检查。':failure==='invalid'?'响应未通过完整校验，已清空浏览器证据。':denied?'来源拒绝访问后停止自动请求，不切换路径。':failure==='network'?'连接失败；仅保留未超过展示期限的已校验报告。':'每小时检查。通常为周度报告，实际观测日期以报告为准。获取成功不表示数据实时。'}</p>{data?.status.error_code&&<small>{data.status.error_code}</small>}</div><button onClick={()=>void refresh()} disabled={loading||denied||failure==='permission'}>{loading?'正在检查…':'检查报告'}</button></section>
@@ -54,5 +54,5 @@ export default function FuturesPositioning(){
    })}</section>
   </>:<section className={s.empty}><h2>数据缺失时，不填入示例。</h2><p>四个市场的本期和前期记录全部通过合约、单位、日期和多空平衡校验后才展示。报告超过 35 天或获取缓存超过 24 小时后停止展示。</p></section>}
   <section className={s.sources}><h2>先理解口径，再看变化。</h2><ul><li>Legacy Futures Only 把持仓分为商业、非商业和非报告持仓。分类依据报告规则，不能直接称为“聪明钱”或买卖信号。</li><li>商业与非商业持仓用于不同目的，净多头不保证看涨或获利。持仓变化还可能受移仓、平仓、分类变化或数据修订影响。</li><li>单位是各市场的合约张数，合约规模不同，不相加、不换算名义美元，不把黄金、原油、玉米或欧元期货扩展为全球资金流。</li><li>传统周度安排通常为周二持仓、周五 15:30 美东时间发布；假日会延后。CFTC 已宣布计划在 2026 年底前增加发布频率，本页始终显示实际日期和间隔，不猜测发布时间。</li><li>报告距观测日期超过 10 天提示陈旧，这是本应用的保守阈值，不是来源发布 SLA。官方 API 没有给每条记录的实际发布时间；获取时间与发布时间不同。</li></ul><div className={s.links}><a href={CFTC_DATASET} target="_blank" rel="noreferrer">CFTC 官方数据集 ↗</a><a href={CFTC_SCHEDULE} target="_blank" rel="noreferrer">官方发布日历 ↗</a><a href="https://www.cftc.gov/MarketReports/CommitmentsofTraders/ExplanatoryNotes/index.htm" target="_blank" rel="noreferrer">字段与分类说明 ↗</a><a href="https://www.cftc.gov/PressRoom/PressReleases/9316-26" target="_blank" rel="noreferrer">2026 年频率变更计划 ↗</a></div></section>
- </main>;
+ </main></div>;
 }

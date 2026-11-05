@@ -75,6 +75,17 @@ redirects and HTML/challenge replies permanently stop that gate. Ordinary source
 failures use backoff and honor Retry-After. Unknown upstream exception codes are
 not passed to the client.
 
+Before admission, the host synchronously registers the acquisition and all owned
+D1 settlement with Workers `waitUntil`. Missing or failed lifetime registration
+fails closed before acquisition. With the production `enable_request_signal`
+flag, a disconnected request aborts collection but retains release of its own
+lease and the shared cooldown. A bounded response can finish before an uncertain
+D1 result, but the original operation remains retained through settlement,
+including a late granted lease's abort cleanup. No late result is taken over,
+reset or retried. An observed source denial still persists if cancellation also
+occurs. Workers lifetime limits or process loss can still leave a busy gate; the
+application does not automatically clear it.
+
 An independent `cftc_source_gate` stores coordination metadata and the validated
 public official report in existing private D1. The report cache is schema-checked
 on each read; successful release stores it atomically with the acquisition
@@ -98,19 +109,27 @@ remain visible. No accounts, private positions or trading execution are added.
 
 - Parser and API tests cover identity, units, OI, dates, interval semantics,
   completeness, byte/deadline limits, caching, stale/expired states, stop behavior,
-  persistent-gate errors, query refusal, concurrent checks and no-secret diagnostics.
+  persistent-gate errors, query refusal, concurrent checks, cancellation, rejected
+  lifetime registration, retained late D1 settlement and no-secret diagnostics.
 - Browser component tests cover category switching, signed normalized bars,
   incomplete data, two-day intervals, expiry while hidden, access removal,
   malformed successful replies, authentication redirects, double clicks, unmount
   aborts and source denial.
 - `npm run test:cftc-runtime` runs the actual checked-in host in native workerd and
   D1 with all external network disabled. Synthetic plain, gzip and Brotli data,
-  cold-worker cache reuse, shared cooldown, Retry-After and persistent denials are checked. Existing
-  blocked A-share gate state must remain unchanged.
+  distinct warm/cold worker cache reuse, shared cooldown, Retry-After and
+  persistent denials are checked. An explicit abort after the HTTP response ends
+  verifies retained cleanup in native workerd; Miniflare does not forward actual
+  Node-client socket cancellation. The appended migration and runtime must leave
+  every existing blocked A-share, Sina, Kraken and ECB gate unchanged.
 - TypeScript, ESLint and production build are separate required checks.
-- Chromium screenshot testing was attempted but blocked before navigation by the
-  execution environment's socket startup restriction. Component tests and build
-  passed; visual browser QA is not claimed.
+- Local browser QA covered the actual `/futures` unavailable-storage state and
+  a temporary synthetic-data harness at desktop and a 375px iframe (360px
+  document excluding the scrollbar). Four cards, commercial negative positions,
+  non-reportable zero positions, EUR 125,000 contract details, dark-background
+  contrast and no horizontal overflow were checked. The harness was removed;
+  no synthetic route or financial fixture is shipped. This does not establish
+  live CFTC or authenticated production availability.
 
 Apply the appended `0005_cftc_futures_gate.sql` using the supported migration
 workflow before deployment, after existing migrations including the FX gate.
