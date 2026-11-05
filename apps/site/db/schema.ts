@@ -74,6 +74,16 @@ export const cftcSourceGate=sqliteTable('cftc_source_gate',{
  check('cftc_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
 
+/** Public official TPEx report cache and independent gate. No private user data. */
+export const tpexSourceGate=sqliteTable('tpex_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('tpex_gate_id',sql`${t.id} = 'institutional_shares'`),
+ check('tpex_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('tpex_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);
+
 /** Public ASEANstats annual FDI report cache and independent acquisition gate. */
 export const aseanSourceGate=sqliteTable('asean_source_gate',{
  id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),

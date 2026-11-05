@@ -117,11 +117,10 @@ Cache expires after seven days in both browser and server; failures cannot renew
 its age. Busy/unavailable coordination never starts concurrent collection, and
 uncertain writes fail closed.
 
-`0010_asean_fdi_gate.sql` is appended only, with a source-specific row/table.
-**Migration number and journal index are provisional**, reserved with integration:
-0007 TPEx, 0008 World Bank, 0009 CVM, 0010 ASEAN. This branch starts from main
-b2764343 and therefore its local journal has this as the next entry. Reconcile the
-journal index when combining branches, without editing existing gate rows.
+`0008_asean_fdi_gate.sql` is appended after the canonical TPEx 0007 migration,
+with an independent source table and initial row. Generated snapshot metadata
+retains all prior tables. World Bank PR11 remains held and must use a later index;
+CVM reserves 0009. No existing gate row is altered.
 
 ## Verification
 
@@ -133,9 +132,12 @@ journal index when combining branches, without editing existing gate rows.
   daily cooldown; all existing gate states unchanged; two-day Retry-After; denial
   clears warm and shared cache; request abort still settles the exact owned lease.
   All external network is disabled and observations are synthetic in this test.
-- Full app suite: 662 tests in 44 files passed; ESLint, TypeScript no-emit and
+- Final integrated app suite: 722 tests in 48 files passed; ESLint, TypeScript no-emit and
   production build passed.
-- Pixel QA did not run: installed Chromium cannot create its required local
-  socket (`EPERM`), including after reviewed escalation. Integration must verify
-  desktop/mobile rendering in its permitted browser environment.
+- Integration browser QA passed against synthetic local fixtures on desktop and
+  320/375px responsive layouts: all 220 cells, repeated detail close/selection,
+  year/country filters, duplicate raw values and missing/denied states. Single-
+  country views fit the viewport; the industry header stays visible while the
+  full matrix scrolls. Tiny nonzero values use scientific notation rather than
+  displaying zero. No synthetic preview route or fixture data is deployed.
 - No deployment or production-host acquisition is implied by local verification.

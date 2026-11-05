@@ -15,12 +15,12 @@ describe('market navigation',()=>{
  it('links only implemented pages including the separate daily FX reference',()=>{
   render(<MarketNavigation/>);
   const nav=screen.getByRole('navigation',{name:'市场导航'});
-  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/markets','/asean','/crypto','/futures','/forex','/']);
+  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/taiwan','/markets','/asean','/crypto','/futures','/forex','/']);
   expect(within(nav).getByRole('link',{name:'外汇参考'}).getAttribute('href')).toBe('/forex');
   expect(within(nav).queryByText('即将接入')).toBeNull();
   for(const link of marketLinks)expect(existsSync(resolve(process.cwd(),`app${link.href==='/'?'':link.href}/page.tsx`))).toBe(true);
  });
- it.each(['/ashare','/markets','/asean','/crypto','/futures','/forex','/'])('marks the exact current page %s',route=>{
+ it.each(['/ashare','/taiwan','/markets','/asean','/crypto','/futures','/forex','/'])('marks the exact current page %s',route=>{
   pathname=route;const {container}=render(<MarketNavigation/>);
   expect(container.querySelectorAll('[aria-current=page]')).toHaveLength(1);
   expect(container.querySelector('[aria-current=page]')?.getAttribute('href')).toBe(route);

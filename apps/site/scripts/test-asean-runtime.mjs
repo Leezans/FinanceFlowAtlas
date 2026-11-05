@@ -28,9 +28,9 @@ const {outputFiles}=await build({stdin:{contents:`
   }
   return aseanHandler(request);
  }};`,resolveDir:root,sourcefile:'asean-offline-worker.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
-const migration=await readFile(new URL('../drizzle/0010_asean_fdi_gate.sql',import.meta.url),'utf8');
-const priorMigrations=await Promise.all(['0000_silly_ogun','0001_wild_jigsaw','0002_faithful_pyro','0003_brainy_donald_blake','0004_ecb_fx_gate','0005_cftc_futures_gate','0006_ecb_fx_shared_cache'].map(name=>readFile(new URL(`../drizzle/${name}.sql`,import.meta.url),'utf8')));
-const priorGates=['ashare_source_gate','sina_source_gate','kraken_source_gate','ecb_fx_source_gate','cftc_source_gate'];
+const migration=await readFile(new URL('../drizzle/0008_asean_fdi_gate.sql',import.meta.url),'utf8');
+const priorMigrations=await Promise.all(['0000_silly_ogun','0001_wild_jigsaw','0002_faithful_pyro','0003_brainy_donald_blake','0004_ecb_fx_gate','0005_cftc_futures_gate','0006_ecb_fx_shared_cache','0007_tpex_institutional_gate'].map(name=>readFile(new URL(`../drizzle/${name}.sql`,import.meta.url),'utf8')));
+const priorGates=['ashare_source_gate','sina_source_gate','kraken_source_gate','ecb_fx_source_gate','cftc_source_gate','tpex_source_gate'];
 const url='https://test.invalid/api/v1/asean/fdi/snapshot';
 const {outputFiles:modelFiles}=await build({stdin:{contents:"export {FLOW_URL} from './lib/asean/adapter';export {fixture} from './tests/asean-fixture';",resolveDir:root,sourcefile:'asean-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
 const {FLOW_URL,fixture}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
@@ -51,7 +51,7 @@ async function scenario(mode,fn){
  try{
   const db=await mf.getD1Database('DB','warm');
   for(const sql of priorMigrations)for(const statement of sql.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();
-  await db.prepare("UPDATE ashare_source_gate SET status='blocked',reason_code='http_403' WHERE id='single_upstream'").run();
+  await db.prepare("UPDATE ashare_source_gate SET status='busy',lease_token='offline-legacy-busy',reason_code=NULL WHERE id='single_upstream'").run();
   for(const table of priorGates.slice(1))await db.prepare(`UPDATE ${table} SET status='blocked'`).run();
   const previous=await Promise.all(priorGates.map(table=>db.prepare(`SELECT * FROM ${table}`).all()));
   for(const statement of migration.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();

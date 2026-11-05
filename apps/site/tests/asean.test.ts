@@ -3,7 +3,7 @@ import {FLOW_URL,parseFdi,requestBody} from '../lib/asean/adapter';
 import {HOSTS,SECTORS,YEARS,CELL_COUNT} from '../lib/asean/dimensions';
 import {createFdiHandler,type FdiGate} from '../lib/asean/handler';
 import {REFRESH_MS,MAX_CACHE_AGE_MS,replySchema,visibleSnapshot,type FdiReply} from '../lib/asean/model';
-import {cellText,colorKey,yearCells,yearMaximum} from '../components/asean/matrix';
+import {cellText,colorKey,yearCells,yearMaximum,valueText} from '../components/asean/matrix';
 import {fixture,NOW,ISO,reply,snapshot,row} from './asean-fixture';
 function gate():FdiGate{return {inspect:vi.fn(async()=>({state:'idle' as const,retryAt:0,snapshot:null})),acquire:vi.fn(async()=>({token:'synthetic-lease'})),release:vi.fn(async()=>{})};}
 const request=(mode='snapshot')=>new Request(`https://test.invalid/api/v1/asean/fdi/${mode}`);
@@ -32,3 +32,5 @@ describe('bounded public acquisition and durable permission stops',()=>{
  it('times out hung admission with no takeover',async()=>{vi.useFakeTimers();const t=setup();vi.mocked(t.g.acquire).mockImplementation(()=>new Promise(()=>{}));const r=t.handler(request());await vi.advanceTimersByTimeAsync(25_001);expect((await body(await r)).status.error_code).toBe('source_gate_outcome_unconfirmed');expect(t.fetcher).not.toHaveBeenCalled();});
  it('rejects duplicate JSON keys and decoded body overflow',async()=>{for(const raw of ['{"Trade":[],"Trade":[]}','x'.repeat(4_000_001)]){const t=setup();t.fetcher.mockImplementation(async()=>new Response(raw,{headers:{'content-type':'application/json'}}));expect((await body(await t.handler(request()))).snapshot).toBeNull();}});
 });
+
+it('does not display nonzero small FDI as zero',()=>{expect(valueText(0.004)).toBe('+4.00e-3');expect(valueText(-0.004)).toBe('-4.00e-3');expect(valueText(0)).toBe('0');expect(valueText(1e-40)).toBe('+1.00e-40');const c={...snapshot().cells.find(c=>c.state==='reported')!,value:1e-40};expect(colorKey(c,1e-40)).toBe('positive-3');});
