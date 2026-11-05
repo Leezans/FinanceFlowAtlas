@@ -36,6 +36,13 @@
       "when": 1793857639330,
       "tag": "0004_ecb_fx_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793858027229,
+      "tag": "0005_cftc_futures_gate",
+      "breakpoints": true
     }
   ]
 }

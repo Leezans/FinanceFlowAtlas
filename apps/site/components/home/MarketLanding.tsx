@@ -25,6 +25,11 @@ export default function MarketLanding() {
         <div className={s.content}><span className={s.kicker}>BTC / ETH · USD</span><h2>加密现货</h2><p>Kraken 单一交易所价格与成交量。</p><small>成交量不是资金净流入</small></div>
         <ArrowRight className={s.arrow} size={18} aria-hidden="true"/>
       </a>
+      <a className={s.card} href="/futures" aria-label="打开期货持仓：美国 CFTC 精选市场">
+        <ArrowLeftRight className={s.icon} size={25} aria-hidden="true"/>
+        <div className={s.content}><span className={s.kicker}>CFTC · 有发布滞后</span><h2>期货持仓</h2><p>黄金、原油、玉米与欧元期货的多空持仓。</p><small>合约张数与持仓变化，不是资金流</small></div>
+        <ArrowRight className={s.arrow} size={18} aria-hidden="true"/>
+      </a>
       <a className={s.card} href="/forex" aria-label="打开外汇参考：ECB 每日汇率">
         <ArrowLeftRight className={s.icon} size={25} aria-hidden="true"/>
         <div className={s.content}><span className={s.kicker}>ECB · 每日参考</span><h2>外汇参考</h2><p>欧洲央行参考汇率与交叉换算。</p><small>参考汇率不是资金流或实时交易报价</small></div>
