@@ -7,6 +7,7 @@ export type SourceLease = { token: string };
 export interface SourceGate {
   acquire(scope: string, signal?: AbortSignal): Promise<SourceLease>;
   release(token: string, outcome: SourceOutcome): Promise<void>;
+  inspect?(): Promise<SourceGateCode | null>;
 }
 export type SourceGateCode = 'source_denied' | 'source_busy' | 'source_outcome_unconfirmed' | 'source_cooldown' |
   'source_gate_unavailable' | 'source_stale_lease' | 'source_aborted';
@@ -68,8 +69,12 @@ export class D1SourceGate implements SourceGate {
       return { token };
     }
     if (acquired.meta?.changes !== 0) throw new SourceGateError('source_gate_unavailable');
+    throw new SourceGateError((await this.inspect()) ?? 'source_gate_unavailable');
+  }
+  /** Read-only shared status: does not acquire, expire, clear, or retry anything. */
+  async inspect(): Promise<SourceGateCode | null> {
     const state = (await this.run(SQL.inspect)).results?.[0];
-    if (state?.status === 'blocked') throw new SourceGateError('source_denied');
+    if (state?.status === 'blocked') return 'source_denied';
     // A busy operation may be crashed or still active. Never guess or take over.
     if (state?.status === 'busy') {
       // Age changes only the explanation. Never release, reset, or retry this
@@ -77,11 +82,11 @@ export class D1SourceGate implements SourceGate {
       if (typeof state.acquired_ms !== 'number' || !Number.isSafeInteger(state.acquired_ms) || state.acquired_ms < 0 ||
         typeof state.now_ms !== 'number' || !Number.isSafeInteger(state.now_ms) || state.now_ms < state.acquired_ms)
         throw new SourceGateError('source_gate_unavailable');
-      throw new SourceGateError(state.now_ms - state.acquired_ms >= UNCONFIRMED_AFTER_MS ? 'source_outcome_unconfirmed' : 'source_busy');
+      return state.now_ms - state.acquired_ms >= UNCONFIRMED_AFTER_MS ? 'source_outcome_unconfirmed' : 'source_busy';
     }
-    if (state?.status === 'idle' && typeof state.not_before_ms === 'number' &&
-      typeof state.now_ms === 'number' && state.not_before_ms > state.now_ms)
-      throw new SourceGateError('source_cooldown');
+    if (state?.status === 'idle' && typeof state.not_before_ms === 'number' && Number.isSafeInteger(state.not_before_ms) && state.not_before_ms >= 0 &&
+      typeof state.now_ms === 'number' && Number.isSafeInteger(state.now_ms) && state.now_ms >= 0)
+      return state.not_before_ms > state.now_ms ? 'source_cooldown' : null;
     // Concurrent changes or absent/malformed row are fail-closed too.
     throw new SourceGateError('source_gate_unavailable');
   }

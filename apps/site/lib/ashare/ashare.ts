@@ -1,5 +1,6 @@
 import {strictJSON} from './strict-json';
 import {safeSourceCode} from './recovery';
+import type {SourceGateCode} from './source-gate';
 export const NUMERIC_FIELDS=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'] as const;
 export const FIELDS=['f12','f14',...NUMERIC_FIELDS] as const;
 const PATH='/api/qt/clist/get';
@@ -11,22 +12,21 @@ export type Row={f12:string;f14:string}&Record<typeof NUMERIC_FIELDS[number],num
 type Snapshot={rows:Row[];source_total:number;fetched_at:string;scope:Scope;page_count:number};
 type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>;errorCode?:string};
 export type SourceOutcome={kind:'success'|'temporary_failure'|'denied';reason?:string};
-export interface SourceGate {acquire(scopeKey:string,signal:AbortSignal):Promise<{token:string}>;release(token:string,outcome:SourceOutcome):Promise<void>;}
+export interface SourceGate {acquire(scopeKey:string,signal:AbortSignal):Promise<{token:string}>;release(token:string,outcome:SourceOutcome):Promise<void>;inspect?():Promise<SourceGateCode|null>;}
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
 type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean;errorCode?:string};
 class SourceDenied extends Error {
   constructor(code:string,readonly response?:Response){super(code);}
 }
-const DENIED_DISPOSAL_MS=1000;
-async function discardDeniedResponse(response?:Response):Promise<void> {
-  if(!response)return;
+const DISPOSAL_MS=1000;
+async function boundedDisposal(dispose:()=>Promise<unknown>|undefined):Promise<void>{
   let timer:ReturnType<typeof setTimeout>|undefined;
-  try{
-    // Called only AFTER the durable outcome write has settled. Native or custom
-    // body cleanup must never delay recording an already-observed denial.
-    const cleanup=Promise.resolve().then(()=>response.body?.cancel()).catch(()=>{});
-    await Promise.race([cleanup,new Promise<void>(resolve=>{timer=setTimeout(resolve,DENIED_DISPOSAL_MS);})]);
-  }finally{if(timer!==undefined)clearTimeout(timer);}
+  try{await Promise.race([Promise.resolve().then(dispose).catch(()=>{}),new Promise<void>(resolve=>{timer=setTimeout(resolve,DISPOSAL_MS);})]);}
+  finally{if(timer!==undefined)clearTimeout(timer);}
+}
+async function discardDeniedResponse(response?:Response):Promise<void> {
+  // Called only after the durable denial write has settled.
+  if(response)await boundedDisposal(()=>response.body?.cancel());
 }
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
@@ -90,14 +90,14 @@ async function body(response:Response,budget:number,signal:AbortSignal):Promise<
   // Accept only a single supported coding, never decode the stream twice, and
   // enforce MAX_BYTES against the decoded stream below (not Content-Length).
   const encoding=response.headers.get('content-encoding')?.trim().toLowerCase();
-  if(encoding&&!['identity','gzip','br'].includes(encoding)){await response.body?.cancel();throw new Error('unsupported_content_encoding');}
+  if(encoding&&!['identity','gzip','br'].includes(encoding)){await boundedDisposal(()=>response.body?.cancel());throw new Error('unsupported_content_encoding');}
   const length=response.headers.get('content-length');
-  if(length!==null&&(!/^[0-9]{1,12}$/.test(length)||Number(length)>budget)){await response.body?.cancel();throw new Error('byte_budget');}
+  if(length!==null&&(!/^[0-9]{1,12}$/.test(length)||Number(length)>budget)){await boundedDisposal(()=>response.body?.cancel());throw new Error('byte_budget');}
   const reader=response.body?.getReader();if(!reader)return new Uint8Array();
   const chunks:Uint8Array[]=[];let size=0;
   const cancel=()=>{void reader.cancel().catch(()=>{});};signal.addEventListener('abort',cancel,{once:true});
   try{while(true){abortCheck(signal);const part=await reader.read();abortCheck(signal);if(part.done)break;if(part.value.byteLength>budget-size)throw new Error('byte_budget');size+=part.value.byteLength;chunks.push(part.value);}}
-  finally{signal.removeEventListener('abort',cancel);await reader.cancel().catch(()=>{});reader.releaseLock();}
+  finally{signal.removeEventListener('abort',cancel);await boundedDisposal(()=>reader.cancel());reader.releaseLock();}
   const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
 /** Server-only: no background worker; no network until an enabled snapshot GET. */
@@ -129,7 +129,9 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           const wait=INTERVAL-(now()-state.lastRequest);if(wait>0)await sleep(wait,signal);
           abortCheck(signal);if(!enabled())throw new Error('disabled');if(now()-start>=DEADLINE)throw new Error('deadline');
           state.lastRequest=now();
+          console.info('[ashare lifecycle]',JSON.stringify({event:'source_request',scope:scope.kind,page,redirects}));
           response=await fetcher(url,{method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'},signal});
+          console.info('[ashare lifecycle]',JSON.stringify({event:'source_response',scope:scope.kind,page,status:response.status}));
           const isRedirect=[301,302,303,307,308].includes(response.status);
           let nextUrl:string|undefined;
           if(isRedirect){
@@ -194,13 +196,14 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           lease=await acquire();
         }
         if(!lease||typeof lease.token!=='string'||!lease.token)throw new SourceDenied('invalid_source_lease');
+        console.info('[ashare lifecycle]',JSON.stringify({event:'lease_acquired',scope:scope.kind}));
         let next:Snapshot|undefined, collectionError:unknown;
         let outcome:SourceOutcome={kind:'success'};
         try{next=await collect(scope,acquisition.signal);}
         catch(error){collectionError=error;outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:'temporary_failure',reason:'collection_failed'};}
         // Release exactly once, including cancellation, and never silently ignore a
         // failed/uncertain write. No publication until persistence confirms release.
-        try{await sourceGate.release(lease.token,outcome);}
+        try{await sourceGate.release(lease.token,outcome);console.info('[ashare lifecycle]',JSON.stringify({event:'lease_released',scope:scope.kind,outcome:outcome.kind}));}
         catch{throw new SourceDenied('source_gate_release_unconfirmed');}
         finally{if(collectionError instanceof SourceDenied)await discardDeniedResponse(collectionError.response);}
         if(collectionError)throw collectionError;
@@ -251,7 +254,18 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     let scope:Scope;try{scope=parseScope(url);}catch{return reply(400,{error:'invalid_scope'});}
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     const key=scope.fs;let entry=state.entries.get(key);
-    if(url.pathname.endsWith('/status')){const issue=diagnostic(entry);return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue,refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);}
+    if(url.pathname.endsWith('/status')){
+      let issue=diagnostic(entry);
+      if(sourceGate?.inspect){
+        let timer:ReturnType<typeof setTimeout>|undefined;
+        try{
+          const shared=await Promise.race([sourceGate.inspect(),new Promise<SourceGateCode>(resolve=>{timer=setTimeout(()=>resolve('source_gate_unavailable'),2000);})]);
+          if(shared){const code=safeSourceCode(shared)??'source_gate_unavailable';const next={code,stopped:code==='source_denied'||code==='source_outcome_unconfirmed',retrySeconds:60};if(!issue?.stopped||next.stopped)issue=next;}
+        }catch{if(!issue?.stopped)issue={code:'source_gate_unavailable',stopped:false,retrySeconds:60};}
+        finally{if(timer!==undefined)clearTimeout(timer);}
+      }
+      return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue,refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
+    }
     if(!entry){
       // One level-1 plus one selected industry cache. Never evict in-flight work.
       if(scope.kind==='industry_stocks'){for(const [k,v]of state.entries){if(k.startsWith('b:')){if(v.pending)return reply(503,{state:'unavailable',error_code:'source_busy',message:'行业采集进行中，请稍后重试。'},undefined,{code:'source_busy',stopped:false,retrySeconds:60});state.entries.delete(k);}}}

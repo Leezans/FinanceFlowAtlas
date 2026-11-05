@@ -128,3 +128,11 @@ test('missing or future acquisition metadata fails closed, never guesses duratio
     assert.equal(db.status,'busy'); assert.equal(db.token,token);
   }
 });
+
+test('shared inspection reads unresolved/denied/cooldown/idle without acquiring or altering metadata',async()=>{
+ const db=new FakeD1();const g=new D1SourceGate(db);assert.equal(await g.inspect(),null);
+ const lease=await g.acquire('level1');const token=db.token;assert.equal(await g.inspect(),'source_busy');assert.equal(db.token,token);
+ db.now+=UNCONFIRMED_AFTER_MS;assert.equal(await new D1SourceGate(db).inspect(),'source_outcome_unconfirmed');assert.equal(db.token,token);
+ await g.release(lease.token,{kind:'temporary_failure'});assert.equal(await g.inspect(),'source_cooldown');db.now+=60_000;assert.equal(await g.inspect(),null);
+ const next=await g.acquire('level1');await g.release(next.token,{kind:'denied',reason:'http_403'});assert.equal(await new D1SourceGate(db).inspect(),'source_denied');
+});

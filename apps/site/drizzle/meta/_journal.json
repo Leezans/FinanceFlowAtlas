@@ -71,6 +71,13 @@
       "when": 1793865049988,
       "tag": "0009_cvm_monthly_fund_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793867433557,
+      "tag": "0010_ashare_legacy_reconciliation",
+      "breakpoints": true
     }
   ]
 }

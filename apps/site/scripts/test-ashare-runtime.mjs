@@ -197,6 +197,10 @@ await withWorkers('plain',async(mf,db,calls)=>{
   // Synthetic legacy operation with unknown outcome. Never touch production.
   await db.prepare("UPDATE ashare_source_gate SET status='busy',lease_token='synthetic-unconfirmed',acquired_ms=1000,updated_ms=1000,reason_code=NULL WHERE id='single_upstream'").run();
   const before=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  const coldStatus=await (await mf.getWorker('cold')).fetch(endpoint.replace('/snapshot','/status'));
+  assert.equal((await coldStatus.json()).error_code,'source_outcome_unconfirmed');
+  assert.equal(coldStatus.headers.get('x-ashare-recovery'),'stopped');assert.equal(calls(),0);
+  assert.deepEqual(await db.prepare('SELECT * FROM ashare_source_gate').first(),before);
   for(const fetcher of [mf,await mf.getWorker('cold')]) {
     const response=fetcher===mf?await mf.dispatchFetch(endpoint):await fetcher.fetch(endpoint);
     assert.equal(response.status,503);
@@ -209,3 +213,26 @@ await withWorkers('plain',async(mf,db,calls)=>{
   assert.deepEqual(await db.prepare('SELECT * FROM ashare_source_gate').first(),before,'diagnosis must preserve every lease/denial field exactly');
 });
 console.log('PASS native unconfirmed legacy operation: zero source calls; every D1 field preserved across isolates');
+
+await withWorkers('plain',async(mf,db,calls)=>{
+  // Test only: initialize operation metadata matching the one-time repair.
+  // This is not a production mutation and no captured provider values are used.
+  await db.prepare("UPDATE ashare_source_gate SET status='busy',lease_token='5c3f28a0-6303-4432-8dab-019ff369586e',acquired_ms=1793856991992,finished_ms=1793842921309,updated_ms=1793856991992,not_before_ms=1793842924309,reason_code=NULL WHERE id='single_upstream'").run();
+  const before=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  const migration=await readFile(new URL('../drizzle/0010_ashare_legacy_reconciliation.sql',import.meta.url),'utf8');
+  for(const sql of migration.split('--> statement-breakpoint'))await db.prepare(sql.trim()).run();
+  const gate=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  assert.equal(gate.status,'idle');assert.equal(gate.lease_token,null);assert.equal(gate.not_before_ms-gate.finished_ms,60_000);
+  const audit=await db.prepare('SELECT * FROM ashare_recovery_audit').first();
+  assert.equal(audit.prior_lease_token,before.lease_token);assert.equal(audit.source_outcome,'unknown');assert.equal(audit.invocation_outcome,'canceled_terminal');
+  const deniedDuringCooldown=await mf.dispatchFetch(endpoint);assert.equal(deniedDuringCooldown.status,503);assert.equal(calls(),0);
+  // Elapse cooldown in the isolated fixture only; the production migration never skips it.
+  await db.prepare('UPDATE ashare_source_gate SET not_before_ms=0 WHERE status=\'idle\'').run();
+  const cold=await mf.getWorker('cold');const snapshot=await cold.fetch(endpoint);assert.equal(snapshot.status,200);
+  assert.equal((await snapshot.json()).rows.length,1);assert.equal(calls(),1);
+  const finished=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  for(const sql of migration.split('--> statement-breakpoint'))await db.prepare(sql.trim()).run();
+  assert.deepEqual(await db.prepare('SELECT * FROM ashare_source_gate').first(),finished);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM ashare_recovery_audit').first()).n,1);
+});
+console.log('PASS native one-time audited repair: exact legacy lease only, shared cooldown, synthetic cold-start snapshot, replay no-op');

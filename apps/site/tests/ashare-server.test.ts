@@ -287,3 +287,63 @@ describe('unconfirmed acquisition outcome',()=>{
   expect(sourceGate.acquire).toHaveBeenCalledTimes(1);expect(sourceGate.release).not.toHaveBeenCalled();expect(fetcher).not.toHaveBeenCalled();
  });
 });
+
+describe('bounded ordinary response cleanup',()=>{
+ it.each(['encoding','bytes'])('does not strand a lease when %s rejection has hanging cancel',async reason=>{
+  const gate={async acquire(){return {token:'synthetic-cleanup'};},release:vi.fn(async()=>{})};
+  const body=new ReadableStream({cancel(){return new Promise<void>(()=>{});}});
+  const headers:Record<string,string>={'content-type':'application/json'};
+  if(reason==='encoding')headers['content-encoding']='compress';else headers['content-length']='4000001';
+  const response=make(async()=>new Response(body,{headers}),{sourceGate:gate})(request());
+  await vi.advanceTimersByTimeAsync(1001);
+  expect((await response).status).toBe(503);
+  expect(gate.release).toHaveBeenCalledTimes(1);
+  expect(gate.release).toHaveBeenCalledWith('synthetic-cleanup',{kind:'temporary_failure',reason:'collection_failed'});
+ });
+ it('body budget failure also bounds reader cancellation before release',async()=>{
+  const gate={async acquire(){return {token:'synthetic-body'};},release:vi.fn(async()=>{})};
+  const body=new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new Uint8Array(4_000_001));},cancel(){return new Promise<void>(()=>{});}});
+  const response=make(async()=>new Response(body,{headers:{'content-type':'application/json'}}),{sourceGate:gate})(request());
+  await vi.advanceTimersByTimeAsync(1001);expect((await response).status).toBe(503);expect(gate.release).toHaveBeenCalledTimes(1);
+ });
+});
+
+describe('read-only shared status across cold starts',()=>{
+ it.each(['source_outcome_unconfirmed','source_denied','source_busy','source_cooldown'] as const)('reports shared %s before any snapshot/acquisition',async code=>{
+  const f=vi.fn();const gate={inspect:vi.fn(async()=>code),acquire:vi.fn(),release:vi.fn()};
+  const response=await make(f,{sourceGate:gate})(request('level1','status'));
+  expect(await response.json()).toMatchObject({state:'unavailable',has_error:true,error_code:code});
+  expect(response.headers.get('x-ashare-recovery')).toBe(['source_outcome_unconfirmed','source_denied'].includes(code)?'stopped':'retry');
+  expect(gate.inspect).toHaveBeenCalledOnce();expect(gate.acquire).not.toHaveBeenCalled();expect(f).not.toHaveBeenCalled();
+ });
+ it('bounds an unresolved read without acquiring and surfaces unavailable coordination',async()=>{
+  const f=vi.fn();const gate={inspect:()=>new Promise<null>(()=>{}),acquire:vi.fn(),release:vi.fn()};
+  const response=make(f,{sourceGate:gate})(request('level1','status'));await vi.advanceTimersByTimeAsync(2000);
+  expect(await (await response).json()).toMatchObject({has_error:true,error_code:'source_gate_unavailable'});expect(gate.acquire).not.toHaveBeenCalled();expect(f).not.toHaveBeenCalled();
+ });
+ it('does not disclose storage exceptions from read-only status',async()=>{
+  const gate={inspect:async()=>{throw new Error('private-secret');},acquire:vi.fn(),release:vi.fn()};
+  const response=await make(vi.fn(),{sourceGate:gate})(request('level1','status'));
+  expect(await response.text()).not.toContain('private-secret');expect(response.headers.get('x-ashare-error-code')).toBe('source_gate_unavailable');
+ });
+});
+
+describe('status denial precedence',()=>{
+ it.each(['source_busy','source_cooldown','source_gate_unavailable','throws','timeout'] as const)('shared %s never downgrades a stopped local handler to retry',async shared=>{
+  const gate={
+   inspect:async()=>{if(shared==='throws')throw new Error('storage');if(shared==='timeout')return new Promise<null>(()=>{});return shared;},
+   acquire:async()=>{throw Object.assign(new Error('denied'),{code:'source_denied'});},release:vi.fn(),
+  };
+  const f=vi.fn();const h=make(f,{sourceGate:gate});const snapshot=await h(request());expect(snapshot.headers.get('x-ashare-recovery')).toBe('stopped');
+  const pending=h(request('level1','status'));if(shared==='timeout')await vi.advanceTimersByTimeAsync(2000);const status=await pending;
+  expect(status.headers.get('x-ashare-recovery')).toBe('stopped');expect(status.headers.get('retry-after')).toBeNull();
+  expect(await status.json()).toMatchObject({has_error:true,error_code:'persistent_source_denial'});expect(f).not.toHaveBeenCalled();
+ });
+});
+
+it('read-only status preserves a local unconfirmed stop after shared cooldown begins',async()=>{
+ const gate={inspect:async()=> 'source_cooldown' as const,acquire:async()=>{throw Object.assign(new Error('unknown'),{code:'source_outcome_unconfirmed'});},release:vi.fn()};
+ const h=make(vi.fn(),{sourceGate:gate});await h(request());const response=await h(request('level1','status'));
+ expect(response.headers.get('x-ashare-recovery')).toBe('stopped');expect(response.headers.get('retry-after')).toBeNull();
+ expect(await response.json()).toMatchObject({error_code:'source_outcome_unconfirmed'});
+});

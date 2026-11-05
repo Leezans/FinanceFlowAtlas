@@ -146,3 +146,48 @@ An offline workerd test seeds only a synthetic legacy busy row and verifies that
 all fields are byte-for-byte unchanged across two isolates with zero source calls.
 This fixes diagnosis and retry behavior, not the availability of current A-share
 observations, and must not be described as restored source data.
+
+## One-time operational reconciliation, 2026-11-05
+
+The 05:36:32 UTC invocation was reported as terminal `canceled` after about 1.6
+seconds. Its provider response was not retained. D1 preserved the original busy
+lease acquired at 05:36:31.992 UTC, without a recorded denial. The missing outcome
+must remain **unknown**, not be described as success or proof that no response
+occurred. No source denial, challenge, rate limit, access-policy change, or denied
+administrative reset is established for this invocation.
+
+The user's repair request authorizes a deliberate service repair, not provider
+restriction bypass. Migration `0010_ashare_legacy_reconciliation` is that explicit
+one-time operation. It only matches the exact legacy token and every known field
+of the unchanged row, never a blocked row, different owner, newer acquisition or
+changed cooldown. A database trigger atomically preserves the full old row and
+this limited evidence in `ashare_recovery_audit` before releasing it. An audit
+write failure leaves the gate unchanged. The repair imposes a fresh 60-second
+quiet period. The old `acquired_ms` remains as evidence. The trigger is removed;
+replay is a no-op. It is not an automatic timeout, generic reset endpoint, or
+permission to retry after a source denial. Future crashed/unknown operations
+still require separate investigation. All current provider-denial behavior
+remains in force, and any denial on the next authorized acquisition remains
+permanently recorded and stops requests.
+
+The runtime now logs only bounded lifecycle metadata: admission, each source
+request's page number, response HTTP status, and confirmed release outcome.
+Tokens, request identities, source URLs, payloads and financial values are not
+logged. Normal unsupported-encoding and oversized-body cancellation is bounded
+as well as denied-response cleanup, so a stalled stream disposal cannot hold an
+otherwise classified operation forever.
+
+SQLite and network-disabled native-workerd tests cover exact reconciliation,
+atomic audit failure, migration replay/interruption, newer owners, changed
+metadata, persistent denial, cooldown and cold-start collection. They do not
+establish real source availability. After deployment, read the audit and gate,
+wait for the shared cooldown, and verify one real industry snapshot and one
+constituent snapshot. Stop if the live source denies access. No financial rows
+are persisted by this repair; last-good snapshots remain isolate-local, so cold
+starts must reacquire rather than imply a durable last-good cache exists.
+
+
+The status endpoint also reads the shared gate without acquiring a lease or
+contacting the provider. This fixes the cold-isolate `has_error=false` response
+that previously hid a persistent busy/denied state. Status inspection has a
+two-second bound, reports storage failure truthfully, and never changes the gate.
