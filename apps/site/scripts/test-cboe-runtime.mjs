@@ -20,9 +20,9 @@ const url='https://test.invalid/api/v1/europe/cboe/snapshot';
 async function scenario(mode,check){
  let calls=0,csvCalls=0;const mock=createFetchMock();mock.disableNetConnect();
  mock.get('https://www-api.cboe.com').intercept({method:'GET',path}).reply(()=>{calls++;if(mode==='denied')return {statusCode:403,data:''};if(mode==='temporary')return {statusCode:503,data:'',responseOptions:{headers:{'retry-after':'3600'}}};return {statusCode:200,data:JSON.stringify({daily:[],minute:[{filename,serveUrl}]}),responseOptions:{headers:{'content-type':'application/json'}}};}).persist();
- mock.get('https://cdn.cboe.com').intercept({method:'GET',path:new URL(serveUrl).pathname}).reply(()=>{csvCalls++;return {statusCode:200,data:mode==='badcsv'?csv+'bad,row\n':csv,responseOptions:{headers:{'content-type':'text/csv'}}};}).persist();
+ mock.get('https://cdn.cboe.com').intercept({method:'GET',path:new URL(serveUrl).pathname}).reply(()=>{csvCalls++;return {statusCode:200,data:mode==='badcsv'?csv+'bad,row\n':mode==='empty'?csv.replace('SYNTHETIC1','EMPTY2').replace('""','"NPFT,NETW"'):mode==='cancel'?csv.replace('SYNTHETIC1','CANCEL2').replace('""','"CANC"'):csv,responseOptions:{headers:{'content-type':'text/csv'}}};}).persist();
  const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-cboe-shared-cache'},fetchMock:mock});
- const mf=new Miniflare({workers:[worker('warm'),worker('cold')]});
+ const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('observer')]});
  try{
   const db=await mf.getD1Database('DB','warm');
   for(const sql of migrations.slice(0,-1))for(const statement of sql.split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();
@@ -38,8 +38,29 @@ await scenario('plain',async(mf,db,calls,csvCalls)=>{
  const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,200,JSON.stringify(body));assert.equal(body.snapshot.rows[0].price,'12.34');assert.equal(body.snapshot.sourceDelaySeconds,900);assert.equal(body.snapshot.netCapitalFlow,null);assert.equal(calls(),1);assert.equal(csvCalls(),1);
  const cold=await(await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,200);assert.deepEqual((await cold.json()).snapshot,body.snapshot);assert.equal(calls(),1);assert.equal(csvCalls(),1);
  const gate=await db.prepare('SELECT status,not_before_ms FROM cboe_delayed_source_gate').first();assert.equal(gate.status,'idle');assert.ok(gate.not_before_ms>Date.now()+55000);
+ await db.prepare('UPDATE cboe_delayed_source_gate SET payload=?').bind(JSON.stringify(body.snapshot)).run();
+ const legacy=await(await(await mf.getWorker('observer')).fetch(url)).json();assert.deepEqual(legacy.snapshot,body.snapshot);assert.equal(legacy.latest_empty_check,null);assert.equal(calls(),1);
  await db.prepare("UPDATE cboe_delayed_source_gate SET payload='{}'").run();const corrupt=await(await mf.getWorker('cold')).fetch(url);assert.equal(corrupt.status,503);assert.equal((await corrupt.json()).status.error_code,'source_gate_unavailable');assert.equal(calls(),1);
  console.log('PASS atomic shared snapshot, cold cache reuse, source timestamps, cooldown and corrupt-cache fail-closed');
+});
+await scenario('plain',async(mf,db,calls,csvCalls,setMode)=>{
+ const first=await(await mf.dispatchFetch(url)).json();
+ await db.prepare('UPDATE cboe_delayed_source_gate SET payload=?').bind(JSON.stringify(first.snapshot)).run();
+ await db.prepare('UPDATE cboe_delayed_source_gate SET not_before_ms=0').run();setMode('empty');
+ const retained=await(await(await mf.getWorker('cold')).fetch(url)).json();
+ assert.equal(retained.status.state,'stale');assert.deepEqual(retained.snapshot,first.snapshot);assert.equal(retained.latest_empty_check.rows.length,0);
+ assert.equal(calls(),2);assert.equal(csvCalls(),2);
+ const observer=await(await(await mf.getWorker('observer')).fetch(url)).json();assert.deepEqual(observer.snapshot,retained.snapshot);assert.deepEqual(observer.latest_empty_check,retained.latest_empty_check);assert.equal(observer.status.state,'stale');assert.equal(calls(),2);
+ const stored=JSON.parse((await db.prepare('SELECT payload FROM cboe_delayed_source_gate').first()).payload);
+ assert.equal(stored.schema,'cboe-cache/1');assert.deepEqual(stored.snapshot,first.snapshot);assert.equal(stored.latestEmptyCheck.rows.length,0);
+ await db.prepare("UPDATE cboe_delayed_source_gate SET status='blocked',payload=NULL").run();
+ const blocked=await(await mf.dispatchFetch(url)).json();assert.equal(blocked.status.state,'denied');assert.equal(blocked.snapshot,null);assert.equal(blocked.latest_empty_check,null);assert.equal(calls(),2);
+ console.log('PASS bounded eligible evidence across an empty window and cold worker; separate check clock; durable denial still clears all evidence');
+});
+await scenario('plain',async(mf,db,calls,csvCalls,setMode)=>{
+ await mf.dispatchFetch(url);await db.prepare('UPDATE cboe_delayed_source_gate SET not_before_ms=0').run();setMode('cancel');
+ const result=await(await(await mf.getWorker('cold')).fetch(url)).json();assert.equal(result.snapshot.rows.length,0);assert.equal(result.latest_empty_check,null);assert.equal(calls(),2);assert.equal(csvCalls(),2);
+ console.log('PASS later cancellation clears previous prices instead of reviving them');
 });
 await scenario('temporary',async(mf,db,calls)=>{
  assert.equal((await mf.dispatchFetch(url)).status,503);const gate=await db.prepare('SELECT status,not_before_ms FROM cboe_delayed_source_gate').first();assert.equal(gate.status,'idle');assert.ok(gate.not_before_ms>Date.now()+3595000);await(await mf.getWorker('cold')).fetch(url);assert.equal(calls(),1);console.log('PASS durable Retry-After across workers');
@@ -62,7 +83,7 @@ async function absentClientSignalDeadline(phase){
  const fileReply=mock.get('https://cdn.cboe.com').intercept({method:'GET',path:new URL(serveUrl).pathname}).reply(()=>{fileCalls++;return {statusCode:200,data:csv,responseOptions:{headers:{'content-type':'text/csv'}}};});
  fileReply.delay(25_000).persist();
  const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:`offline-cboe-deadline-${phase}`},fetchMock:mock});
- const mf=new Miniflare({workers:[worker('warm'),worker('cold')]});
+ const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('observer')]});
  try{
   const db=await mf.getD1Database('DB','warm');for(const statement of migrations.at(-1).split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();
   const started=Date.now(),response=await mf.dispatchFetch(url),body=await response.json();

@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {fetchCboeSnapshot,selectFiles,sourceUrl} from '../lib/cboe/source';
+import {fetchCboeSnapshot,fetchCboeCollection,selectFiles,sourceUrl} from '../lib/cboe/source';
 const NOW=Date.parse('2026-11-05T12:20:00Z');
 const file=(minute='1200')=>({filename:`eqt_trade_BATE_20261105_${minute}.csv`,serveUrl:`https://cdn.cboe.com/data/europe/equities/delayed_data/eqt_trade_BATE/synthetic/minute/eqt_trade_BATE_20261105_${minute}.csv`});
 const map=(rows=[file()])=>({daily:[],minute:rows});
@@ -22,6 +22,11 @@ describe('Cboe file selection',()=>{
 describe('Cboe bounded source cohort',()=>{
  it('gets map and bounded CSV with no credentials and keeps source times',async()=>{const fetcher=vi.fn<typeof fetch>(async url=>String(url)===sourceUrl(NOW)?json(map()):csv(row()));const s=await fetchCboeSnapshot(fetcher,NOW,()=>NOW+500,new AbortController().signal);expect(s.rows).toHaveLength(1);expect(s.rows[0].publicationTime).toBe('2026-11-05T12:00:00.123789Z');expect(s.fetchedAt).toBe('2026-11-05T12:20:00.500Z');expect(s.netCapitalFlow).toBeNull();for(const call of fetcher.mock.calls)expect(call[1]).toMatchObject({credentials:'omit',redirect:'manual',cache:'no-store'});});
  it('records empty eligible windows without presenting late NPFT prices',async()=>{const fetcher=vi.fn<typeof fetch>(async url=>String(url)===sourceUrl(NOW)?json(map()):csv(row('12:00','NPFT,NETW')));const s=await fetchCboeSnapshot(fetcher,NOW,()=>NOW,new AbortController().signal);expect(s.rows).toEqual([]);expect(s.coverage).toEqual({rawRows:1,rejectedRows:1,qualifiedRows:0});expect(s.latestPublicationTime).not.toBeNull();});
+ it.each([['NPFT,NETW',true],['CANC',false],['AMND',false],['ABCD',false],['',false]])('retention safety for flags %s is explicit',async(flags,safe)=>{
+  const fetcher=vi.fn<typeof fetch>(async url=>String(url)===sourceUrl(NOW)?json(map()):csv(row('12:00',String(flags))));
+  const result=await fetchCboeCollection(fetcher,NOW,()=>NOW,new AbortController().signal);
+  expect(result.retention.safeEmptyWindow).toBe(safe);expect(result.retention.reportedTradeKeys).toEqual(['BATE:2026-11-05:ABC1200']);
+ });
  it('fails entire cohort on malformed source rows',async()=>{const fetcher=vi.fn<typeof fetch>(async url=>String(url)===sourceUrl(NOW)?json(map()):csv(row()+'bad,cancel,row\n'));await expect(fetchCboeSnapshot(fetcher,NOW,()=>NOW,new AbortController().signal)).rejects.toThrow('invalid_source_rows');});
  it('fails a source/file minute mismatch and insufficient source delay',async()=>{for(const value of [row('11:59'),row('12:05')]){const fetcher=vi.fn<typeof fetch>(async url=>String(url)===sourceUrl(NOW)?json(map([file(value.includes('12:05')?'1205':'1200')])):csv(value));await expect(fetchCboeSnapshot(fetcher,NOW,()=>NOW,new AbortController().signal)).rejects.toThrow('inconsistent_source_time');}});
  it.each([401,403,406,407,429,451])('stops on %s and makes no next data request',async status=>{const f=vi.fn<typeof fetch>(async()=>new Response('',{status}));await expect(fetchCboeSnapshot(f,NOW,()=>NOW,new AbortController().signal)).rejects.toMatchObject({denied:true});expect(f).toHaveBeenCalledTimes(1);});

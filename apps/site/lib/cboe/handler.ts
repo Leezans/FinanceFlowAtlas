@@ -1,12 +1,13 @@
-import {CboeError,fetchCboeSnapshot} from './source';
+import {CboeError,fetchCboeCollection} from './source';
 import {REFRESH_MS,MAX_CACHE_AGE_MS,type CboeReply} from './service-model';
 import {MAX_SNAPSHOT_CHARS,type CboeSnapshot} from './model';
+import type {CboeRetentionEvidence} from './cache';
 // Absolute budgets start at request entry, not after inspection/admission.
 // Abort acquisition at 18s, leaving 2s for ordinary terminal D1 cleanup and
 // 10s of additional margin before the host's observed30s retained-work ceiling.
 export const CBOE_ACQUISITION_MS=18_000,CBOE_DEADLINE_MS=20_000;
-export type CboeOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:CboeSnapshot};
-export type CboeGateState={state:'idle'|'busy'|'blocked';retryAt:number;snapshot:CboeSnapshot|null};
+export type CboeOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:CboeSnapshot;retention?:CboeRetentionEvidence};
+export type CboeGateState={state:'idle'|'busy'|'blocked';retryAt:number;snapshot:CboeSnapshot|null;latestEmptyCheck?:CboeSnapshot|null};
 export interface CboeGate {inspect():Promise<CboeGateState>;acquire(signal?:AbortSignal):Promise<{token:string}>;release(token:string,outcome:CboeOutcome):Promise<void>}
 function fail(code:string):never{throw new CboeError(code);}
 const gateErrors=new Set(['source_denied','source_busy','source_cooldown','source_gate_unavailable','source_stale_lease','source_aborted']);
@@ -19,7 +20,7 @@ function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
 type Lifetime={source:AbortController;completion:AbortController;track:<T>(operation:Promise<T>)=>Promise<T>};
 export function createCboeHandler(options:{gate:CboeGate;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean}){
  const now=options.now??Date.now,fetcher=options.fetcher??fetch;
- let snapshot:CboeSnapshot|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
+ let snapshot:CboeSnapshot|null=null,latestEmptyCheck:CboeSnapshot|null=null,pending:Promise<void>|undefined,error:string|null=null,denied=false,lastAttempt:number|null=null,retryAt=0,failures=0;
  async function refresh(request:Request,started:number,lifetime:Lifetime){
   const {source,completion,track}=lifetime;let token:string|undefined,releasing=false;
   lastAttempt=started;
@@ -32,11 +33,11 @@ export function createCboeHandler(options:{gate:CboeGate;fetcher?:typeof fetch;n
    // Do not race collection against a timer and then unlock an unknown request.
    // Normal fetch/body reads observe source.abort; only their settled outcome
    // permits terminal release. A non-cooperative fetch stays durably busy.
-   const candidate=await fetchCboeSnapshot(fetcher,started,now,source.signal);
-   if(JSON.stringify(candidate).length>MAX_SNAPSHOT_CHARS)fail('snapshot_budget');
-   if(snapshot&&Date.parse(candidate.windowEnd)<Date.parse(snapshot.windowEnd))fail('source_window_regression');
+   const {snapshot:candidate,retention}=await fetchCboeCollection(fetcher,started,now,source.signal);
+   if(JSON.stringify({schema:'cboe-cache/1',snapshot:candidate,latestEmptyCheck:null}).length>MAX_SNAPSHOT_CHARS)fail('snapshot_budget');
+   if(snapshot&&Date.parse(candidate.windowEnd)<Date.parse((latestEmptyCheck??snapshot).windowEnd))fail('source_window_regression');
    if(source.signal.aborted)fail(request.signal.aborted?'source_aborted':'timeout');
-   releasing=true;await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate})),completion.signal);token=undefined;
+   releasing=true;await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate,retention})),completion.signal);token=undefined;
    snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
    const code=caught instanceof CboeError?caught.code:typeof (caught as {code?:unknown})?.code==='string'&&gateErrors.has((caught as {code:string}).code)?(caught as {code:string}).code:request.signal.aborted?'source_aborted':source.signal.aborted?'timeout':'source_unavailable';
@@ -53,9 +54,13 @@ export function createCboeHandler(options:{gate:CboeGate;fetcher?:typeof fetch;n
   }
  }
  function reply():CboeReply{
-  const at=now(),age=snapshot?at-Date.parse(snapshot.fetchedAt):null;
-  const valid=age!==null&&age>=0&&age<=MAX_CACHE_AGE_MS;
-  return {snapshot:!denied&&valid?snapshot:null,status:{state:denied?'denied':!valid?'unavailable':error||age!>REFRESH_MS?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:snapshot?.fetchedAt??null,cache_age_ms:age,refresh_ms:REFRESH_MS,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:denied||retryAt===0||retryAt>8.64e15?null:new Date(retryAt).toISOString()}};
+  const at=now(),retainedAge=snapshot?at-Date.parse(snapshot.fetchedAt):null;
+  // Expiring retained prices does not discard a newer, independently checked
+  // empty window. It becomes the visible empty result, with its own clocks.
+  const retainedValid=retainedAge!==null&&retainedAge>=0&&retainedAge<=MAX_CACHE_AGE_MS;
+  const shown=snapshot?(retainedValid?snapshot:latestEmptyCheck??snapshot):null,check=retainedValid?latestEmptyCheck:null;
+  const age=shown?at-Date.parse(shown.fetchedAt):null,valid=age!==null&&age>=0&&age<=MAX_CACHE_AGE_MS;
+  return {snapshot:!denied&&valid?shown:null,latest_empty_check:!denied&&valid?check:null,status:{state:denied?'denied':!valid?'unavailable':error||check||age!>REFRESH_MS?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:shown?.fetchedAt??null,cache_age_ms:age,refresh_ms:REFRESH_MS,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:denied||retryAt===0||retryAt>8.64e15?null:new Date(retryAt).toISOString()}};
  }
  function unavailable(mode:string,code:string){
   const status={...reply().status,state:'unavailable' as const,error_code:code};
@@ -70,6 +75,7 @@ export function createCboeHandler(options:{gate:CboeGate;fetcher?:typeof fetch;n
    else if(!denied){
     busy=shared.state==='busy';if(busy){snapshot=null;error='source_busy';}retryAt=Math.max(retryAt,shared.retryAt);
     if(!busy&&shared.snapshot&&(!snapshot||Date.parse(shared.snapshot.fetchedAt)>Date.parse(snapshot.fetchedAt))){snapshot=shared.snapshot;error=null;}
+    latestEmptyCheck=shared.latestEmptyCheck??null;
     if(!snapshot&&(busy||now()<retryAt))error=busy?'source_busy':'source_cooldown';
    }
   }catch{return unavailable(mode,'source_gate_unavailable');}
@@ -83,7 +89,7 @@ export function createCboeHandler(options:{gate:CboeGate;fetcher?:typeof fetch;n
     retryAt=Math.max(retryAt,final.retryAt);
     if(final.state==='blocked'){denied=true;snapshot=null;error='source_denied';}
     else if(final.state==='busy'){snapshot=null;error='source_busy';}
-    else if(!denied&&!hideForRace)snapshot=final.snapshot;
+    else if(!denied&&!hideForRace){snapshot=final.snapshot;latestEmptyCheck=final.latestEmptyCheck??null;}
     else snapshot=null;
    }catch{return unavailable(mode,'source_gate_unavailable');}
   }
