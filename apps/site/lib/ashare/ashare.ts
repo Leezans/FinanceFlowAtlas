@@ -8,12 +8,32 @@ const TTL=60_000, INTERVAL=3_000, DEADLINE=90_000, MAX_BYTES=4_000_000, MAX_ROWS
 export type Scope={kind:'industry_rank'|'industry_stocks';fs:string;classification_level:'eastmoney_level_1'|'unknown_may_mix_levels'};
 export type Row={f12:string;f14:string}&Record<typeof NUMERIC_FIELDS[number],number|null|'-'|'--'|''>;
 type Snapshot={rows:Row[];source_total:number;fetched_at:string;scope:Scope;page_count:number};
-type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>};
+type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>;errorCode?:string};
 export type SourceOutcome={kind:'success'|'temporary_failure'|'denied';reason?:string};
 export interface SourceGate {acquire(scopeKey:string,signal:AbortSignal):Promise<{token:string}>;release(token:string,outcome:SourceOutcome):Promise<void>;}
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
 type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean};
 class SourceDenied extends Error {}
+// Only bounded codes leave the server. Never expose upstream bodies, URLs, or
+// runtime exception text through the owner-facing API or production logs.
+const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','source_gate_required','source_gate_unavailable','source_busy','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','compressed_body_denied','byte_budget','upstream_http','not_json','invalid_schema','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
+function failureCode(error:unknown):string {
+  if(error&&typeof error==='object'&&'code'in error&&typeof error.code==='string'&&ERROR_CODES.has(error.code))return error.code;
+  if(error instanceof Error&&ERROR_CODES.has(error.message))return error.message;
+  if(error instanceof Error&&error.name==='AbortError')return 'aborted';
+  if(error instanceof SyntaxError)return 'invalid_json';
+  if(error instanceof TypeError)return 'transport_or_encoding_failure';
+  return 'collection_failed';
+}
+function failureMessage(code?:string):string {
+  if(code==='source_gate_unavailable')return '数据协调存储尚未就绪，请检查数据库迁移。';
+  if(code==='source_busy'||code==='source_cooldown')return '另一项数据采集仍在进行或限速等待中。';
+  if(code==='compressed_body_denied')return '来源返回压缩内容，当前传输校验未通过。';
+  if(code==='source_access_denied'||code==='persistent_source_denial'||code==='source_denied'||code==='source_denial_latched')return '来源限制访问，已停止采集，不会绕过限制。';
+  if(code==='runtime_routing_unverified')return '当前运行环境的来源连接未通过校验。';
+  if(code==='aborted'||code==='deadline')return '数据请求中断或超时，尚未取得完整快照。';
+  return '来源连接或数据校验失败，尚无完整有效快照。';
+}
 const stateKey=Symbol.for('FinanceFlowAtlas.ashare.controlled.v1');
 const globals=globalThis as typeof globalThis & {[stateKey]?:State};
 function processState():State{return globals[stateKey]??=(freshState());}
@@ -162,9 +182,9 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         catch{throw new SourceDenied('source_gate_release_unconfirmed');}
         if(collectionError)throw collectionError;
         if(!next)throw new Error('missing_snapshot');
-        entry.snapshot=next;entry.published=now();entry.error=false;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;
+        entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;
       }
-      catch(error){if(error instanceof SourceDenied){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
+      catch(error){entry.errorCode=failureCode(error);console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
       finally{clearTimeout(timer);signal.removeEventListener('abort',abort);acquisition.abort();}
     });state.tail=run;await run;
   }
@@ -175,7 +195,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     let scope:Scope;try{scope=parseScope(url);}catch{return reply(400,{error:'invalid_scope'});}
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     const key=scope.fs;let entry=state.entries.get(key);
-    if(url.pathname.endsWith('/status'))return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(state.denied||entry.error||now()-entry.published>=TTL),has_error:state.denied||(entry?.error??false),refresh_interval_seconds:60,acquisition_is_separate:false});
+    if(url.pathname.endsWith('/status'))return reply(200,{state:entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(state.denied||entry.error||now()-entry.published>=TTL),has_error:state.denied||(entry?.error??false),refresh_interval_seconds:60,acquisition_is_separate:false,...(entry?.errorCode?{error_code:entry.errorCode,message:failureMessage(entry.errorCode)}:{})});
     if(!entry){
       // One level-1 plus one selected industry cache. Never evict in-flight work.
       if(scope.kind==='industry_stocks'){for(const [k,v]of state.entries){if(k.startsWith('b:')){if(v.pending)return reply(503,{state:'unavailable',message:'行业采集进行中，请稍后重试。'});state.entries.delete(k);}}}
@@ -185,7 +205,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     if(!state.denied&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=refresh(target,scope,request.signal).finally(()=>{target.pending=undefined;});}
     if(entry.pending)await entry.pending;
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
-    if(!entry.snapshot)return reply(503,{state:'unavailable',message:'尚无完整且通过校验的快照。'});
+    if(!entry.snapshot)return reply(503,{state:'unavailable',error_code:entry.errorCode??'not_yet_acquired',message:failureMessage(entry.errorCode)});
     const payload={schema:'ashare-provider-evidence/1',...entry.snapshot,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:'CNY'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'供应商订单分类净额代理，非市场真实新增资金；抓取时间不是行情时间。',stale:stale(),has_error:state.denied||entry.error};
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload)));
     const etag='"'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')+'"';

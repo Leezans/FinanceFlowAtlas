@@ -55,3 +55,23 @@ describe('validation and publication',()=>{
  it('unverified live routing fails closed before fetch',async()=>{const f=vi.fn();const h=createAshareHandler({enabled:()=>true,fetcher:f});expect((await h(request())).status).toBe(503);expect(f).not.toHaveBeenCalled();});
  it('strict parser rejects duplicates and deep JSON',()=>{for(const text of ['{"a":1,"a":2}','{"a":{"b":1,"b":2}}','[1,]','{"a":1,}','1e999','01','[true false]','['.repeat(25)+'0'+']'.repeat(25)])expect(()=>strictJSON(text)).toThrow();expect(strictJSON('{"a":"x\\\"y","b":[null,false,1e2]}')).toEqual({a:'x"y',b:[null,false,100]});});
 });
+
+describe('safe acquisition diagnostics',()=>{
+ it('reports known failure without exposing upstream content and repeats it in status',async()=>{
+  const h=make(async()=>new Response('private-provider-body',{headers:{'content-type':'application/json','content-encoding':'gzip'}}));
+  const response=await h(request());expect(response.status).toBe(503);
+  const result=await response.json();expect(result.error_code).toBe('compressed_body_denied');
+  expect(JSON.stringify(result)).not.toContain('private-provider-body');
+  expect(await (await h(request('level1','status'))).json()).toMatchObject({error_code:'compressed_body_denied',has_error:true});
+ });
+ it('does not expose arbitrary transport exception text',async()=>{
+  const h=make(async()=>{throw new Error('private-token-or-target');});
+  const result=await (await h(request())).json();expect(result.error_code).toBe('collection_failed');
+  expect(JSON.stringify(result)).not.toContain('private-token-or-target');
+ });
+ it('distinguishes missing source-gate storage before upstream',async()=>{
+  const f=vi.fn();const gate={async acquire(){throw Object.assign(new Error('SQL detail'),{code:'source_gate_unavailable'});},async release(){}};
+  const result=await (await make(f,{sourceGate:gate})(request())).json();
+  expect(result.error_code).toBe('source_gate_unavailable');expect(f).not.toHaveBeenCalled();
+ });
+});
