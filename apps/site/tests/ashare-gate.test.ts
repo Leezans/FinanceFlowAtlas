@@ -2,23 +2,23 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { D1SourceGate, SQL, type GateD1, type D1Result } from '../lib/ashare/source-gate';
+import { D1SourceGate, SQL, UNCONFIRMED_AFTER_MS, type GateD1, type D1Result } from '../lib/ashare/source-gate';
 
 class FakeD1 implements GateD1 {
-  now=1000; status='idle'; token: unknown=null; notBefore=0; reason: unknown=null;
+  now=1000; acquired:number|null=null; status='idle'; token: unknown=null; notBefore=0; reason: unknown=null;
   fail=false; afterAcquire?:()=>void;
   prepare(sql: string) { return { bind: (...v: unknown[]) => ({ run: async ():Promise<D1Result> => {
     if(this.fail) throw new Error('SECRET SQL ERROR token=private');
     let changes=0;
     if(sql===SQL.acquire) {
       if(this.status==='idle' && this.notBefore<=this.now) {
-        this.status='busy'; this.token=v[0]; changes=1; this.afterAcquire?.();
+        this.status='busy'; this.acquired=this.now; this.token=v[0]; changes=1; this.afterAcquire?.();
       }
     } else if(sql===SQL.finish) {
       if(this.status==='busy' && this.token===v[3]) {
         this.status=v[0] as string; this.reason=v[1]; this.token=null; this.notBefore=this.now+Number(v[2]); changes=1;
       }
-    } else if(sql===SQL.inspect) return {success:true,results:[{status:this.status,not_before_ms:this.notBefore,now_ms:this.now}],meta:{changes:0}};
+    } else if(sql===SQL.inspect) return {success:true,results:[{status:this.status,acquired_ms:this.acquired,not_before_ms:this.notBefore,now_ms:this.now}],meta:{changes:0}};
     else throw new Error('Unknown SQL');
     return {success:true,results:[],meta:{changes}};
   }})}; }
@@ -45,8 +45,9 @@ test('stale token cannot release current owner',async()=>{
   assert.equal(db.status,'busy'); assert.equal(db.token,current.token);
 });
 test('crashed busy lease has no timeout or takeover even after years',async()=>{
-  const db=new FakeD1(); await new D1SourceGate(db).acquire('x'); db.now+=10*365*86400000;
-  await assert.rejects(new D1SourceGate(db).acquire('x'),hasCode('source_busy'));
+  const db=new FakeD1(); await new D1SourceGate(db).acquire('x'); const token=db.token; db.now+=10*365*86400000;
+  await assert.rejects(new D1SourceGate(db).acquire('x'),hasCode('source_outcome_unconfirmed'));
+  assert.equal(db.status,'busy'); assert.equal(db.token,token); assert.equal(db.reason,null);
 });
 test('successful acquisition keeps a full 3s quiet interval after finishing',async()=>{
   const db=new FakeD1(); const g=new D1SourceGate(db); const l=await g.acquire('x'); db.now+=60000;
@@ -80,8 +81,9 @@ test('abort before acquisition avoids write; abort during DB acquisition awaits 
 test('failed denied-state write leaves busy, never reopens gate',async()=>{
   const db=new FakeD1(); const g=new D1SourceGate(db); const l=await g.acquire('x'); db.fail=true;
   await assert.rejects(g.release(l.token,{kind:'denied',reason:'http_403'}),hasCode('source_gate_unavailable'));
-  db.fail=false; db.now+=900000;
-  await assert.rejects(new D1SourceGate(db).acquire('x'),hasCode('source_busy'));
+  db.fail=false; const token=db.token; db.now+=900000;
+  await assert.rejects(new D1SourceGate(db).acquire('x'),hasCode('source_outcome_unconfirmed'));
+  assert.equal(db.status,'busy'); assert.equal(db.token,token);
 });
 test('actual SQLite syntax, CAS changes, constraints and permanent blocked row',async()=>{
   const db=new DatabaseSync(':memory:'); db.exec(readFileSync(new URL('../drizzle/0001_wild_jigsaw.sql',import.meta.url),'utf8'));
@@ -107,4 +109,22 @@ test('actual SQLite syntax, CAS changes, constraints and permanent blocked row',
   assert.equal(db.prepare('SELECT reason_code FROM ashare_source_gate').get()?.reason_code,'http_429');
   assert.throws(()=>db.exec("INSERT INTO ashare_source_gate (id,status) VALUES ('second','idle')"));
   db.close();
+});
+
+test('busy age changes only diagnostic, never lease ownership or source outcome',async()=>{
+  const db=new FakeD1(); const g=new D1SourceGate(db); await g.acquire('x');
+  const original={status:db.status,token:db.token,acquired:db.acquired,reason:db.reason,notBefore:db.notBefore};
+  db.now+=UNCONFIRMED_AFTER_MS-1;
+  await assert.rejects(new D1SourceGate(db).acquire('other'),hasCode('source_busy'));
+  db.now++;
+  await assert.rejects(new D1SourceGate(db).acquire('other'),hasCode('source_outcome_unconfirmed'));
+  assert.deepEqual({status:db.status,token:db.token,acquired:db.acquired,reason:db.reason,notBefore:db.notBefore},original);
+});
+test('missing or future acquisition metadata fails closed, never guesses duration',async()=>{
+  for(const acquired of [null,NaN,-1,1001]) {
+    const db=new FakeD1(); await new D1SourceGate(db).acquire('x'); db.acquired=acquired;
+    const token=db.token;
+    await assert.rejects(new D1SourceGate(db).acquire('other'),hasCode('source_gate_unavailable'));
+    assert.equal(db.status,'busy'); assert.equal(db.token,token);
+  }
 });

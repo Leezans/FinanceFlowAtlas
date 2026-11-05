@@ -32,7 +32,7 @@ describe('controlled transport and contract',()=>{
 describe('persistent source gate integration',()=>{
  it('requires gate in production even when explicitly enabled',async()=>{const f=vi.fn();const h=createAshareHandler({enabled:()=>true,runtime:'cloudflare-workers',fetcher:f});expect((await h(request())).status).toBe(503);expect(f).not.toHaveBeenCalled();});
  it('acquires before first source request and releases only after complete collection',async()=>{const order:string[]=[];const gate={acquire:vi.fn(async(scope:string,signal:AbortSignal)=>{expect(scope).toBe('m:90+s:2+f:!50');expect(signal).toBeInstanceOf(AbortSignal);order.push('acquire');return {token:'lease-1'};}),release:vi.fn(async()=>{order.push('release');})};const f=vi.fn(async()=>{order.push('fetch');return upstream();});expect((await make(f,{sourceGate:gate})(request())).status).toBe(200);expect(order).toEqual(['acquire','fetch','release']);expect(gate.release).toHaveBeenCalledWith('lease-1',{kind:'success'});});
- it.each(['source_busy','source_cooldown','source_gate_unavailable','source_denied'])('fails closed on gate %s',async code=>{const f=vi.fn();const gate={async acquire(){throw Object.assign(new Error('gate'),{code});},release:vi.fn()};expect((await settle(make(f,{sourceGate:gate})(request()))).status).toBe(503);expect(f).not.toHaveBeenCalled();expect(gate.release).not.toHaveBeenCalled();});
+ it.each(['source_busy','source_outcome_unconfirmed','source_cooldown','source_gate_unavailable','source_denied'])('fails closed on gate %s',async code=>{const f=vi.fn();const gate={async acquire(){throw Object.assign(new Error('gate'),{code});},release:vi.fn()};expect((await settle(make(f,{sourceGate:gate})(request()))).status).toBe(503);expect(f).not.toHaveBeenCalled();expect(gate.release).not.toHaveBeenCalled();});
  it('waits at most once for cooldown admission with no source request before 3.1s',async()=>{let attempts=0;const gate={acquire:vi.fn(async()=>{if(++attempts===1)throw Object.assign(new Error('cooldown'),{code:'source_cooldown'});return {token:'one'};}),release:vi.fn(async()=>{})};const f=vi.fn(async()=>upstream([item(1,true)]));const p=make(f,{sourceGate:gate})(request('BK0001'));await vi.advanceTimersByTimeAsync(3099);expect(f).not.toHaveBeenCalled();expect(gate.acquire).toHaveBeenCalledTimes(1);await vi.advanceTimersByTimeAsync(1);expect((await p).status).toBe(200);expect(gate.acquire).toHaveBeenCalledTimes(2);expect(f).toHaveBeenCalledTimes(1);});
  it('second cooldown stops admission without looping or source fetch',async()=>{const gate={acquire:vi.fn(async()=>{throw Object.assign(new Error('cooldown'),{code:'source_cooldown'});}),release:vi.fn(async()=>{})};const f=vi.fn();expect((await settle(make(f,{sourceGate:gate})(request()))).status).toBe(503);expect(gate.acquire).toHaveBeenCalledTimes(2);expect(f).not.toHaveBeenCalled();});
  it('aborting cooldown wait prevents second admission and source request',async()=>{const gate={acquire:vi.fn(async()=>{throw Object.assign(new Error('cooldown'),{code:'source_cooldown'});}),release:vi.fn(async()=>{})};const c=new AbortController();const f=vi.fn();const p=make(f,{sourceGate:gate})(new Request('https://x/api/v1/ashare/snapshot',{signal:c.signal}));await vi.advanceTimersByTimeAsync(100);c.abort();expect((await p).status).toBe(503);expect(gate.acquire).toHaveBeenCalledTimes(1);expect(f).not.toHaveBeenCalled();});
@@ -268,5 +268,22 @@ describe('durable denial precedes bounded body disposal',()=>{
   const pending=h(request());await vi.advanceTimersByTimeAsync(5000);
   expect(gate.release).toHaveBeenCalledTimes(1);expect(cancel).not.toHaveBeenCalled();
   finish();expect((await pending).status).toBe(503);expect(cancel).toHaveBeenCalledTimes(1);
+ });
+});
+
+describe('unconfirmed acquisition outcome',()=>{
+ it('stops local admission and browser retries without source requests or release writes',async()=>{
+  const sourceGate={acquire:vi.fn(async()=>{throw Object.assign(new Error('private lease info'),{code:'source_outcome_unconfirmed'});}),release:vi.fn()};
+  const fetcher=vi.fn();const handler=make(fetcher,{sourceGate});
+  for(const scope of ['level1','BK0001','level1']){
+   const response=await handler(request(scope));
+   expect(response.status).toBe(503);
+   expect(response.headers.get('x-ashare-error-code')).toBe('source_outcome_unconfirmed');
+   expect(response.headers.get('x-ashare-recovery')).toBe('stopped');
+   expect(response.headers.get('retry-after')).toBeNull();
+   const body=await response.text();expect(body).toContain('上次采集未能确认结果');expect(body).not.toContain('private lease info');
+   await vi.advanceTimersByTimeAsync(86400000);
+  }
+  expect(sourceGate.acquire).toHaveBeenCalledTimes(1);expect(sourceGate.release).not.toHaveBeenCalled();expect(fetcher).not.toHaveBeenCalled();
  });
 });

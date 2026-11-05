@@ -120,3 +120,29 @@ both persistence and cleanup, cross-isolate refusal before disposal completes,
 and automatic-redirect/cancellation races. An offline native-workerd test uses
 an actual stream and D1 table to verify that the denial is durable despite stalled
 body disposal. Production state is not modified by these tests or the fix.
+
+
+## Unconfirmed acquisition status
+
+A `busy` operation older than three minutes is now reported as
+`source_outcome_unconfirmed`, rather than promising that another collection is
+still running. The threshold is diagnostic only: it covers the 90-second
+acquisition budget plus cleanup margin but proves neither that the process died
+nor what response the provider returned. A recorded denial always takes priority.
+The D1 row, token, timestamps and reason remain unchanged. No expiry, release,
+takeover, source retry or source switch is introduced.
+
+The API responds with `X-Ashare-Recovery: stopped`, with no `Retry-After`. The
+handler stops further admission in the same isolate; the browser stops automatic
+checks and removes the retry button. A-share's empty matrix states that the prior
+result needs review, instead of implying that waiting will recover observations.
+Missing or inconsistent acquisition metadata fails closed. Recovery still needs
+verified evidence of the prior request's outcome and an authorized reconciliation;
+age and `reason_code = null` do not establish a safe retry.
+
+Unit tests cover the exact age boundary, missing/future metadata, unchanged lease
+ownership, denial precedence, API/client stop behavior and truthful empty UI.
+An offline workerd test seeds only a synthetic legacy busy row and verifies that
+all fields are byte-for-byte unchanged across two isolates with zero source calls.
+This fixes diagnosis and retry behavior, not the availability of current A-share
+observations, and must not be described as restored source data.

@@ -30,7 +30,7 @@ describe('same-scope validated browser recovery',()=>{
  it.each([401,403,400,404,429])('clears evidence for non-temporary HTTP %i',status=>{
   const result=consumeReply(ready(),{status},scope);expect(result.snapshot).toBeNull();expect(result.etag).toBeNull();
  });
- it.each(['source_access_denied','persistent_source_denial','source_denial_latched','source_gate_release_unconfirmed','invalid_source_lease','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge'])('clears and stops for %s, including stale 200/304',errorCode=>{
+ it.each(['source_outcome_unconfirmed','source_access_denied','persistent_source_denial','source_denial_latched','source_gate_release_unconfirmed','invalid_source_lease','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge'])('clears and stops for %s, including stale 200/304',errorCode=>{
   for(const status of [200,304,503]){
    const result=consumeReply(ready(),{status,payload:{...snapshot,stale:true,has_error:true},errorCode},scope);
    expect(result).toMatchObject({snapshot:null,etag:null,status:'blocked',recovery:{mode:'stopped',retryAt:null}});
@@ -40,8 +40,8 @@ describe('same-scope validated browser recovery',()=>{
   const result=consumeReply(ready(),{status:200,payload:snapshot,errorCode:'private-server-detail',recoveryMode:'stopped'},scope);
   expect(result).toMatchObject({snapshot:null,status:'blocked',recovery:{mode:'stopped',code:'collection_failed'}});expect(JSON.stringify(result)).not.toContain('private-server-detail');
  });
- it('never retries a known stop on repeated calls',async()=>{
-  const transport=vi.fn(async()=>({status:503,errorCode:'html_challenge'}));const client=createEvidenceClient(transport,()=>99999999);
+ it.each(['source_outcome_unconfirmed','html_challenge'])('never retries a known stop %s on repeated calls',async errorCode=>{
+  const transport=vi.fn(async()=>({status:503,errorCode}));const client=createEvidenceClient(transport,()=>99999999);
   await client.load(scope);await client.load(scope);expect(client.canLoad(scope)).toBe(false);expect(transport).toHaveBeenCalledTimes(1);
  });
  it('clears malformed, partial, or wrong-scope successful bodies',()=>{

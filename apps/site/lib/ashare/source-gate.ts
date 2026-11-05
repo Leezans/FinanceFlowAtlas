@@ -8,7 +8,7 @@ export interface SourceGate {
   acquire(scope: string, signal?: AbortSignal): Promise<SourceLease>;
   release(token: string, outcome: SourceOutcome): Promise<void>;
 }
-export type SourceGateCode = 'source_denied' | 'source_busy' | 'source_cooldown' |
+export type SourceGateCode = 'source_denied' | 'source_busy' | 'source_outcome_unconfirmed' | 'source_cooldown' |
   'source_gate_unavailable' | 'source_stale_lease' | 'source_aborted';
 export class SourceGateError extends Error {
   constructor(public readonly code: SourceGateCode) { super(code); this.name = 'SourceGateError'; }
@@ -27,10 +27,13 @@ const SUCCESS_QUIET_MS = 3_000;
 // In-memory exponential backoff does not survive a new isolate. Keep its first
 // 60s failure window in shared metadata so cold isolates cannot retry after 3s.
 const TEMPORARY_FAILURE_QUIET_MS = 60_000;
+// A diagnostic threshold only, not a lease expiry or proof of source outcome.
+// Allow the 90s acquisition budget plus cleanup margin before asking for review.
+export const UNCONFIRMED_AFTER_MS = 180_000;
 export const SQL = {
   acquire: `UPDATE ashare_source_gate SET status='busy', lease_token=?, acquired_ms=${NOW}, updated_ms=${NOW}
     WHERE id='single_upstream' AND status='idle' AND not_before_ms <= ${NOW} RETURNING status`,
-  inspect: `SELECT status, not_before_ms, ${NOW} AS now_ms FROM ashare_source_gate WHERE id='single_upstream'`,
+  inspect: `SELECT status, acquired_ms, not_before_ms, ${NOW} AS now_ms FROM ashare_source_gate WHERE id='single_upstream'`,
   finish: `UPDATE ashare_source_gate SET status=?, lease_token=NULL, reason_code=?,
     finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+?
     WHERE id='single_upstream' AND status='busy' AND lease_token=? RETURNING status`,
@@ -68,7 +71,14 @@ export class D1SourceGate implements SourceGate {
     const state = (await this.run(SQL.inspect)).results?.[0];
     if (state?.status === 'blocked') throw new SourceGateError('source_denied');
     // A busy operation may be crashed or still active. Never guess or take over.
-    if (state?.status === 'busy') throw new SourceGateError('source_busy');
+    if (state?.status === 'busy') {
+      // Age changes only the explanation. Never release, reset, or retry this
+      // acquisition: it may have observed a denial before losing persistence.
+      if (typeof state.acquired_ms !== 'number' || !Number.isSafeInteger(state.acquired_ms) || state.acquired_ms < 0 ||
+        typeof state.now_ms !== 'number' || !Number.isSafeInteger(state.now_ms) || state.now_ms < state.acquired_ms)
+        throw new SourceGateError('source_gate_unavailable');
+      throw new SourceGateError(state.now_ms - state.acquired_ms >= UNCONFIRMED_AFTER_MS ? 'source_outcome_unconfirmed' : 'source_busy');
+    }
     if (state?.status === 'idle' && typeof state.not_before_ms === 'number' &&
       typeof state.now_ms === 'number' && state.not_before_ms > state.now_ms)
       throw new SourceGateError('source_cooldown');

@@ -1,4 +1,4 @@
-import type {MatrixGroup} from '@/components/matrix/MatrixHeatmap';
+import type {MatrixGroup} from '@/lib/matrix/model';
 import {intensity,type Participant,type TpexSnapshot,type Trading} from '@/lib/tpex/model';
 import {industryLabel} from '@/lib/tpex/industries';
 export {industryLabel} from '@/lib/tpex/industries';

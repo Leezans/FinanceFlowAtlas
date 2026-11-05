@@ -191,3 +191,21 @@ await withWorkers('plain',async(mf,db,calls)=>{
   assert.equal(calls(),0,'denied fixtures must not result in an external mock or actual source call');
 });
 console.log('PASS native hanging body cancellation cannot delay durable denial; cold isolate remains blocked');
+
+
+await withWorkers('plain',async(mf,db,calls)=>{
+  // Synthetic legacy operation with unknown outcome. Never touch production.
+  await db.prepare("UPDATE ashare_source_gate SET status='busy',lease_token='synthetic-unconfirmed',acquired_ms=1000,updated_ms=1000,reason_code=NULL WHERE id='single_upstream'").run();
+  const before=await db.prepare('SELECT * FROM ashare_source_gate').first();
+  for(const fetcher of [mf,await mf.getWorker('cold')]) {
+    const response=fetcher===mf?await mf.dispatchFetch(endpoint):await fetcher.fetch(endpoint);
+    assert.equal(response.status,503);
+    assert.equal(response.headers.get('x-ashare-error-code'),'source_outcome_unconfirmed');
+    assert.equal(response.headers.get('x-ashare-recovery'),'stopped');
+    assert.equal(response.headers.get('retry-after'),null);
+    assert.equal((await response.json()).error_code,'source_outcome_unconfirmed');
+  }
+  assert.equal(calls(),0,'unconfirmed operation must not permit any source call');
+  assert.deepEqual(await db.prepare('SELECT * FROM ashare_source_gate').first(),before,'diagnosis must preserve every lease/denial field exactly');
+});
+console.log('PASS native unconfirmed legacy operation: zero source calls; every D1 field preserved across isolates');

@@ -1,0 +1,16 @@
+import {MAX_CACHE_AGE_MS,REFRESH_MS,type KrakenReply,type KrakenSnapshot} from '@/lib/crypto/kraken';
+import {z} from 'zod';
+const date=z.string().datetime({offset:true});
+const decimal=z.string().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,12})?$/);
+const positive=decimal.refine(value=>/[1-9]/.test(value));
+const rowSchema=z.object({pair:z.enum(['BTC/USD','ETH/USD']),base:z.enum(['BTC','ETH']),quote:z.literal('USD'),last_price_usd:positive,volume_base_24h:decimal,vwap_usd_24h:positive,trades_24h:z.number().int().safe().nonnegative(),net_capital_flow:z.null(),open_interest:z.null()}).strict();
+const snapshotSchema=z.object({schema:z.literal('kraken-spot/1'),venue:z.literal('Kraken'),coverage:z.literal('two_selected_spot_pairs_one_venue'),rows:z.array(rowSchema).length(2),acquisition_started_at:date,fetched_at:date,source_observed_at:z.null(),delay_status:z.literal('not_provided'),window:z.literal('rolling_24h'),monetary_encoding:z.literal('decimal_string')}).strict().refine(snapshot=>
+ Date.parse(snapshot.fetched_at)>=Date.parse(snapshot.acquisition_started_at)&&new Set(snapshot.rows.map(row=>row.pair)).size===2&&snapshot.rows.every(row=>row.pair===`${row.base}/USD`));
+const replySchema=z.object({snapshot:snapshotSchema.nullable(),status:z.object({state:z.enum(['available','stale','unavailable','denied']),error_code:z.string().regex(/^[a-z_]{1,64}$/).nullable(),last_attempt_at:date.nullable(),fetched_at:date.nullable(),cache_age_ms:z.number().int().safe().nullable(),refresh_ms:z.literal(REFRESH_MS),max_cache_age_ms:z.literal(MAX_CACHE_AGE_MS),next_retry_at:date.nullable()}).strict()}).strict().refine(reply=>
+ (reply.status.state==='available'||reply.status.state==='stale')===!!reply.snapshot&&(!reply.snapshot||reply.snapshot.fetched_at===reply.status.fetched_at));
+export function validateKrakenReply(value:unknown):KrakenReply{return replySchema.parse(value);}
+
+export function visibleSnapshot(reply:KrakenReply|null,now:number):KrakenSnapshot|null{
+ const snapshot=reply?.snapshot;if(!snapshot||reply.status.state==='denied'||reply.status.state==='unavailable')return null;
+ const age=now-Date.parse(snapshot.fetched_at);return Number.isFinite(age)&&age>=0&&age<=MAX_CACHE_AGE_MS?snapshot:null;
+}
