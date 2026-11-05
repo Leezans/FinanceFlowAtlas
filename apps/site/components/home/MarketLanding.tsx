@@ -25,10 +25,11 @@ export default function MarketLanding() {
         <div className={s.content}><span className={s.kicker}>BTC / ETH · USD</span><h2>加密现货</h2><p>Kraken 单一交易所价格与成交量。</p><small>成交量不是资金净流入</small></div>
         <ArrowRight className={s.arrow} size={18} aria-hidden="true"/>
       </a>
-      <div className={`${s.card} ${s.pending}`}>
+      <a className={s.card} href="/forex" aria-label="打开外汇参考：ECB 每日汇率">
         <ArrowLeftRight className={s.icon} size={25} aria-hidden="true"/>
-        <div className={s.content}><span className={s.kicker}>即将接入</span><h2>外汇参考</h2><p>独立的汇率参考视图。</p><small>当前尚无可用页面</small></div>
-      </div>
+        <div className={s.content}><span className={s.kicker}>ECB · 每日参考</span><h2>外汇参考</h2><p>欧洲央行参考汇率与交叉换算。</p><small>参考汇率不是资金流或实时交易报价</small></div>
+        <ArrowRight className={s.arrow} size={18} aria-hidden="true"/>
+      </a>
     </div>
     <p className={s.disclosure}>入口表示已有页面，不保证来源此刻可用。进入后查看观测期、获取时间与来源状态。</p>
   </section>;

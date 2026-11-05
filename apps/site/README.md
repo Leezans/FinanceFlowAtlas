@@ -26,7 +26,7 @@ The hosted adapter discovers the latest complete, validated observation month pr
 
 Treemap area is the absolute net amount divided by the sum of absolute net amounts of included reported countries, not market capitalization or the Treasury Grand Total. Zero rows are separate; missing rows have no area. No industry or individual-stock hierarchy is implied.
 
-The IMF layer is explicitly unavailable in this hosted application. FX and futures are unconnected. A separate selected-pair Kraken spot layer is described below; it does not extend TIC coverage. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
+The IMF layer is explicitly unavailable in this hosted application. Separate daily ECB FX reference and selected-pair Kraken spot layers are described below; neither extends TIC coverage. Futures remain unconnected. A source failure preserves a last-good cached snapshot with stale status; no initial snapshot returns 503, never substitute data. Tests use synthetic fixtures only. No captured financial snapshots or private user data are bundled.
 
 See [HOSTED_PROOF.md](HOSTED_PROOF.md) for cache validation and endpoint details, and [ATTRIBUTION.md](ATTRIBUTION.md) for separate geography and dependency licensing.
 
@@ -66,6 +66,23 @@ a denial must remain blocked. All external network access is disabled. These
 checks do not establish live provider availability or authenticated production
 access. No database migration is needed for the cooldown change.
 
+
+## Daily FX reference layer
+
+`/forex` and `/api/v1/fx/reference` use the ECB public daily XML, without an account
+or API key. This is a separate **exchange-rate reference** layer, not a capital-flow
+or real-time-price layer. The page shows actual currency coverage, source reference
+date, retrieval/check times, source precision and clearly labelled calculated
+cross-rates. It links the official source and usage terms, and retains the existing
+private site boundary.
+
+A bounded namespace-aware XML parser rejects malformed data and date regressions.
+Per-process memory caches successful checks for an hour; temporary failures retain
+explicitly stale validated rates, and access denials stop checks and clear data.
+No real rates are committed, no credentials are required and no database migration
+is added. `npm run test:fx-runtime` verifies native-workerd parsing and caching with
+synthetic plain/gzip/Brotli XML and real networking disabled. See
+[the FX source contract](../../docs/source-ecb-fx.md) for timing, rights and limits.
 ## Personal Kraken spot layer
 
 `/crypto` reads two selected Kraken spot pairs (BTC/USD and ETH/USD) through its
@@ -109,3 +126,4 @@ responses, 304 recovery, exponential backoff, permanent stops and preservation o
 search, palette, details and selected-stock evidence. These are synthetic local
 checks, not proof of authenticated production source availability. No database
 migration is required for this change.
+

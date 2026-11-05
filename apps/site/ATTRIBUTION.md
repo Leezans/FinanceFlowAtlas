@@ -10,3 +10,13 @@ The upstream iso-codes package is LGPL-2.1-or-later; its copyright notice and li
 ## Hosted application dependencies
 
 The Sites Vite plugin license is retained at `scripts/vite/sites-vite-plugin.LICENSE`. The vendored shadcn stylesheet license is retained at `vendor/shadcn-tailwind-4.13.0.LICENSE.md`. npm dependencies retain their own licenses; exact resolved versions and package license metadata are recorded in `package-lock.json`. Repository source licensing does not relicense dependency code or geographic/provider data.
+
+
+## ECB reference-rate layer
+
+Daily exchange-rate references are attributed to the European Central Bank.
+Source information, data conditions and calculated cross-rate distinctions are
+documented in [the source contract](../../docs/source-ecb-fx.md) and linked in the UI.
+ECB data and branding are not covered by the repository software licence.
+The namespace-aware XML parser uses saxes 6.0.0 (ISC) and its xmlchars dependency
+(MIT), with their package notices retained in installed dependencies.

@@ -8,6 +8,7 @@ export const marketLinks = [
   {href: '/ashare', label: 'A 股热力图'},
   {href: '/markets', label: '全球市场'},
   {href: '/crypto', label: '加密现货'},
+  {href: '/forex', label: '外汇参考'},
   {href: '/', label: '首页 / 美国 TIC'},
 ] as const;
 
@@ -21,7 +22,6 @@ export default function MarketNavigation() {
         className={link.href === '/ashare' ? s.primary : undefined}>
         {link.label}
       </a>)}
-      <span className={s.upcoming}>外汇参考 <small>即将接入</small></span>
     </nav>
     <span className={s.note}>各来源独立展示</span>
   </div>;
