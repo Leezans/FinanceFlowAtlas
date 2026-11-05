@@ -1,9 +1,17 @@
 import {describe,expect,it,vi} from 'vitest';
 import {createFxService as createGatedFxService} from '../lib/fx/service';
-import {CHECK_INTERVAL_MS,RETRY_INTERVAL_MS} from '../lib/fx/model';
+import {CHECK_INTERVAL_MS,RETRY_INTERVAL_MS,CACHE_TTL_MS} from '../lib/fx/model';
 import {FX_NOW,fxXml,fxResponse} from './fx-fixture';
-const createFxService=(fetcher:typeof fetch,now:()=>number)=>createGatedFxService(fetcher,now,{async inspect(){return 'idle'},async acquire(){return {token:'test-only'}},async release(){}});
-describe('ECB ephemeral service cache',()=>{
+import type {FxGateState} from '../lib/fx/source-gate';
+const createFxService=(fetcher:typeof fetch,now:()=>number)=>{
+ const state:FxGateState={state:'idle',retryAt:0,nowMs:now(),checkedAt:null,snapshot:null,expired:false,errorCode:null};
+ return createGatedFxService(fetcher,now,{
+  async inspect(){return {...state,nowMs:now(),expired:!!state.snapshot&&Date.parse(state.snapshot.retrieved_at)+CACHE_TTL_MS<=now()}},
+  async acquire(){state.state='busy';return {token:'test-only'}},
+  async release(_token,outcome){state.state=outcome.kind==='denied'?'blocked':'idle';state.retryAt=now()+(outcome.kind==='success'?CHECK_INTERVAL_MS:RETRY_INTERVAL_MS);state.checkedAt=new Date(now()).toISOString();state.errorCode=outcome.kind==='temporary_failure'?outcome.error:null;if(outcome.kind==='success')state.snapshot=outcome.snapshot;if(outcome.kind==='denied')state.snapshot=null;},
+ });
+};
+describe('ECB shared-cache service',()=>{
  it('coalesces parallel checks and caches successful results for an hour',async()=>{
   let now=FX_NOW;const fetcher=vi.fn(async()=>fxResponse()),service=createFxService(fetcher,()=>now);
   const results=await Promise.all([service.read(),service.read(),service.read()]);expect(fetcher).toHaveBeenCalledTimes(1);expect(results.every(r=>r.snapshot?.rates.length===3)).toBe(true);
@@ -15,6 +23,12 @@ describe('ECB ephemeral service cache',()=>{
   const stale=await service.read();expect(stale.source_state).toBe('stale');expect(stale.error_code).toBe('invalid_source');expect(stale.snapshot).toEqual(first.snapshot);expect(stale.checked_at).not.toBe(first.checked_at);
   now+=RETRY_INTERVAL_MS-1;await service.read();expect(fetcher).toHaveBeenCalledTimes(2);now+=1;
   expect((await service.read()).error_code).toBe('source_older');now+=RETRY_INTERVAL_MS;expect((await service.read()).source_state).toBe('available');
+ });
+ it('does not acquire or fetch when request-lifetime retention cannot be registered',async()=>{
+  const inspect=vi.fn(),acquire=vi.fn(),release=vi.fn(),fetcher=vi.fn();
+  const service=createGatedFxService(fetcher,()=>FX_NOW,{inspect,acquire,release},()=>{throw new Error('no execution context')});
+  expect(await service.read()).toMatchObject({snapshot:null,source_state:'stopped',error_code:'source_gate_unavailable'});
+  expect(inspect).not.toHaveBeenCalled();expect(acquire).not.toHaveBeenCalled();expect(fetcher).not.toHaveBeenCalled();
  });
  it('returns unavailable, never fake zero data, on first failure',async()=>{
   const service=createFxService(async()=>{throw new Error('private error detail')},()=>FX_NOW),result=await service.read();expect(result.snapshot).toBeNull();expect(result.source_state).toBe('unavailable');expect(JSON.stringify(result)).not.toContain('private error detail');

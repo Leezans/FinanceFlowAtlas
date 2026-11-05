@@ -56,6 +56,8 @@ export const krakenSourceGate=sqliteTable('kraken_source_gate',{
 export const ecbFxSourceGate=sqliteTable('ecb_fx_source_gate',{
  id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),
  updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+ payload:text('payload'),expiresMs:integer('expires_ms').notNull().default(0),
+ checkedMs:integer('checked_ms').notNull().default(0),errorCode:text('error_code'),
 },t=>[
  check('ecb_fx_gate_id',sql`${t.id} = 'daily_reference'`),
  check('ecb_fx_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
