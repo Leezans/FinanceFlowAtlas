@@ -1,8 +1,8 @@
 /** Public spot evidence from one exchange. No accounts, orders or net-flow model. */
 import {strictJSON} from '../ashare/strict-json';
 import {KrakenError, krakenResult} from './protocol';
-import {readTradeSelection, type TradeSelection} from './selection';
-import {parseKrakenTrades, selectedTradePairs, tradeRequestUrl, tradeSnapshot, TRADE_WINDOW_MS, type KrakenTradeRow, type KrakenTradeSnapshot} from './trades';
+import {readTradeSelection, tradeWindowMilliseconds, type TradeSelection, type TradeTimeframe} from './selection';
+import {KrakenTradeCollection, selectedTradePairs, tradeSnapshot, TRADE_PAGE_LIMIT, MAX_TRADE_REQUESTS, type KrakenTradeSnapshot} from './trades';
 export {KrakenError} from './protocol';
 export const KRAKEN_URL='https://api.kraken.com/0/public/Ticker?asset_class=forex';
 export const KRAKEN_PAIRS_URL='https://api.kraken.com/0/public/AssetPairs?aclass_base=currency';
@@ -17,7 +17,7 @@ export type KrakenRow=KrakenPair&{last_price_usd:string;volume_base_24h:string;v
 export type KrakenMissing={pair:string;reason:'missing_ticker'|'invalid_ticker'};
 export type KrakenSnapshot={schema:'kraken-spot/2';venue:'Kraken';coverage:'online_usd_spot_pairs_one_venue';rows:KrakenRow[];missing:KrakenMissing[];universe_pair_count:number;catalog_pair_count:number;catalog_fetched_at:string;quality:'complete'|'partial';acquisition_started_at:string;fetched_at:string;source_observed_at:null;delay_status:'not_provided';window:'rolling_24h';monetary_encoding:'decimal_string'};
 export type KrakenStatus={state:'available'|'stale'|'unavailable'|'denied';error_code:string|null;last_attempt_at:string|null;fetched_at:string|null;cache_age_ms:number|null;refresh_ms:number;max_cache_age_ms:number;next_retry_at:string|null};
-export type KrakenReply={requested_pairs?:string[];status:KrakenStatus;snapshot:KrakenSnapshot|null;trade_snapshot?:KrakenTradeSnapshot|null};
+export type KrakenReply={requested_pairs?:string[];requested_window?:TradeTimeframe;status:KrakenStatus;snapshot:KrakenSnapshot|null;trade_snapshot?:KrakenTradeSnapshot|null};
 export type KrakenOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number};
 export interface KrakenGate {inspect():Promise<'idle'|'busy'|'blocked'>;acquire(signal?:AbortSignal):Promise<{token:string}>;release(token:string,outcome:KrakenOutcome):Promise<void>}
 function fail(code:string):never{throw new KrakenError(code);}
@@ -123,19 +123,26 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
    const tickerPayload=await acquireJSON(KRAKEN_URL);
    // Classify API denials and validate quotes before any further source call.
    const validatedTicker=parseKrakenTicker(tickerPayload,new Date(started).toISOString(),new Date(now()).toISOString(),nextUniverse);
-   const tradeRows:KrakenTradeRow[]=[];
+   const tradeCollections:KrakenTradeCollection[]=[];
    if(options.includeTradeImbalance){
-    for(const pair of selectedTradePairs(nextUniverse,selection.pairs)){
-     // No continuation/backfill loop. One page per verified selected pair, inside the same
-     // lease and deadline as quotes; every public request is spaced apart.
-     await pause(REQUEST_SPACING_MS,controller.signal);
-     const raw=await acquireJSON(tradeRequestUrl(pair,started-TRADE_WINDOW_MS));
-     tradeRows.push(parseKrakenTrades(raw,pair,started-TRADE_WINDOW_MS,started,now()));
+    const windowStart=started-tradeWindowMilliseconds(selection.timeframe);
+    tradeCollections.push(...selectedTradePairs(nextUniverse,selection.pairs).map(pair=>new KrakenTradeCollection(pair,windowStart,started)));
+    let requests=0;
+    // Give every selected pair one page before bounded continuations. All
+    // requests retain the same shared admission, spacing and total deadline.
+    for(let page=0;page<TRADE_PAGE_LIMIT;page++){
+     for(const collection of tradeCollections){
+      if(!collection.needsPage)continue;
+      if(requests>=MAX_TRADE_REQUESTS)fail('trade_page_budget');
+      const url=collection.requestUrl;
+      await pause(REQUEST_SPACING_MS,controller.signal);
+      collection.append(await acquireJSON(url),now());requests++;
+     }
     }
    }
    const finished=now();
    const candidate={...validatedTicker,fetched_at:new Date(finished).toISOString()};
-   const candidateTrades=options.includeTradeImbalance?tradeSnapshot(tradeRows,started,finished,selection.pairs):null;
+   const candidateTrades=options.includeTradeImbalance?tradeSnapshot(tradeCollections.map(collection=>collection.row),started,finished,selection.pairs,selection.timeframe):null;
    abortCheck();
    // Cleanup has its own budget: request cancellation must not interrupt the
    // single owner-token release, or publish a candidate before it is confirmed.
@@ -172,7 +179,7 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
   // Quote scope is the full USD catalog. Trade scope must match this request.
   const trades=!denied&&valid&&tradeEvidenceKey===selection.key&&tradeEvidence?{...tradeEvidence}:null;
   if(trades&&!selection.explicit){delete trades.selected_pairs;trades.schema='kraken-trades/1';}
-  return {...(selection.explicit?{requested_pairs:[...selection.pairs]}:{}),...(options.includeTradeImbalance?{trade_snapshot:trades}:{}),snapshot:!denied&&valid?snapshot:null,status:{state:denied?'denied':!valid?'unavailable':error||age!>REFRESH_MS?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:snapshot?.fetched_at??null,cache_age_ms:age,refresh_ms:REFRESH_MS,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:denied||retryAt===0||retryAt>8.64e15?null:new Date(retryAt).toISOString()}};
+  return {...(selection.explicit?{requested_pairs:[...selection.pairs]}:{}),...(selection.windowExplicit?{requested_window:selection.timeframe}:{}),...(options.includeTradeImbalance?{trade_snapshot:trades}:{}),snapshot:!denied&&valid?snapshot:null,status:{state:denied?'denied':!valid?'unavailable':error||age!>REFRESH_MS?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:snapshot?.fetched_at??null,cache_age_ms:age,refresh_ms:REFRESH_MS,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:denied||retryAt===0||retryAt>8.64e15?null:new Date(retryAt).toISOString()}};
  }
  return async(request:Request):Promise<Response>=>{
   const url=new URL(request.url),mode=url.pathname.split('/').at(-1);
@@ -182,7 +189,7 @@ export function createKrakenHandler(options:{gate:KrakenGate;fetcher?:typeof fet
   try{selection=readTradeSelection(url,options.includeTradeImbalance===true);}catch{return Response.json({error:'invalid_request'},{status:400,headers:{'Cache-Control':'no-store'}});}
   const run=async(lifetimeReady:()=>boolean,track:<T>(operation:Promise<T>)=>Promise<T>)=>{
   try{if(await settleGate(options.gate.inspect(),AbortSignal.timeout(2_000))==='blocked'){denied=true;snapshot=null;tradeEvidence=null;tradeEvidenceKey=null;universe=null;error='source_denied';}}
-  catch{error='source_gate_unavailable';const status={...reply(selection).status,state:'unavailable'};return Response.json(mode==='status'?status:{...(selection.explicit?{requested_pairs:[...selection.pairs]}:{}),status,snapshot:null,...(options.includeTradeImbalance?{trade_snapshot:null}:{})},{status:503,headers:{'Cache-Control':'no-store'}});}
+  catch{error='source_gate_unavailable';const status={...reply(selection).status,state:'unavailable'};return Response.json(mode==='status'?status:{...(selection.explicit?{requested_pairs:[...selection.pairs]}:{}),...(selection.windowExplicit?{requested_window:selection.timeframe}:{}),status,snapshot:null,...(options.includeTradeImbalance?{trade_snapshot:null}:{})},{status:503,headers:{'Cache-Control':'no-store'}});}
   if(mode==='snapshot'&&!denied&&now()>=retryAt){pending??=refresh(selection,request.signal,lifetimeReady,track).finally(()=>{pending=undefined;});await pending;}
   const result=reply(selection);return Response.json(mode==='status'?result.status:result,{status:mode==='status'||result.snapshot?200:503,headers:{'Cache-Control':'no-store','X-Data-Status':result.status.state}});
   };

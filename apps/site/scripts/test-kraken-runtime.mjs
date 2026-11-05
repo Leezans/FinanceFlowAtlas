@@ -30,7 +30,7 @@ catalog.result.SOLUSD={aclass_base:'currency',aclass_quote:'currency',base:'SOL'
 // Exercise broad cardinality in the native runtime, not only two-row fixtures.
 for(let i=0;i<700;i++){catalog.result[`S${i}USD`]={aclass_base:'currency',aclass_quote:'currency',base:`S${i}`,quote:'ZUSD',wsname:`S${i}/USD`,status:'online'};fixture.result[`S${i}USD`]={c:['1.25','1'],v:['99','3'],p:['99','1.2'],t:[99,8]};}
 async function scenario(mode,fn){
- let calls=0,metadataCalls=0,tradeCalls=0;const events=[];const mock=createFetchMock();mock.disableNetConnect();
+ let calls=0,metadataCalls=0,tradeCalls=0;const events=[],pairPages=new Map();const mock=createFetchMock();mock.disableNetConnect();
  mock.get('https://api.kraken.com').intercept({method:'GET',path:'/0/public/AssetPairs?aclass_base=currency'}).reply(()=>{metadataCalls++;events.push({endpoint:'metadata',at:Date.now()});if(mode==='metadata-denied')return {statusCode:403,data:''};const raw=Buffer.from(JSON.stringify(catalog)),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json',...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};}).persist();
  const interception=mock.get('https://api.kraken.com').intercept({method:'GET',path:'/0/public/Ticker?asset_class=forex'}).reply(()=>{
   calls++;events.push({endpoint:'ticker',at:Date.now()});if(mode==='denied')return {statusCode:403,data:''};
@@ -44,15 +44,17 @@ async function scenario(mode,fn){
   if(mode==='trade-denied')return {statusCode:403,data:''};
   const query=new URL(options.path,'https://api.kraken.com').searchParams,pair=query.get('pair'),start=Number(BigInt(query.get('since'))/1_000_000n)/1000;
   assert.ok(Object.hasOwn(catalog.result,pair),'trade source ID must come from the verified catalog');assert.equal(query.get('count'),'1000');assert.match(query.get('since'),/^\d+$/);
-  const rows=mode==='trade-cap'?Array.from({length:1000},(_,index)=>['0.1','0.2',start+1+index/1000,'b','l','',index+1]):[['0.1','0.2',start+1,'b','l','',1],['0.3','0.1',start+2,'s','m','',2]];
-  const raw=Buffer.from(JSON.stringify({error:[],result:{[pair]:rows,last:query.get('since')}})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
+  const page=(pairPages.get(pair)??0)+1;pairPages.set(pair,page);
+  const capped=mode==='trade-cap'||mode==='trade-paginated'&&page===1;
+  const rows=capped?Array.from({length:1000},(_,index)=>['0.1','0.2',start+1+index/1000,'b','l','',(page-1)*1000+index+1]):[['0.1','0.2',start+1,'b','l','',(page-1)*1000+1],['0.3','0.1',start+2,'s','m','',(page-1)*1000+2]];
+  const raw=Buffer.from(JSON.stringify({error:[],result:{[pair]:rows,last:(BigInt(query.get('since'))+2_000_000_000n).toString()}})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
   return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json',...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};
  }).persist();
 
  // Separate native worker module state sharing the exact same D1 gate.
  const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat','enable_request_signal'],d1Databases:{DB:'offline-shared-kraken-gate'},fetchMock:mock});
  const mf=new Miniflare({workers:[worker('warm'),worker('cold')]});
- try{const db=await mf.getD1Database('DB','warm');for(const sql of [aMigration,migration])for(const statement of sql.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();await db.prepare("UPDATE ashare_source_gate SET status='blocked',reason_code='http_403' WHERE id='single_upstream'").run();await fn(mf,db,()=>calls);assert.equal(metadataCalls,1);for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'all Kraken requests require source pacing');assert.ok(tradeCalls<=3,'bounded three-pair trade request budget');assert.equal((await db.prepare('SELECT status FROM ashare_source_gate').first()).status,'blocked');}
+ try{const db=await mf.getD1Database('DB','warm');for(const sql of [aMigration,migration])for(const statement of sql.split('--> statement-breakpoint'))await db.prepare(statement.trim()).run();await db.prepare("UPDATE ashare_source_gate SET status='blocked',reason_code='http_403' WHERE id='single_upstream'").run();await fn(mf,db,()=>calls);assert.equal(metadataCalls,1);for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'all Kraken requests require source pacing');assert.ok(tradeCalls<=6,'bounded three-pair, two-page trade request budget');assert.equal((await db.prepare('SELECT status FROM ashare_source_gate').first()).status,'blocked');}
  finally{await mf.dispose();await mock.close();}
 }
 for(const encoding of ['plain','gzip','br'])await scenario(encoding,async(mf,db,calls)=>{
@@ -95,8 +97,16 @@ await scenario('denied',async(mf,db,calls)=>{
 });
 await scenario('trade-cap',async(mf,_db,calls)=>{
  const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,200);assert.equal(calls(),1);
- for(const row of body.trade_snapshot.rows){assert.equal(row.coverage,'capped_response');assert.equal(row.returned_count,1000);assert.equal(row.imbalance_usd,null);assert.equal(row.imbalance_pct,null);}
+ for(const row of body.trade_snapshot.rows){assert.equal(row.coverage,'capped_response');assert.equal(row.returned_count,2000);assert.equal(row.page_count,2);assert.equal(row.last_page_count,1000);assert.equal(row.imbalance_usd,null);assert.equal(row.imbalance_pct,null);}
  console.log('PASS capped response exposes incompleteness, never a zero or invented window total');
+});
+await scenario('trade-paginated',async(mf,_db,calls)=>{
+ const body=await (await mf.dispatchFetch(url+'?window=1m')).json();assert.equal(body.status.state,'available');assert.equal(body.requested_window,'1m');assert.equal(body.trade_snapshot.window_ms,60_000);assert.equal(calls(),1);
+ for(const row of body.trade_snapshot.rows){assert.equal(row.coverage,'uncapped_response');assert.equal(row.page_count,2);assert.equal(row.last_page_count,2);assert.equal(row.returned_count,1002);assert.equal(row.imbalance_usd,'19.99');}
+ const other=await (await mf.dispatchFetch(url+'?window=5m')).json();assert.equal(other.trade_snapshot,null);assert.deepEqual(other.snapshot,body.snapshot);assert.equal(calls(),1);
+ const same=await (await mf.dispatchFetch(url+'?window=1m')).json();assert.deepEqual(same.trade_snapshot,body.trade_snapshot);assert.equal(calls(),1);
+ const cold=await (await (await mf.getWorker('cold')).fetch(url+'?window=1m')).json();assert.equal(cold.status.error_code,'source_cooldown');assert.equal(cold.trade_snapshot,null);assert.equal(cold.requested_window,'1m');assert.equal(calls(),1);
+ console.log('PASS bounded cursor continuation; one-minute identity isolated from five-minute scope and cold-worker cooldown');
 });
 await scenario('trade-denied',async(mf,db,calls)=>{
  const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,503);assert.equal(body.status.state,'denied');assert.equal(body.snapshot,null);assert.equal(body.trade_snapshot,null);assert.equal(calls(),1);

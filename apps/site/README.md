@@ -98,15 +98,19 @@ with synthetic plain/gzip/Brotli XML and real networking disabled. See
 without an account. It also adds a separate, bounded executed-trade imbalance matrix. BTC/USD,
 ETH/USD and SOL/USD are the default; the owner can explicitly select one to three
 pairs from the validated online USD catalog. See [trade source contract](../../docs/source-kraken-trades.md)
-for the five-minute requested window, REST side-label uncertainty and incomplete
+for selectable one/five-minute requested windows, REST side-label uncertainty and incomplete
 responses. The quote matrix shows last price, rolling-24h base-coin volume,
 VWAP and trade count, not net capital flow, derivative open interest or global
 crypto totals. Quote observation time remains unknown; the separate trade matrix
 shows returned execution times independently of acquisition time.
 Quote cards stay equal-width: a price, base-coin quantity or trade count is not a
 comparable transaction amount. The separate trade treemap sizes each pair by the
-absolute USD buy-label minus sell-label notional over the same stored five-minute
-window. Capped responses receive no monetary area or directional color. Reported
+absolute USD buy-label minus sell-label notional over the same stored one/five-minute
+window. Each selected pair receives at most two 1,000-trade pages; a full terminal
+page remains unknown, including in the shorter window. Pagination stays within
+the existing 12-second acquisition deadline and shared source gate.
+Window and canonical pair selection are both part of the evidence cache key.
+Changing either removes old trade evidence immediately without relabeling it. Capped responses receive no monetary area or directional color. Reported
 zero imbalance and missing evidence remain distinct in the full details panel;
 area does not imply net capital flow or complete interval coverage.
 One-minute caching, a 15-minute display expiry and a separate persistent

@@ -10,11 +10,17 @@ export function canonicalTradeSelection(pairs: readonly string[]): string[] {
   return [...pairs].sort();
 }
 export const tradeSelectionKey = (pairs: readonly string[]): string => canonicalTradeSelection(pairs).join(',');
-export type TradeSelection = {pairs: readonly string[]; key: string; explicit: boolean};
+export const DEFAULT_TRADE_TIMEFRAME = '5m';
+export type TradeTimeframe = '1m' | '5m';
+export const tradeWindowMilliseconds = (timeframe: TradeTimeframe): 60_000 | 300_000 => timeframe === '1m' ? 60_000 : 300_000;
+export const tradeEvidenceKey = (pairs: readonly string[], timeframe: TradeTimeframe): string => `${timeframe}:${tradeSelectionKey(pairs)}`;
+export type TradeSelection = {pairs: readonly string[]; key: string; explicit: boolean; timeframe: TradeTimeframe; windowExplicit: boolean};
 export function readTradeSelection(url: URL, enabled: boolean): TradeSelection {
   const params = [...url.searchParams.entries()];
-  if (params.length === 0) return {pairs: DEFAULT_TRADE_PAIRS, key: tradeSelectionKey(DEFAULT_TRADE_PAIRS), explicit: false};
-  if (!enabled || params.length !== 1 || params[0][0] !== 'pairs' || params[0][1].length > 110) throw new Error('invalid_trade_selection');
-  const pairs = canonicalTradeSelection(params[0][1].split(','));
-  return {pairs, key: tradeSelectionKey(pairs), explicit: true};
+  if (params.some(([key]) => !['pairs', 'window'].includes(key)) || new Set(params.map(([key]) => key)).size !== params.length || !enabled && params.length > 0) throw new Error('invalid_trade_selection');
+  const raw = url.searchParams.get('pairs'), window = url.searchParams.get('window');
+  if (raw !== null && raw.length > 110 || window !== null && !['1m', '5m'].includes(window)) throw new Error('invalid_trade_selection');
+  const pairs = raw === null ? DEFAULT_TRADE_PAIRS : canonicalTradeSelection(raw.split(','));
+  const timeframe = (window ?? DEFAULT_TRADE_TIMEFRAME) as TradeTimeframe;
+  return {pairs, key: tradeEvidenceKey(pairs, timeframe), explicit: raw !== null, timeframe, windowExplicit: window !== null};
 }
