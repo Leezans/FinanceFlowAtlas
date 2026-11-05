@@ -11,6 +11,7 @@ const eslintConfig = defineConfig([
     ".wrangler/**",
     ".sites-runtime/**",
     "outputs/**",
+    ".offline-built-browser*/**",
     "work/**",
   ]),
   {

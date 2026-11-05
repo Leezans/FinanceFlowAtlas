@@ -19,6 +19,7 @@ next-env.d.ts
 
 # Test output
 /coverage/
+/.offline-built-browser*/
 
 # Package-manager logs
 npm-debug.log*
