@@ -14,7 +14,20 @@ export type SourceOutcome={kind:'success'|'temporary_failure'|'denied';reason?:s
 export interface SourceGate {acquire(scopeKey:string,signal:AbortSignal):Promise<{token:string}>;release(token:string,outcome:SourceOutcome):Promise<void>;}
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
 type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean;errorCode?:string};
-class SourceDenied extends Error {}
+class SourceDenied extends Error {
+  constructor(code:string,readonly response?:Response){super(code);}
+}
+const DENIED_DISPOSAL_MS=1000;
+async function discardDeniedResponse(response?:Response):Promise<void> {
+  if(!response)return;
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{
+    // Called only AFTER the durable outcome write has settled. Native or custom
+    // body cleanup must never delay recording an already-observed denial.
+    const cleanup=Promise.resolve().then(()=>response.body?.cancel()).catch(()=>{});
+    await Promise.race([cleanup,new Promise<void>(resolve=>{timer=setTimeout(resolve,DENIED_DISPOSAL_MS);})]);
+  }finally{if(timer!==undefined)clearTimeout(timer);}
+}
 // Only bounded codes leave the server. Never expose upstream bodies, URLs, or
 // runtime exception text through the owner-facing API or production logs.
 const ERROR_CODES=new Set(['source_denial_latched','runtime_routing_unverified','runtime_lifetime_unverified','source_gate_required','source_gate_unavailable','source_busy','source_cooldown','source_denied','source_aborted','source_stale_lease','persistent_source_denial','invalid_source_lease','source_gate_release_unconfirmed','source_access_denied','html_challenge','non_json_challenge','redirect_denied','automatic_redirect_denied','provider_error_or_challenge','unsupported_content_encoding','byte_budget','upstream_http','not_json','invalid_schema','invalid_json','row_budget','unstable_total','incomplete_page','duplicate_id','incomplete_snapshot','invalid_row','missing_fields','invalid_id','invalid_name','invalid_numeric','negative_price','invalid_return','deadline','aborted','disabled','missing_snapshot']);
@@ -121,14 +134,15 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
             // A normal official redirect may have an HTML body. Validate its
             // exact target first; an off-policy/login redirect is a denial.
             try{if(redirects>=1)throw new Error('redirect_budget');nextUrl=redirect(url,response.headers.get('location')??'',query);}
-            catch{await response.body?.cancel().catch(()=>{});throw new SourceDenied('redirect_denied');}
+            catch{throw new SourceDenied('redirect_denied',response);}
           }
           const responseType=response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-          if(!isRedirect&&(responseType==='text/html'||responseType==='application/xhtml+xml')){await response.body?.cancel().catch(()=>{});throw new SourceDenied('html_challenge');}
+          if(!isRedirect&&(responseType==='text/html'||responseType==='application/xhtml+xml')){throw new SourceDenied('html_challenge',response);}
           // Once observed, a denial remains a denial even if abort/cancel also fails.
-          if([401,403,407,429,451].includes(response.status)){await response.body?.cancel().catch(()=>{});throw new SourceDenied('source_access_denied');}
-          if(response.status===200&&response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json'){await response.body?.cancel().catch(()=>{});throw new SourceDenied('non_json_challenge');}
-          abortCheck(signal);if(now()-start>=DEADLINE)throw new Error('deadline');if(response.redirected){await response.body?.cancel().catch(()=>{});throw new SourceDenied('automatic_redirect_denied');}
+          if([401,403,407,429,451].includes(response.status)){throw new SourceDenied('source_access_denied',response);}
+          if(response.status===200&&response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json'){throw new SourceDenied('non_json_challenge',response);}
+          if(response.redirected)throw new SourceDenied('automatic_redirect_denied',response);
+          abortCheck(signal);if(now()-start>=DEADLINE)throw new Error('deadline');
           raw=await body(response,MAX_BYTES-bytes,signal);bytes+=raw.byteLength;
           if(isRedirect){redirects++;url=nextUrl!;endpoint=DELAY;continue;}
           if(response.status!==200)throw new Error('upstream_http');
@@ -186,6 +200,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         // failed/uncertain write. No publication until persistence confirms release.
         try{await sourceGate.release(lease.token,outcome);}
         catch{throw new SourceDenied('source_gate_release_unconfirmed');}
+        finally{if(collectionError instanceof SourceDenied)await discardDeniedResponse(collectionError.response);}
         if(collectionError)throw collectionError;
         if(!next)throw new Error('missing_snapshot');
         entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;

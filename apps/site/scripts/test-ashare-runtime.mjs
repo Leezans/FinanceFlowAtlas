@@ -15,8 +15,16 @@ const root=fileURLToPath(new URL('..',import.meta.url));
 const {outputFiles}=await build({
   stdin:{
     contents:`import {ashareHandler} from './lib/ashare/host';
+      import {createAshareHandler} from './lib/ashare/ashare';
+      import {D1SourceGate} from './lib/ashare/source-gate';
+      import {env,waitUntil} from 'cloudflare:workers';
+      const hangingDenial=createAshareHandler({enabled:()=>true,runtime:'cloudflare-workers',isolatedForTests:true,
+        sourceGate:new D1SourceGate(env.DB),waitUntil,
+        fetcher:async()=>new Response(new ReadableStream({cancel(){return new Promise(()=>{});}}),
+          {status:403,headers:{'content-type':'application/json'}})});
       let releaseAbort;
       export default {fetch(request){
+        if(new URL(request.url).pathname==='/offline/hanging-denial')return hangingDenial(new Request(new URL('/api/v1/ashare/snapshot',request.url)));
         if(new URL(request.url).pathname==='/offline/abort'){releaseAbort?.();return new Response('synthetic cancellation released');}
         if(new URL(request.url).pathname==='/offline/cancel-after-response'){
           const controller=new AbortController();
@@ -158,3 +166,28 @@ await withWorkers('disconnect',async(mf,db,calls)=>{
   assert.equal((await next.json()).error_code,'source_cooldown');assert.equal(calls(),1);
 });
 console.log('PASS abort after HTTP response: native retained cleanup releases only its own lease; cooldown persists');
+
+
+await withWorkers('plain',async(mf,db,calls)=>{
+  // A never-settling cancel() is synthetic, but the handler, workerd stream, and
+  // D1 denial transition are real. No external/provider request is made.
+  const pending=mf.dispatchFetch('https://offline.invalid/offline/hanging-denial');
+  const deadline=Date.now()+3000;
+  let gate;
+  while(Date.now()<deadline){
+    gate=await db.prepare('SELECT status,lease_token FROM ashare_source_gate').first();
+    if(gate.status==='blocked')break;
+    await new Promise(resolve=>setTimeout(resolve,20));
+  }
+  assert.equal(gate.status,'blocked','observed denial must persist without waiting for body cancellation');
+  assert.equal(gate.lease_token,null);
+  let timer;
+  try{
+    const result=await Promise.race([pending,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('denial cleanup exceeded bound')),3000);})]);
+    assert.equal(result.status,503);assert.equal((await result.json()).error_code,'source_access_denied');
+  }finally{clearTimeout(timer);}
+  const cold=await mf.getWorker('cold');const result=await cold.fetch(endpoint);
+  assert.equal(result.status,503);assert.equal((await result.json()).error_code,'persistent_source_denial');
+  assert.equal(calls(),0,'denied fixtures must not result in an external mock or actual source call');
+});
+console.log('PASS native hanging body cancellation cannot delay durable denial; cold isolate remains blocked');

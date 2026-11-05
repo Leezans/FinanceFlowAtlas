@@ -224,3 +224,49 @@ describe('request lifetime retention',()=>{
   expect(f).toHaveBeenCalledTimes(1);expect(gate.release).toHaveBeenCalledTimes(1);
  });
 });
+
+describe('durable denial precedes bounded body disposal',()=>{
+ const denialCases=[
+  ['source_access_denied',{status:403,headers:{'content-type':'application/json'}}],
+  ['html_challenge',{status:503,headers:{'content-type':'text/html'}}],
+  ['non_json_challenge',{status:200,headers:{'content-type':'text/plain'}}],
+  ['redirect_denied',{status:302,headers:{location:'https://untrusted.invalid/path'}}],
+ ] as const;
+ it.each(denialCases)('persists %s before a never-settling cancellation and stops within 1s',async(code,init)=>{
+  let denied=false;const order:string[]=[];
+  const gate={async acquire(){if(denied)throw Object.assign(new Error('denied'),{code:'source_denied'});return {token:'one'};},release:vi.fn(async(_token:string,outcome:{kind:string})=>{denied=outcome.kind==='denied';order.push('persist');})};
+  const stream=new ReadableStream({cancel(){order.push('cancel');return new Promise(()=>{});}});
+  const f=vi.fn(async()=>new Response(stream,init));const h=make(f,{sourceGate:gate});
+  const pending=h(request());let settled=false;void pending.then(()=>{settled=true;});
+  await vi.advanceTimersByTimeAsync(1);expect(denied).toBe(true);expect(order).toEqual(['persist','cancel']);expect(settled).toBe(false);
+  const coldFetch=vi.fn();const cold=make(coldFetch,{sourceGate:gate});
+  expect((await cold(request('BK0001'))).status).toBe(503);expect(coldFetch).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1000);const result=await pending;
+  expect(result.status).toBe(503);expect(await result.json()).toMatchObject({error_code:code});
+  expect(gate.release).toHaveBeenCalledTimes(1);expect(f).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(86400000);await h(request());expect(f).toHaveBeenCalledTimes(1);
+ });
+ it('never reopens or retries if denied persistence fails while body cleanup also stalls',async()=>{
+  const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{throw new Error('unconfirmed');})};
+  const f=vi.fn(async()=>new Response(new ReadableStream({cancel(){return new Promise(()=>{});}}),{status:403}));
+  const h=make(f,{sourceGate:gate});const pending=h(request());await vi.advanceTimersByTimeAsync(1001);
+  expect(await (await pending).json()).toMatchObject({error_code:'source_gate_release_unconfirmed'});
+  await vi.advanceTimersByTimeAsync(86400000);await h(request('BK0001'));expect(f).toHaveBeenCalledTimes(1);expect(gate.release).toHaveBeenCalledTimes(1);
+ });
+ it('does not downgrade an observed automatic redirect when cancellation races the response',async()=>{
+  const controller=new AbortController();
+  const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};
+  const f=vi.fn(async()=>{const response=upstream();Object.defineProperty(response,'redirected',{value:true});controller.abort();return response;});
+  const h=make(f,{sourceGate:gate});const result=await h(new Request('https://x/api/v1/ashare/snapshot',{signal:controller.signal}));
+  expect(await result.json()).toMatchObject({error_code:'automatic_redirect_denied'});
+  expect(gate.release).toHaveBeenCalledWith('one',{kind:'denied',reason:'source_denial'});
+ });
+ it('awaits outcome persistence before even starting response-body disposal',async()=>{
+  let finish!:()=>void;const barrier=new Promise<void>(resolve=>{finish=resolve;});const cancel=vi.fn(async()=>{});
+  const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>barrier)};
+  const h=make(async()=>new Response(new ReadableStream({cancel}),{status:403}),{sourceGate:gate});
+  const pending=h(request());await vi.advanceTimersByTimeAsync(5000);
+  expect(gate.release).toHaveBeenCalledTimes(1);expect(cancel).not.toHaveBeenCalled();
+  finish();expect((await pending).status).toBe(503);expect(cancel).toHaveBeenCalledTimes(1);
+ });
+});
