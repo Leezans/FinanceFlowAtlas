@@ -1,0 +1,102 @@
+/** Bounded, single-venue executed-trade evidence. Never a net capital-flow model. */
+import type {KrakenPair, KrakenUniverse} from './kraken';
+import {KrakenError, krakenResult} from './protocol';
+
+export const KRAKEN_TRADES_DOCS = 'https://docs.kraken.com/api-reference/market-data/get-recent-trades';
+export const KRAKEN_TAKER_DOCS = 'https://docs.kraken.com/exchange/api-reference/spot-websocket-v2/trade';
+export const TRADE_PAIRS = ['BTC/USD', 'ETH/USD', 'SOL/USD'] as const;
+export const TRADE_WINDOW_MS = 300_000;
+export const TRADE_LIMIT = 1_000;
+export type TradePair = typeof TRADE_PAIRS[number];
+export type KrakenTradeRow = KrakenPair & {
+  coverage: 'uncapped_response' | 'capped_response';
+  returned_count: number;
+  trade_count: number;
+  excluded_after_window_count: number;
+  first_trade_at: string | null;
+  last_trade_at: string | null;
+  fetched_at: string;
+  cursor: string;
+  buy_notional_usd: string | null;
+  sell_notional_usd: string | null;
+  imbalance_usd: string | null;
+  imbalance_pct: number | null;
+};
+export type KrakenTradeSnapshot = {
+  schema: 'kraken-trades/1';
+  venue: 'Kraken';
+  coverage: 'selected_usd_pairs_one_venue';
+  window_started_at: string;
+  window_ended_at: string;
+  fetched_at: string;
+  window_ms: typeof TRADE_WINDOW_MS;
+  trade_limit: typeof TRADE_LIMIT;
+  rows: KrakenTradeRow[];
+  missing_pairs: TradePair[];
+  net_capital_flow: null;
+};
+function fail(code: string): never { throw new KrakenError(code); }
+const DECIMAL = /^(?:0|[1-9]\d{0,14})(?:\.\d{1,12})?$/;
+const SCALE = BigInt(10) ** BigInt(12), NOTIONAL_SCALE = SCALE * SCALE;
+function scaled(value: unknown): bigint {
+  if (typeof value !== 'string' || !DECIMAL.test(value)) fail('invalid_trade_decimal');
+  const [whole, fraction = ''] = (value as string).split('.');
+  const result = BigInt(whole) * SCALE + BigInt(fraction.padEnd(12, '0'));
+  if (result <= BigInt(0)) fail('invalid_trade_decimal');
+  return result;
+}
+export function formatTradeNotional(value: bigint): string {
+  const negative = value < BigInt(0), absolute = negative ? -value : value;
+  const fraction = (absolute % NOTIONAL_SCALE).toString().padStart(24, '0').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${absolute / NOTIONAL_SCALE}${fraction ? `.${fraction}` : ''}`;
+}
+export function selectedTradePairs(universe: KrakenUniverse): KrakenPair[] {
+  return TRADE_PAIRS.flatMap(name => universe.pairs.filter(pair => pair.pair === name));
+}
+export function tradeRequestUrl(pair: KrakenPair, windowStart: number): string {
+  if (!TRADE_PAIRS.includes(pair.pair as TradePair) || !/^[A-Z0-9][A-Z0-9.]{0,31}$/.test(pair.source_pair) || !Number.isSafeInteger(windowStart) || windowStart <= 0) fail('invalid_trade_request');
+  const url = new URL('https://api.kraken.com/0/public/Trades');
+  url.searchParams.set('pair', pair.source_pair);
+  url.searchParams.set('since', (BigInt(windowStart) * BigInt(1_000_000)).toString());
+  url.searchParams.set('count', String(TRADE_LIMIT));
+  return url.toString();
+}
+/**
+ * One bounded response, not a cursor-following archive. A full page may truncate
+ * the requested window, so it never supplies a window total or a heatmap color.
+ * Separate snapshots overlap and must never be accumulated into a daily total.
+ */
+export function parseKrakenTrades(payload: unknown, pair: KrakenPair, windowStart: number, windowEnd: number, fetched: number): KrakenTradeRow {
+  if (!Number.isSafeInteger(windowStart) || !Number.isSafeInteger(windowEnd) || !Number.isSafeInteger(fetched) || windowEnd - windowStart !== TRADE_WINDOW_MS || windowStart <= 0 || fetched < windowEnd || fetched - windowEnd > 12_000) fail('invalid_trade_clock');
+  const result = krakenResult(payload, 2), keys = Object.keys(result);
+  if (keys.length !== 2 || !Object.hasOwn(result, pair.source_pair) || !Object.hasOwn(result, 'last')) fail('invalid_trade_pair');
+  const cursor = result.last;
+  if (typeof cursor !== 'string' || !/^\d{1,24}$/.test(cursor)) fail('invalid_trade_cursor');
+  const raw = result[pair.source_pair];
+  if (!Array.isArray(raw) || raw.length > TRADE_LIMIT) fail('trade_count_budget');
+  const seen = new Set<number>();
+  let buy = BigInt(0), sell = BigInt(0), count = 0, excluded = 0, first: number | null = null, last: number | null = null, prior = -Infinity;
+  for (const item of raw) {
+    if (!Array.isArray(item) || item.length !== 7) fail('invalid_trade_tuple');
+    const [price, volume, time, side, orderType, misc, tradeId] = item;
+    const notional = scaled(price) * scaled(volume);
+    if (typeof time !== 'number' || !Number.isFinite(time) || typeof tradeId !== 'number' || !Number.isSafeInteger(tradeId) || tradeId <= 0 || !['b', 's'].includes(side) || !['m', 'l'].includes(orderType) || typeof misc !== 'string' || misc.length > 64) fail('invalid_trade_fields');
+    const milliseconds = time * 1000;
+    // Millisecond comparisons preserve the API number's available precision.
+    if (milliseconds < windowStart || milliseconds > fetched + 1_000 || milliseconds < prior) fail('invalid_trade_time');
+    if (seen.has(tradeId)) fail('duplicate_trade_id');
+    seen.add(tradeId); prior = milliseconds;
+    if (milliseconds >= windowEnd) { excluded++; continue; }
+    count++; first ??= milliseconds; last = milliseconds;
+    if (side === 'b') buy += notional; else sell += notional;
+  }
+  const capped = raw.length === TRADE_LIMIT;
+  return { ...pair, coverage: capped ? 'capped_response' : 'uncapped_response', returned_count: raw.length, trade_count: count, excluded_after_window_count: excluded,
+    first_trade_at: first === null ? null : new Date(first).toISOString(), last_trade_at: last === null ? null : new Date(last).toISOString(), fetched_at: new Date(fetched).toISOString(), cursor,
+    buy_notional_usd: capped ? null : formatTradeNotional(buy), sell_notional_usd: capped ? null : formatTradeNotional(sell), imbalance_usd: capped ? null : formatTradeNotional(buy - sell),
+    imbalance_pct: capped || buy + sell === BigInt(0) ? null : Number((buy - sell) * BigInt(1_000_000) / (buy + sell)) / 10_000 };
+}
+export function tradeSnapshot(rows: KrakenTradeRow[], windowEnd: number, fetched: number): KrakenTradeSnapshot {
+  return {schema: 'kraken-trades/1', venue: 'Kraken', coverage: 'selected_usd_pairs_one_venue', window_started_at: new Date(windowEnd - TRADE_WINDOW_MS).toISOString(), window_ended_at: new Date(windowEnd).toISOString(), fetched_at: new Date(fetched).toISOString(), window_ms: TRADE_WINDOW_MS, trade_limit: TRADE_LIMIT,
+    rows, missing_pairs: TRADE_PAIRS.filter(pair => !rows.some(row => row.pair === pair)), net_capital_flow: null};
+}
