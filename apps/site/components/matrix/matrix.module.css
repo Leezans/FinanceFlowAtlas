@@ -16,3 +16,7 @@ button.gridTile{cursor:pointer}.gridTile:hover,.gridTile:focus-visible{outline:2
 .root[data-palette=global] .tile[data-color=positive-1] rect{fill:#204b3a}.root[data-palette=global] .tile[data-color=negative-1] rect{fill:#62303a}.root[data-palette=global] .gridTile[data-color=positive-1]{background:#204b3a}.root[data-palette=global] .gridTile[data-color=negative-1]{background:#62303a}
 .root[data-palette=global] .tile[data-color=positive-2] rect{fill:#246447}.root[data-palette=global] .tile[data-color=negative-2] rect{fill:#983746}.root[data-palette=global] .gridTile[data-color=positive-2]{background:#246447}.root[data-palette=global] .gridTile[data-color=negative-2]{background:#983746}
 .root[data-palette=global] .tile[data-color=positive-3] rect{fill:#25854f}.root[data-palette=global] .tile[data-color=negative-3] rect{fill:#c53d4b}.root[data-palette=global] .gridTile[data-color=positive-3]{background:#25854f}.root[data-palette=global] .gridTile[data-color=negative-3]{background:#c53d4b}
+
+/* Sequential magnitude is not a gain/loss or inflow/outflow palette. */
+.tile[data-color=magnitude-1] rect{fill:#1d4265}.tile[data-color=magnitude-2] rect{fill:#255f90}.tile[data-color=magnitude-3] rect{fill:#257bb2}
+.gridTile[data-color=magnitude-1]{background:#1d4265}.gridTile[data-color=magnitude-2]{background:#255f90}.gridTile[data-color=magnitude-3]{background:#257bb2}

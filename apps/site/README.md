@@ -180,3 +180,19 @@ amounts, in BRL, grouped by exact official company industry and ticker. Both
 source datasets use ODbL. Missing/confidential transactions remain unknown and
 are never allocated to sectors. This is partial fund activity, not all-market
 capital flow. See `../../docs/source-cvm-fund-equity.md`.
+
+## Open annual global equity context
+
+`/equities` uses the shared matrix renderer for World Bank/WFE annual country
+market cap and stocks traded value, grouped by region then country. All 249
+geographic slots stay reachable, but only actual same-year source observations
+receive magnitude colors; coverage counts clearly distinguish the two. Selected
+country details use a separate two-metric matrix, initially USA. It never calls either measure net capital flow, mixes
+observation years in comparisons, or fills missing observations with zero.
+Both specific indicators are CC BY 4.0, with source attribution and terms in the
+UI. No account or key is needed. The latest observation years, dataset update
+and retrieval time are distinct. Apply appended `0011_worldbank_equity_cache.sql`
+after 0010; it adds a separate daily refresh/shared cache without modifying
+existing gates. Denial is durable; seven-day cache expiry also applies in the
+browser. Run `npm run test:equity-runtime` for native workerd/D1 tests with real
+network disabled. See [source evidence and limitations](../../docs/source-worldbank-equities.md).

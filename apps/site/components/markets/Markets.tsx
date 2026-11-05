@@ -24,7 +24,7 @@ export default function Markets() {
     <section className={s.sourceScope} aria-label="矩阵来源与口径边界">
       <strong>TIC · 月度 · USD · 美国发行人</strong>
       <span>只绘制来源已报告的国家与地区。其他资产、币种与频率不拼成一个全球净流入数字。</span>
-      <nav aria-label="独立来源矩阵"><a href="/ashare">A 股 · 订单分类估算</a><a href="/taiwan">台股上柜 · 法人交易</a><a href="/brazil">巴西 · 月度基金交易</a><a href="/asean">东盟 · 年度 FDI</a></nav>
+      <nav aria-label="独立来源矩阵"><a href="/ashare">A 股 · 订单分类估算</a><a href="/taiwan">台股上柜 · 法人交易</a><a href="/brazil">巴西 · 月度基金交易</a><a href="/equities">全球股市 · 年度规模</a><a href="/asean">东盟 · 年度 FDI</a></nav>
     </section>
     <div id="global-evidence" className={s.globalEvidence}><TicLayer/></div>
     <details className={s.geographyDisclosure} open={geographyOpen} onToggle={event => setGeographyOpen(event.currentTarget.open)}>

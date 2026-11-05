@@ -78,6 +78,13 @@
       "when": 1793867433557,
       "tag": "0010_ashare_legacy_reconciliation",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793867433558,
+      "tag": "0011_worldbank_equity_cache",
+      "breakpoints": true
     }
   ]
 }
