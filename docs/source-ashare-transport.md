@@ -228,3 +228,51 @@ The native suites use synthetic interceptors with external networking disabled.
 They prove runtime behavior, not current provider availability. Deployment still
 requires authorized migration/release and a real permitted source acquisition;
 an empty cache cannot manufacture the first real snapshot.
+
+
+## Recurrence prevention: fit the retained runtime budget
+
+Production invocation `a51dcec4e7ce88a5c73ed04f4d3a8112` acquired its lease at
+2026-11-05 09:35:00.854 UTC. The primary request returned HTTP 302 at
+09:35:21.652, and the existing strict redirect path then started a second
+request. At 09:35:29.146 the invocation ended as `canceled` after 31.504 seconds,
+without a logged second response or durable release. The same trace explicitly
+logged: `waitUntil() tasks did not complete within the allowed time after
+invocation end and have been cancelled.` This confirms the retained-work ceiling
+terminated the operation while the old acquisition budget was 90 seconds. The exact host disconnect/signaling sequence
+is not available. The redirected request's result remains unknown; this change
+neither resets that lease nor claims that no denial occurred.
+
+The handler now establishes **one 20-second absolute acquisition deadline at
+entry**, including initial shared-cache reads, queue waiting, admission,
+cooldown, every redirect and every page. The timer is created before joining the
+queue. Neither collection nor redirects restart it. This leaves ordinary
+native-abort work room for up to one second of stream disposal and a five-second
+persistence reserve, plus scheduler slack before the observed runtime ceiling.
+The five seconds is a reserve, not a promise that D1 always finishes that fast.
+
+A deadline aborts the native fetch, but the handler still awaits its outcome.
+It never races away a request and releases ownership while a late denial could
+still arrive. Any observed denial wins over cancellation and is persisted before
+body disposal. A confirmed late admission releases only its own token without
+requesting the source. A deadline is checked again before issuing an atomic
+snapshot commit. Once commit/release is issued it must settle; no timeout causes
+a second release or guessed success. Unknown network or persistence outcomes
+continue to fail closed. The current uncertain 09:35 lease stays unchanged.
+
+This is a prevention fix for the observed budget mismatch, not a guarantee
+against runtime loss, unresponsive cancellation, hung D1, or delayed timers.
+A complete snapshot that takes more than 20 seconds is now rejected, never
+partially published. With three-second pacing, the theoretical maximum is seven dispatches, or six data pages if one redirect is needed, before network/admission latency. Larger or slow paginations can therefore remain unavailable;
+a prior valid snapshot may be shown only under the cache's existing permission,
+expiry and explicit stale rules. Nothing here establishes real-time source
+observations or an exact provider delay.
+
+Added fake-timer tests cover the original deadline across reads, admission,
+queue and redirect; delayed 403 priority; stalled body disposal; late admission;
+and unsettled fetch/commit without a guessed release. Network-disabled native
+workerd tests return an early response **without** relaying client cancellation,
+then stall the primary request or an allowed redirect. They verify native abort
+and a confirmed D1 release/cooldown before 27 seconds, with no partial cache and
+no cold-isolate source retry. This tests the missing-signal case absent from the
+previous explicit-abort test; it is not a live-source restoration proof.

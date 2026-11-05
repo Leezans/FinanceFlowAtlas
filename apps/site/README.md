@@ -62,7 +62,7 @@ Compact tiles retain signed amounts where they fit, and hover or keyboard focus 
 workerd with a shared D1 database and separate warm/cold workers. Synthetic
 plain/gzip/Brotli responses verify decoding and cache behavior. Temporary
 failures must preserve a 60-second shared cooldown across workers and scopes;
-a denial must remain blocked. All external network access is disabled. The shared-snapshot suite additionally covers multi-scope cold reads, expiry, corruption, denial with warm ETags, transactional rollback, stale tokens, retained late commits, cancellation, and bounded retention. These
+a denial must remain blocked. All external network access is disabled. The shared-snapshot suite additionally covers multi-scope cold reads, expiry, corruption, denial with warm ETags, transactional rollback, stale tokens, retained late commits, cancellation. Bounded-retention coverage is in the SQLite unit suite. These
 checks do not establish live provider availability or authenticated production
 access. No database migration is needed for the cooldown change.
 
