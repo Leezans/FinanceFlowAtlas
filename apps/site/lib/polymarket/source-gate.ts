@@ -1,6 +1,6 @@
 import {SourceGateError,type GateD1,type D1Result} from '../ashare/source-gate';
 import {strictJSON} from '../ashare/strict-json';
-import {REFRESH_MS,snapshotSchema,type PolymarketSnapshot} from './model';
+import {REFRESH_MS,MAX_CACHE_BYTES,snapshotSchema,type PolymarketSnapshot} from './model';
 import type {PolymarketGate,PolymarketOutcome} from './handler';
 const NOW="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 /** Independent shared cache/admission. No automatic reset, takeover or credentials. */
@@ -17,7 +17,9 @@ export class D1PolymarketGate implements PolymarketGate{
   if(!row||!['idle','busy','blocked'].includes(String(row.status))||typeof row.not_before_ms!=='number'||!Number.isSafeInteger(row.not_before_ms)||row.not_before_ms<0||typeof row.checked_ms!=='number'||!Number.isSafeInteger(row.checked_ms)||row.checked_ms<0||row.error_code!==null&&(typeof row.error_code!=='string'||! /^[a-z_]{1,64}$/.test(row.error_code)))throw new SourceGateError('source_gate_unavailable');
   const state=row.status as 'idle'|'busy'|'blocked';let snapshot:PolymarketSnapshot|null=null;
   if(state==='idle'&&row.payload!==null){
-   try{if(typeof row.payload!=='string'||new TextEncoder().encode(row.payload).byteLength>2_000_000)throw new Error();snapshot=snapshotSchema.parse(strictJSON(row.payload));}
+   try{if(typeof row.payload!=='string'||new TextEncoder().encode(row.payload).byteLength>MAX_CACHE_BYTES)throw new Error();// Preserve valid prior v1 evidence with its own schema and semantics.
+    // No lease, denial or cooldown is changed by cache compatibility.
+    snapshot=snapshotSchema.parse(strictJSON(row.payload));}
    catch{throw new SourceGateError('source_gate_unavailable');}
   }
   return {state,retryAt:row.not_before_ms,snapshot,errorCode:row.error_code as string|null,checkedAt:row.checked_ms};
@@ -39,7 +41,7 @@ export class D1PolymarketGate implements PolymarketGate{
   let payload:string|null=null;
   if(outcome.kind==='success'){
    const candidate=snapshotSchema.safeParse(outcome.snapshot);if(!candidate.success)throw new SourceGateError('source_gate_unavailable');
-   payload=JSON.stringify(candidate.data);if(new TextEncoder().encode(payload).byteLength>2_000_000)throw new SourceGateError('source_gate_unavailable');
+   payload=JSON.stringify(candidate.data);if(new TextEncoder().encode(payload).byteLength>MAX_CACHE_BYTES)throw new SourceGateError('source_gate_unavailable');
   }else if(outcome.snapshot)throw new SourceGateError('source_gate_unavailable');
   const result=await this.run(POLYMARKET_SQL.finish,outcome.kind==='denied'?'blocked':'idle',delay,outcome.kind==='success'?null:outcome.errorCode??'source_unavailable',outcome.kind==='denied'?1:0,payload,token);
   if(result.meta?.changes===0)throw new SourceGateError('source_stale_lease');if(result.meta?.changes!==1)throw new SourceGateError('source_gate_unavailable');

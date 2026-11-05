@@ -1,5 +1,6 @@
+import type {PolymarketCoverage} from './transport';
 import {strictJSON} from '../ashare/strict-json';
-import {marketSchema,snapshotSchema,MAX_MARKETS,type PolymarketMarket,type PolymarketSnapshot} from './model';
+import {marketSchema,keysetSnapshotSchema,MAX_MARKETS,type PolymarketMarket,type PolymarketKeysetSnapshot} from './model';
 export class PolymarketError extends Error {
  constructor(readonly code:string,readonly denied=false,readonly retryAfterMs=0){super(code);}
 }
@@ -21,9 +22,9 @@ function parseMarket(value:unknown,fetched:string):PolymarketMarket|null{
  const outcomes=list(row.outcomes),prices=row.outcomePrices==null||row.outcomePrices===''?outcomes.map(()=>null):list(row.outcomePrices);
  if(outcomes.length!==prices.length)fail('invalid_outcomes');
  const rawTags=row.tags??[];if(!Array.isArray(rawTags)||rawTags.length>100)fail('invalid_tags');
- const tags=rawTags.map(value=>{const tag=object(value);return {slug:tag.slug,label:tag.label};});
+ const tags=rawTags.map(value=>{const tag=object(value);if(typeof tag.slug!=='string')fail('invalid_tags');return {slug:tag.slug as string,label:tag.label};}).sort((a,b)=>a.slug<b.slug?-1:a.slug>b.slug?1:0);
  // Do not infer categories from question text. Preserve the provider's category
- // or, if absent, its first supplied tag. This is a display grouping, not an
+ // or, if absent, the tag with the smallest slug. This is a display grouping, not an
  // exhaustive, mutually exclusive provider taxonomy.
  const direct=typeof row.category==='string'&&row.category.trim()?row.category.trim():null;
  const category=direct??tags[0]?.label??'未分类';
@@ -39,7 +40,7 @@ function parseMarket(value:unknown,fetched:string):PolymarketMarket|null{
  return candidate.data;
 }
 /** One explicitly bounded sample, not a complete Polymarket universe or totals. */
-export function parsePolymarket(payload:unknown,started:string,fetched:string):PolymarketSnapshot{
+export function parsePolymarket(payload:unknown,started:string,fetched:string,coverage?:PolymarketCoverage):PolymarketKeysetSnapshot{
  if(!Array.isArray(payload)||payload.length===0||payload.length>MAX_MARKETS)fail('invalid_market_sample');
  const rows:PolymarketMarket[]=[],seen=new Set<string>();let excluded=0;
  for(const value of payload){
@@ -48,6 +49,6 @@ export function parsePolymarket(payload:unknown,started:string,fetched:string):P
   if(!row){excluded++;continue;}
   if(seen.has(row.id))fail('duplicate_market');seen.add(row.id);rows.push(row);
  }
- const candidate=snapshotSchema.safeParse({schema:'polymarket-gamma/1',source:'Polymarket Gamma',coverage:'bounded_active_market_sample',sample_limit:MAX_MARKETS,source_market_count:payload.length,excluded_market_count:excluded,ordering:'source_volume24hr_descending',complete_universe:false,acquisition_started_at:started,fetched_at:fetched,source_observed_at:null,net_capital_flow:null,rows});
+ const candidate=keysetSnapshotSchema.safeParse({schema:'polymarket-gamma/2',source:'Polymarket Gamma',coverage:'bounded_active_market_sample',sample_limit:MAX_MARKETS,source_market_count:payload.length,excluded_market_count:excluded,ordering:'source_id_descending',complete_universe:false,total_market_count:null,pagination:'keyset',source_page_count:coverage?.pageSizes.length??1,source_page_sizes:coverage?.pageSizes??[payload.length],stop_reason:coverage?.stopReason??'source_exhausted',has_more:coverage?.hasMore??false,grouping:'source_category_else_smallest_tag_slug',acquisition_started_at:started,fetched_at:fetched,source_observed_at:null,net_capital_flow:null,rows});
  if(!candidate.success)fail('invalid_snapshot');return candidate.data;
 }
