@@ -200,3 +200,23 @@ after 0010; it adds a separate daily refresh/shared cache without modifying
 existing gates. Denial is durable; seven-day cache expiry also applies in the
 browser. Run `npm run test:equity-runtime` for native workerd/D1 tests with real
 network disabled. See [source evidence and limitations](../../docs/source-worldbank-equities.md).
+
+## Private Polymarket informational matrix
+
+`/polymarket` and `/api/v1/polymarket/{snapshot,status}` provide a separate,
+no-account Gamma market sample with category/tag → market matrix drilldown.
+The fixed request returns at most 200 active, open markets ordered by source
+24-hour volume. Visible pages check every 30 seconds, with cross-worker D1
+cooldown; this is bounded polling, not a tick stream. Prices are explicitly named
+outcome-implied probabilities, not objective probabilities or recommendations.
+Volume retains the source unit as unverified, and neither metric is funds flow.
+Source record update time, unknown price observation time, and acquisition time
+remain separate. Age-valid stale snapshots expire after five minutes.
+
+Append `0015_polymarket_market_cache.sql` after the reserved A-share `0014`
+migration through the supported deployment workflow, reconciling the journal.
+Existing source gates and owner-private access remain unchanged. Busy/unknown
+state fails closed; denied/challenged source access blocks persistently with no
+fallback or reset. Run `npm run test:polymarket-runtime` for offline native
+workerd/D1 checks. See [source contract and rights](../../docs/source-polymarket-gamma.md).
+No live provider access is claimed by synthetic tests or by a repository commit.

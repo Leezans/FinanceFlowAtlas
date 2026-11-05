@@ -1,0 +1,45 @@
+// @vitest-environment jsdom
+import React from 'react';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
+import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
+import Polymarket from '../components/polymarket/Polymarket';
+import {MAX_CACHE_AGE_MS,type PolymarketReply} from '../lib/polymarket/model';
+const at=Date.parse('2026-11-05T03:00:00Z'),iso=new Date(at).toISOString();
+const question='Will this deliberately long and complete prediction market question be displayed without truncation?';
+function reply():PolymarketReply{return {snapshot:{schema:'polymarket-gamma/1',source:'Polymarket Gamma',coverage:'bounded_active_market_sample',sample_limit:200,source_market_count:2,excluded_market_count:0,ordering:'source_volume24hr_descending',complete_universe:false,acquisition_started_at:iso,fetched_at:iso,source_observed_at:null,net_capital_flow:null,rows:[{id:'1',question,category:'Science',category_basis:'source_category',tags:[],outcomes:[{name:'No',price:'0.75'},{name:'Yes',price:'0.25'}],volume_24h:0,volume_unit:'source_reported',source_record_updated_at:iso,source_observed_at:null,accepting_orders:null},{id:'2',question:'Other market',category:'Science',category_basis:'source_category',tags:[],outcomes:[{name:'Alpha',price:null},{name:'Beta',price:'0.1'}],volume_24h:null,volume_unit:'source_reported',source_record_updated_at:null,source_observed_at:null,accepting_orders:null}]},status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:30_000,max_cache_age_ms:300_000,next_retry_at:null}};}
+beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(at);Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
+afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();});
+async function start(){const result=render(<Polymarket/>);await act(()=>vi.advanceTimersByTimeAsync(1));return result;}
+function drill(){fireEvent.click(screen.getByRole('button',{name:/Science · 来源分类 · 2 个市场/}));}
+function market(){return screen.queryByRole('img',{name:new RegExp(question.replace('?','\\?'))});}
+describe('Polymarket view and refresh trust boundary',()=>{
+ it('drills into full labels, shows named outcomes, zeros and missing metrics; preserves controls across polling',async()=>{
+  const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();drill();expect(market()).toBeTruthy();expect(screen.getByText('25%')).toBeTruthy();expect(screen.getByText('结果：Yes · 价格隐含概率')).toBeTruthy();expect(screen.getByText('来源未提供')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('搜索市场'),{target:{value:'deliberately'}});fireEvent.change(screen.getByLabelText('市场指标'),{target:{value:'volume'}});expect(screen.getByText('0 · 来源单位')).toBeTruthy();
+  await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(fetcher).toHaveBeenCalledTimes(2);expect((screen.getByLabelText('搜索市场') as HTMLInputElement).value).toBe('deliberately');expect((screen.getByLabelText('市场指标') as unknown as HTMLSelectElement).value).toBe('volume');expect(market()).toBeTruthy();expect(screen.getByText('市场问题矩阵')).toBeTruthy();
+  expect((fetcher.mock.calls as unknown as [string,RequestInit][])[0][0]).toBe('/api/v1/polymarket/snapshot');expect(screen.getByText(/价格观测时间：接口未提供/)).toBeTruthy();expect(screen.getByText(/来源记录更新时间：/)).toBeTruthy();
+ });
+ it.each([401,403])('clears and permanently stops after HTTP %s',async status=>{
+  const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();drill();fetcher.mockImplementation(async()=>new Response('Denied',{status}));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(market()).toBeNull();expect(screen.getByText('展示权限已失效')).toBeTruthy();await act(()=>vi.advanceTimersByTimeAsync(60_000));fireEvent(document,new Event('visibilitychange'));expect(fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('clears and stops after structured source denial',async()=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();drill();fetcher.mockImplementation(async()=>Response.json({snapshot:null,status:{...reply().status,state:'denied',error_code:'source_denied'}},{status:503}));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(market()).toBeNull();expect(screen.getByText('来源访问已停止')).toBeTruthy();await act(()=>vi.advanceTimersByTimeAsync(60_000));expect(fetcher).toHaveBeenCalledTimes(2);});
+ it('clears on invalid 200, then recovers without losing the drilldown',async()=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();drill();fetcher.mockImplementation(async()=>Response.json({bad:true}));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(market()).toBeNull();expect(screen.getByText('响应数据未通过校验，已清空浏览器数据。')).toBeTruthy();fetcher.mockImplementation(async()=>Response.json(reply()));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(market()).toBeTruthy();});
+ it.each(['html','structured'])('retains age-valid stale evidence on temporary %s failure, expires while hidden',async kind=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();drill();fetcher.mockImplementation(async()=>kind==='html'?new Response('gateway',{status:502}):Response.json({snapshot:null,status:{...reply().status,state:'unavailable'}},{status:503}));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(market()).toBeTruthy();expect(screen.getByText('上次有效快照 · 已陈旧')).toBeTruthy();Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});fireEvent(document,new Event('visibilitychange'));await act(()=>vi.advanceTimersByTimeAsync(MAX_CACHE_AGE_MS+1000));expect(market()).toBeNull();expect(fetcher).toHaveBeenCalledTimes(2);});
+ it.each(['source_busy','source_gate_unavailable','source_gate_outcome_unconfirmed','source_stale_lease','source_denied'])('clears warm evidence on %s and never retains rows under uncertain access',async error_code=>{
+  const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();drill();expect(market()).toBeTruthy();
+  fetcher.mockImplementation(async()=>Response.json({snapshot:null,status:{...reply().status,state:'unavailable',error_code}},{status:503}));await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(market()).toBeNull();
+  if(error_code==='source_denied'){expect(screen.getByText('来源访问已停止')).toBeTruthy();await act(()=>vi.advanceTimersByTimeAsync(60_000));expect(fetcher).toHaveBeenCalledTimes(2);}
+  else expect(screen.getByText('来源访问状态尚未确认，暂不展示数据。')).toBeTruthy();
+ });
+ it('keeps a minimum 30-second gap across manual clicks and hide/show toggles',async()=>{
+  const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();
+  for(let i=0;i<3;i++){fireEvent.click(screen.getByRole('button',{name:'检查更新'}));Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});fireEvent(document,new Event('visibilitychange'));Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});fireEvent(document,new Event('visibilitychange'));}
+  expect(fetcher).toHaveBeenCalledTimes(1);await act(()=>vi.advanceTimersByTimeAsync(29_998));expect(fetcher).toHaveBeenCalledTimes(1);await act(()=>vi.advanceTimersByTimeAsync(1));expect(fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('honors a later next_retry_at from the server',async()=>{
+  const value=reply();value.status.next_retry_at=new Date(at+90_000).toISOString();const fetcher=vi.fn(async()=>Response.json(value));vi.stubGlobal('fetch',fetcher);await start();await act(()=>vi.advanceTimersByTimeAsync(60_000));fireEvent(document,new Event('visibilitychange'));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));expect(fetcher).toHaveBeenCalledTimes(1);await act(()=>vi.advanceTimersByTimeAsync(30_000));expect(fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('does not start hidden, prevents simultaneous requests, and aborts on unmount',async()=>{
+  Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});const fetcher=vi.fn(()=>new Promise<Response>(()=>{}));vi.stubGlobal('fetch',fetcher);const result=await start();expect(fetcher).not.toHaveBeenCalled();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});fireEvent(document,new Event('visibilitychange'));fireEvent(document,new Event('visibilitychange'));fireEvent.click(screen.getByRole('button',{name:'正在检查…'}));expect(fetcher).toHaveBeenCalledTimes(1);const init=(fetcher.mock.calls as unknown as [string,RequestInit][])[0][1];result.unmount();expect(init.signal?.aborted).toBe(true);
+ });
+});

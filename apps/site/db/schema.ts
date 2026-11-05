@@ -152,3 +152,14 @@ export const ashareStagedAcquisitions=sqliteTable('ashare_staged_acquisitions',{
  check('ashare_stage_payload',sql`json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000`),
  check('ashare_stage_retention',sql`${t.startedMs} >= 0 AND ${t.updatedMs} >= ${t.startedMs} AND ${t.updatedMs} < ${t.expiresMs} AND ${t.expiresMs} = ${t.startedMs} + 180000`),
 ]);
+
+/** Private public-source informational cache. No positions, wallets or credentials. */
+export const polymarketSourceGate=sqliteTable('polymarket_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),errorCode:text('error_code'),
+ checkedMs:integer('checked_ms').notNull().default(0),updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('polymarket_gate_id',sql`${t.id} = 'active_markets'`),
+ check('polymarket_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('polymarket_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+ check('polymarket_gate_payload',sql`${t.payload} IS NULL OR (json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 2000000)`),
+]);

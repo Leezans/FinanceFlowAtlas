@@ -12,6 +12,7 @@ export const marketLinks = [
   {href: '/equities', label: '全球股市年度'},
   {href: '/asean', label: '东盟 FDI 行业'},
   {href: '/crypto', label: '加密现货'},
+  {href: '/polymarket', label: '预测市场矩阵'},
   {href: '/futures', label: '期货持仓'},
   {href: '/forex', label: '外汇参考'},
   {href: '/', label: '首页 / 美国 TIC'},
