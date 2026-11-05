@@ -151,3 +151,24 @@ sources and preserves the owner-only host. Apply the appended
 `0005_cftc_futures_gate.sql` after preceding migrations. Run
 `npm run test:cftc-runtime` for offline native workerd/D1 checks. See
 [scope, verified source and operational limits](../../docs/source-cftc-futures.md).
+
+## TPEx institutional industry matrix
+
+`/taiwan` and `/api/v1/taiwan/tpex/{snapshot,status}` add Taiwan OTC listed-company
+institutional trading using two explicitly free, no-account OGDL v1 sources.
+Official company industries support industry→company drilldown and four
+participant selections. Values are **shares**, not currency or all-market net
+capital flows. TWSE-listed stocks are not included. Missing company observations
+remain null and unmatched securities are excluded with visible coverage counts.
+Equal-area tiles use fixed ±100% net/(buy+sell) color intensity. Dense industry
+and company matrices keep full readable labels in a bounded scroll canvas; no
+rows are omitted to fit mobile screens.
+
+Apply appended `0007_tpex_institutional_gate.sql` through the authorized deployment
+workflow. The independent source gate preserves all existing gates. It shares the
+validated public report for one hour, expires acquired data after 24 hours, and
+permanently stops after denial/challenge with no fallback or lease takeover.
+Run `npm run test:tpex-runtime` for native workerd/D1 synthetic checks, with all
+external networking disabled. See [source rights, verified access, exact join
+coverage and semantics](../../docs/source-tpex-institutional.md). Coding-runtime
+source verification does not establish deployed-host availability.
