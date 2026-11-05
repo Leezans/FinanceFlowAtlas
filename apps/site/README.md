@@ -77,15 +77,20 @@ cross-rates. It links the official source and usage terms, and retains the exist
 private site boundary.
 
 A bounded namespace-aware XML parser rejects malformed data and date regressions.
-Rates remain in per-process memory; temporary source failures retain explicitly
-stale validated rates. Apply appended migration `0004_ecb_fx_gate.sql` through the
-supported deployment workflow. The dedicated metadata-only D1 gate serializes
-acquisition across isolates, enforcing one-hour success and fifteen-minute failure
-cooldowns. Denials persist across restarts, and every cache read checks the shared
-gate. Busy/uncertain operations have no automatic lease takeover or reset. Missing
-or unavailable gate state fails closed. Cold isolates may lack rates during cooldown.
-No real rates or credentials are persisted in this gate or committed. `npm run test:fx-runtime` verifies native-workerd parsing and caching with
-synthetic plain/gzip/Brotli XML and real networking disabled. See
+Validated public ECB rates and check metadata are shared through the independent
+primary D1 gate, so cold workers reuse the same snapshot during cooldown. Apply
+appended migration `0006_ecb_fx_shared_cache.sql` after existing migrations
+through the supported deployment workflow. Snapshot publication and the one-hour
+success cooldown are atomic. Transient failures preserve stale validated rates
+and acquisition time, with a shared fifteen-minute cooldown. Values expire seven
+days after acquisition in both server and browser; failures never extend expiry.
+Denials atomically clear rates and persist across restarts. Every cache read checks
+the gate; busy, unknown or unavailable states fail closed, with no automatic lease
+takeover or reset. Workers retain acquisition and late D1 settlement after the HTTP
+response ends. Existing gate states are preserved by migration. No provider rates
+are committed, and no accounts or credentials are stored. `npm run test:fx-runtime`
+verifies native-workerd parsing, cache sharing, expiry and retained atomic cleanup
+with synthetic plain/gzip/Brotli XML and real networking disabled. See
 [the FX source contract](../../docs/source-ecb-fx.md) for timing, rights and limits.
 ## Personal Kraken spot layer
 
