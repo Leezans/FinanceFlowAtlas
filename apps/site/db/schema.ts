@@ -93,3 +93,13 @@ export const aseanSourceGate=sqliteTable('asean_source_gate',{
  check('asean_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
  check('asean_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
+
+/** Public official CVM report cache and independent gate. No private user data. */
+export const cvmSourceGate=sqliteTable('cvm_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('cvm_gate_id',sql`${t.id} = 'monthly_fund_equity'`),
+ check('cvm_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('cvm_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);

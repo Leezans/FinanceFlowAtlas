@@ -64,6 +64,13 @@
       "when": 1793864331508,
       "tag": "0008_asean_fdi_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793865049988,
+      "tag": "0009_cvm_monthly_fund_gate",
+      "breakpoints": true
     }
   ]
 }
