@@ -8,7 +8,7 @@ const require=createRequire(import.meta.url),wranglerRequire=createRequire(requi
 const {Miniflare,createFetchMock,fetch:mockFetch}=wranglerRequire('miniflare'),{build}=wranglerRequire('esbuild');
 const root=fileURLToPath(new URL('..',import.meta.url));
 const {outputFiles}=await build({stdin:{contents:`import {ashareHandler} from './lib/ashare/host';export default {fetch:ashareHandler};`,resolveDir:root,sourcefile:'offline-ashare-staged.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
-const migrations=await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')));
+const migrations=await Promise.all(['0001_wild_jigsaw','0019_lean_golden_guardian','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')));
 const endpoint='https://offline.invalid/api/v1/ashare/snapshot?scope=BK1216';
 const fields=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];
 const row=id=>({f12:String(id).padStart(6,'0'),f14:'Synthetic '+id,...Object.fromEntries(fields.map(f=>[f,f==='f62'?(id%2?-id:id):1]))});

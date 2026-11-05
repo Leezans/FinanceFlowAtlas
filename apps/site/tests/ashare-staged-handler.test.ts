@@ -89,3 +89,15 @@ describe('normal gated staged pagination',()=>{
   const result=await settle(r.handler()(req()));expect(result.status).toBe(503);expect(r.fetcher).toHaveBeenCalledTimes(count);expect(r.getStage()).toBeUndefined();expect(r.store.commit).not.toHaveBeenCalled();
  });
 });
+
+it('stage read failure before source work preserves durable failure count',async()=>{
+ const r=rig();vi.mocked(r.stages.read).mockRejectedValueOnce(new Error('stage_invalid'));
+ const response=await settle(r.handler()(req()));expect(response.status).toBe(503);
+ expect(r.fetcher).not.toHaveBeenCalled();expect(r.gate.release).toHaveBeenCalledWith('owner',{kind:'cancelled',reason:'stage_invalid'});
+});
+it('abort after lease acquisition before source work preserves durable failure count',async()=>{
+ const r=rig(),controller=new AbortController();
+ vi.mocked(r.stages.read).mockImplementationOnce(async()=>{controller.abort();return undefined;});
+ const response=await settle(r.handler()(new Request('https://offline.invalid/api/v1/ashare/snapshot?scope=BK1216',{signal:controller.signal})));
+ expect(response.status).toBe(503);expect(r.fetcher).not.toHaveBeenCalled();expect(r.gate.release).toHaveBeenCalledWith('owner',{kind:'cancelled',reason:'aborted'});
+});

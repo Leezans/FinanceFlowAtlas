@@ -105,7 +105,7 @@ export class D1StageStore implements StageStore {
         this.db.prepare(STAGE_SQL.put).bind(scopeKey(canonical),started,updated,started,payload,started,started,token,previous?encodeStage(previous):null),
         this.db.prepare(STAGE_SQL.expire).bind(token),
         this.db.prepare(STAGE_SQL.trim).bind(scopeKey(canonical),token),
-        this.db.prepare(SQL.finish).bind('idle',null,SUCCESS_QUIET_MS,token),
+        this.db.prepare(SQL.preserve).bind('idle',SUCCESS_QUIET_MS,token),
       ]);
     }catch{throw new SourceGateError('source_gate_unavailable');}
     requireSuccess(results,4);

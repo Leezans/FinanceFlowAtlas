@@ -15,7 +15,7 @@ describe('one retained acquisition budget',()=>{
   const g=gate();let aborted=-1;const started=performance.now();
   const fetcher=vi.fn((_url:string,init:RequestInit)=>new Promise<Response>((_,reject)=>init.signal!.addEventListener('abort',()=>{aborted=performance.now()-started;reject(init.signal!.reason);}))); 
   const p=make({sourceGate:g,fetcher})(req());await vi.advanceTimersByTimeAsync(ACQUISITION_BUDGET_MS+1);
-  expect((await p).status).toBe(503);expect(aborted).toBe(20_000);expect(g.release).toHaveBeenCalledExactlyOnceWith('synthetic-deadline-owner',{kind:'temporary_failure',reason:'collection_failed'});expect(fetcher).toHaveBeenCalledOnce();
+  expect((await p).status).toBe(503);expect(aborted).toBe(20_000);expect(g.release).toHaveBeenCalledExactlyOnceWith('synthetic-deadline-owner',{kind:'temporary_failure',reason:'deadline'});expect(fetcher).toHaveBeenCalledOnce();
  });
  it('redirects share the original deadline rather than receiving another20s',async()=>{
   const g=gate();let calls=0,aborted=-1;const start=performance.now();
@@ -63,7 +63,7 @@ it('cancellation after collection validation but before commit prevents publicat
  const store:SnapshotStore={read:async()=>({canAcquire:true}),commit:vi.fn(async()=>{})};
  const enabled=()=>{if(++checks===6)controller.abort();return true;};
  const response=await make({sourceGate:g,snapshotStore:store,fetcher:async()=>good(),enabled})(new Request('https://offline.invalid/api/v1/ashare/snapshot',{signal:controller.signal}));
- expect(response.status).toBe(503);expect(store.commit).not.toHaveBeenCalled();expect(g.release).toHaveBeenCalledExactlyOnceWith('synthetic-deadline-owner',{kind:'temporary_failure',reason:'collection_failed'});
+ expect(response.status).toBe(503);expect(store.commit).not.toHaveBeenCalled();expect(g.release).toHaveBeenCalledExactlyOnceWith('synthetic-deadline-owner',{kind:'temporary_failure',reason:'aborted'});
 });
 
 it('absolute deadline prevents admission when a cache promise resumes before its timer callback',async()=>{

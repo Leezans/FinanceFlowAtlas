@@ -16,7 +16,7 @@ const DELAY='https://push2delay.eastmoney.com';
 // This bounds ordinary native-abort work, not uncertain network/storage results.
 export const ACQUISITION_BUDGET_MS=20_000;
 const INTERVAL=3_000, MAX_BYTES=4_000_000, MAX_ROWS=2000, MAX_PAGES=20;
-type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>;errorCode?:string};
+type Entry={snapshot?:Snapshot;published:number;error:boolean;failures:number;retryAt:number;pending?:Promise<void>;errorCode?:string;localIssue?:string;committedMs?:number};
 type Fetcher=(input:string,init:RequestInit)=>Promise<Response>;
 type State={entries:Map<string,Entry>;tail:Promise<unknown>;lastRequest:number;backoffUntil:number;backoffFailures:number;denied:boolean;errorCode?:string};
 class SourceDenied extends Error {
@@ -106,7 +106,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     const env=host.process?.env;
     return !env||!['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'].some(k=>!!env[k]);
   }
-  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number,stage?:Stage,acquiredAtMs?:number,acquiredClock=now()):Promise<{snapshot:Snapshot}|{stage:Stage}>{
+  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number,stage?:Stage,acquiredAtMs?:number,acquiredClock=now(),onSourceStart:()=>void=()=>{}):Promise<{snapshot:Snapshot}|{stage:Stage}>{
     const controller=new AbortController();const abort=()=>controller.abort(requestSignal.reason);
     requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
     const signal=controller.signal;
@@ -127,7 +127,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           abortCheck(signal);if(!enabled())throw new Error('disabled');if(now()>=deadline)throw new Error('deadline');
           state.lastRequest=now();
           console.info('[ashare lifecycle]',JSON.stringify({event:'source_request',scope:scope.kind,page,redirects,route:endpoint===ORIGIN?'primary':'official_redirect'}));
-          response=await fetcher(url,{method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'},signal});
+          onSourceStart();response=await fetcher(url,{method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'},signal});
           console.info('[ashare lifecycle]',JSON.stringify({event:'source_response',scope:scope.kind,page,status:response.status}));
           const isRedirect=[301,302,303,307,308].includes(response.status);
           let nextUrl:string|undefined;
@@ -173,6 +173,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     // Serialize entire acquisitions globally, so pages and redirects share pacing.
     const run=state.tail.catch(()=>{}).then(async()=>{
       if(state.denied||now()<state.backoffUntil){entry.error=true;entry.errorCode=state.errorCode??'source_cooldown';entry.retryAt=state.denied?Infinity:state.backoffUntil;return;}
+      let sourceStarted=false;
       try{
         // Gate covers the whole acquisition, not just each page or individual isolate.
         // No lease takeover/expiry is permitted: unknown crashed work stays busy.
@@ -215,7 +216,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         let outcome:SourceOutcome={kind:'success'};
         try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
           const previous=await options.stageStore?.read(lease.token,scope);
-          const collected=await collect(scope,signal,deadline,previous,lease.acquiredAtMs,acquiredClock);
+          const collected=await collect(scope,signal,deadline,previous,lease.acquiredAtMs,acquiredClock,()=>{sourceStarted=true;});
           if('snapshot'in collected)next=collected.snapshot;else partial=collected.stage;}
         catch(error){
           // An uncertain mutation inside stage-read expiry cleanup is already an
@@ -223,13 +224,13 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           if(error&&typeof error==='object'&&'code'in error&&error.code==='source_gate_release_unconfirmed')throw new SourceDenied('source_gate_release_unconfirmed');
           // Never let a deadline erase an actually observed denial.
           collectionError=!(error instanceof SourceDenied)&&signal.aborted&&signal.reason instanceof Error&&signal.reason.message==='deadline'?new Error('deadline'):error;
-          outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:'temporary_failure',reason:'collection_failed'};
+          outcome=error instanceof SourceDenied?{kind:'denied',reason:'source_denial'}:{kind:sourceStarted?'temporary_failure':'cancelled',reason:failureCode(collectionError)};
         }
         if((next||partial)&&!collectionError){
           // Check before issuing the atomic commit, not after it. An issued
           // commit must settle; a timeout is not permission for a second release.
           try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');}
-          catch(error){next=undefined;partial=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:'collection_failed'};}
+          catch(error){next=undefined;partial=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:failureCode(error)};}
         }
         // Release exactly once, including cancellation, and never silently ignore a
         // failed/uncertain write. No publication until persistence confirms release.
@@ -255,11 +256,11 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         }
         finally{if(collectionError instanceof SourceDenied)await discardDeniedResponse(collectionError.response);}
         if(collectionError)throw collectionError;
-        if(partial){entry.error=false;entry.errorCode='collection_in_progress';entry.retryAt=now()+3000;return;}
+        if(partial){entry.localIssue=undefined;entry.error=false;entry.errorCode='collection_in_progress';entry.retryAt=now()+3000;return;}
         if(!next)throw new Error('missing_snapshot');
-        entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
+        entry.localIssue=undefined;entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
       }
-      catch(error){entry.errorCode=failureCode(error);state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied||entry.errorCode==='source_outcome_unconfirmed'){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
+      catch(error){entry.errorCode=failureCode(error);if(!sourceStarted&&!['source_cooldown','source_busy'].includes(entry.errorCode))entry.localIssue=entry.errorCode;state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied||entry.errorCode==='source_outcome_unconfirmed'){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
     });state.tail=run;await run;
   }
   function retainedRefresh(entry:Entry,scope:Scope,requestSignal:AbortSignal,deadline:number):Promise<void> {
@@ -313,6 +314,15 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
   }
   function hydrate(entry:Entry,shared:SnapshotRead|undefined) {
     if(!shared)return;
+    if(shared.committedMs!==undefined&&(entry.committedMs===undefined||shared.committedMs>entry.committedMs)){
+      if(entry.committedMs!==undefined)entry.localIssue=undefined;
+      entry.committedMs=shared.committedMs;
+    }
+    if(shared.durableBackoff&&!state.denied){
+      state.backoffUntil=0;state.backoffFailures=0;state.errorCode=undefined;
+      entry.retryAt=shared.canAcquire?0:now()+(shared.retryAfterMs??0);
+      entry.error=!!(shared.failureCode??entry.localIssue);entry.errorCode=shared.failureCode??entry.localIssue;
+    }
     if(shared.snapshot?.fetched_at!==entry.snapshot?.fetched_at){entry.error=false;entry.errorCode=undefined;}
     entry.snapshot=shared.snapshot;
     entry.published=now()-(shared.ageMs??0);
@@ -322,6 +332,10 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
   }
   function sharedDiagnostic(shared:SnapshotRead|undefined,entry?:Entry):Diagnostic|undefined {
     const local=diagnostic(entry);
+    if(shared?.durableBackoff&&!local?.stopped){
+      const code=shared.failureCode??entry?.localIssue??shared.code;
+      if(code)return {code,stopped:code==='source_denied'||code==='source_outcome_unconfirmed',retrySeconds:Math.max(1,Math.ceil((shared.retryAfterMs??60000)/1000))};
+    }
     if(local?.stopped||!shared?.code||(shared.code==='source_cooldown'&&local))return local;
     return {code:shared.code,stopped:shared.code==='source_denied'||shared.code==='source_outcome_unconfirmed',retrySeconds:60};
   }

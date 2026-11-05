@@ -41,7 +41,7 @@ describe('persistent source gate integration',()=>{
  it('suppresses cached data without source request if another handler has persistently denied',async()=>{let denied=false;const gate={async acquire(){if(denied)throw Object.assign(new Error('denied'),{code:'source_denied'});return {token:'one'};},async release(){}};const f=vi.fn(async()=>upstream());const h=make(f,{sourceGate:gate});expect((await h(request())).status).toBe(200);denied=true;await vi.advanceTimersByTimeAsync(60001);const r=await h(request());expect(r.status).toBe(503);expect(await r.json()).toMatchObject({state:'unavailable',error_code:'persistent_source_denial'});expect(f).toHaveBeenCalledTimes(1);});
  it('release write failure never publishes candidate or retries, and release called once',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{throw new Error('write unavailable');})};const f=vi.fn(async()=>upstream());const h=make(f,{sourceGate:gate});expect((await h(request())).status).toBe(503);await vi.advanceTimersByTimeAsync(86400000);expect((await h(request('BK0001'))).status).toBe(503);expect(f).toHaveBeenCalledTimes(1);expect(gate.release).toHaveBeenCalledTimes(1);});
  it('observed denial is persisted even when body cancellation rejects',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};const body=new ReadableStream({cancel(){throw new Error('cancel failed');}});expect((await make(async()=>new Response(body,{status:403}),{sourceGate:gate})(request())).status).toBe(503);expect(gate.release).toHaveBeenCalledWith('one',{kind:'denied',reason:'source_denial'});});
- it('temporary failure releases as temporary, not denial',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};expect((await make(async()=>new Response('{\"error\":\"temporary\"}',{status:500,headers:{'content-type':'application/json'}}),{sourceGate:gate})(request())).status).toBe(503);expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'collection_failed'});});
+ it('temporary failure releases as temporary, not denial',async()=>{const gate={async acquire(){return {token:'one'};},release:vi.fn(async()=>{})};expect((await make(async()=>new Response('{\"error\":\"temporary\"}',{status:500,headers:{'content-type':'application/json'}}),{sourceGate:gate})(request())).status).toBe(503);expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'upstream_http'});});
 });
 describe('scope-specific quote units',()=>{
  it('revalidates a legacy quote-unit ETag without refetching cached rows',async()=>{
@@ -218,7 +218,7 @@ describe('request lifetime retention',()=>{
   const h=make(f,{sourceGate:gate,waitUntil:(promise:Promise<unknown>)=>retained.push(promise)});
   const pending=h(new Request('https://x/api/v1/ashare/snapshot',{signal:c.signal}));
   await vi.advanceTimersByTimeAsync(1);c.abort();await vi.advanceTimersByTimeAsync(1);
-  expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'collection_failed'});
+  expect(gate.release).toHaveBeenCalledWith('one',{kind:'temporary_failure',reason:'aborted'});
   let settled=false;void retained[0].then(()=>{settled=true;});await vi.advanceTimersByTimeAsync(1);expect(settled).toBe(false);
   releaseDone();expect((await pending).status).toBe(503);await Promise.all(retained);expect(settled).toBe(true);
   expect(f).toHaveBeenCalledTimes(1);expect(gate.release).toHaveBeenCalledTimes(1);
@@ -298,7 +298,7 @@ describe('bounded ordinary response cleanup',()=>{
   await vi.advanceTimersByTimeAsync(1001);
   expect((await response).status).toBe(503);
   expect(gate.release).toHaveBeenCalledTimes(1);
-  expect(gate.release).toHaveBeenCalledWith('synthetic-cleanup',{kind:'temporary_failure',reason:'collection_failed'});
+  expect(gate.release).toHaveBeenCalledWith('synthetic-cleanup',{kind:'temporary_failure',reason:reason==='encoding'?'unsupported_content_encoding':'byte_budget'});
  });
  it('body budget failure also bounds reader cancellation before release',async()=>{
   const gate={async acquire(){return {token:'synthetic-body'};},release:vi.fn(async()=>{})};

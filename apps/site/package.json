@@ -16,6 +16,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:build-assets": "node scripts/test-rsc-css-build.mjs && node scripts/test-built-browser-fixture.mjs",
     "test:sina-runtime": "node scripts/test-sina-runtime.mjs",
+    "test:ashare-backoff-runtime": "node scripts/test-ashare-backoff-runtime.mjs",
     "test:ashare-runtime": "node scripts/test-ashare-runtime.mjs",
     "test:fx-runtime": "node scripts/test-fx-runtime.mjs",
     "test:kraken-runtime": "node scripts/test-kraken-runtime.mjs",

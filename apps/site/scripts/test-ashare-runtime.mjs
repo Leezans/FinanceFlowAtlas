@@ -63,7 +63,7 @@ const {outputFiles}=await build({
   external:['cloudflare:workers'],
   write:false,
 });
-const migration=(await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
+const migration=(await Promise.all(['0001_wild_jigsaw','0019_lean_golden_guardian','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
 const endpoint='https://offline.invalid/api/v1/ashare/snapshot';
 const numericFields=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];
 const syntheticRow={f12:'BK0001',f14:'合成行业',...Object.fromEntries(numericFields.map(field=>[field,1]))};
@@ -149,7 +149,7 @@ await withWorkers('temporary_failure',async(mf,db,calls)=>{
   // Handler's bounded admission wait exceeds the old 3s database interval.
   const result=await cold.fetch(`${endpoint}?scope=BK0001`);
   assert.equal(result.status,503);
-  assert.equal((await result.json()).error_code,'source_cooldown');
+  assert.equal((await result.json()).error_code,'upstream_http');
   assert.equal(calls(),1,'cold isolate must not retry the failing provider');
   const unchanged=await db.prepare('SELECT finished_ms,not_before_ms FROM ashare_source_gate').first();
   assert.equal(unchanged.finished_ms,gate.finished_ms);
@@ -191,7 +191,7 @@ await withWorkers('disconnect',async(mf,db,calls)=>{
   assert.equal(gate.lease_token,null);assert.equal(gate.quiet_ms,60_000);assert.equal(calls(),1);
   const cold=await mf.getWorker('cold');
   const next=await cold.fetch(endpoint);assert.equal(next.status,503);
-  assert.equal((await next.json()).error_code,'source_cooldown');assert.equal(calls(),1);
+  assert.equal((await next.json()).error_code,'aborted');assert.equal(calls(),1);
 });
 console.log('PASS abort after HTTP response: native retained cleanup releases only its own lease; cooldown persists');
 
@@ -310,6 +310,6 @@ for(const mode of ['deadline_initial','deadline_redirect'])await withWorkers(mod
   assert.ok(Date.now()-started<27_000);assert.equal(calls(),mode==='deadline_redirect'?2:1);
   assert.equal((await db.prepare('SELECT count(*) AS n FROM ashare_snapshot_cache').first()).n,0);
   const beforeCalls=calls();const cold=await mf.getWorker('cold');const reply=await cold.fetch(endpoint);
-  assert.equal(reply.status,503);assert.equal((await reply.json()).error_code,'source_cooldown');assert.equal(calls(),beforeCalls);
+  assert.equal(reply.status,503);assert.equal((await reply.json()).error_code,'deadline');assert.equal(calls(),beforeCalls);
   console.log(`PASS native ${mode}: missing disconnect signal, one20s budget, real abort+D1 release before27s, no partial cache or cold retry`);
 });

@@ -33,7 +33,7 @@ export default {async fetch(request){
  if(path==='/offline/progress')return Response.json({commitStarted,complete,bodyStarted});
  return ashareHandler(request);
 }};`,resolveDir:root,sourcefile:'offline-shared-snapshots.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
-const migrations=(await Promise.all(['0001_wild_jigsaw','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(n=>readFile(new URL('../drizzle/'+n+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
+const migrations=(await Promise.all(['0001_wild_jigsaw','0019_lean_golden_guardian','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(n=>readFile(new URL('../drizzle/'+n+'.sql',import.meta.url),'utf8')))).join('\n--> statement-breakpoint\n');
 const endpoint='https://offline.invalid/api/v1/ashare/snapshot';
 const nowSQL="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 const numeric=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];
@@ -76,7 +76,7 @@ await withWorkers(async({db,fetchers,calls,setMode})=>{
  const stale=await data(fetchers[0]);assert.equal(calls(),2);assert.equal(stale.body.stale,true);assert.equal(stale.body.has_error,true);
  assert.equal(stale.body.fetched_at,initial.body.fetched_at);assert.deepEqual(stale.body.rows,initial.body.rows);assert.equal(stale.body.source_observed_at,null);assert.equal(stale.body.trade_date,null);
  const failed=await gate(db);assert.equal(failed.not_before_ms-failed.finished_ms,60000);
- for(const f of fetchers.slice(1)){const cold=await data(f);assert.equal(cold.body.stale,true);assert.equal(cold.body.has_error,true);assert.equal(cold.body.fetched_at,initial.body.fetched_at);await unavailable(f,'BK0002','source_cooldown');}
+ for(const f of fetchers.slice(1)){const cold=await data(f);assert.equal(cold.body.stale,true);assert.equal(cold.body.has_error,true);assert.equal(cold.body.fetched_at,initial.body.fetched_at);await unavailable(f,'BK0002','upstream_http');}
  assert.equal(calls(),2);assert.deepEqual(await gate(db),failed,'reads cannot extend or shorten failure pacing');
  // Leave one second on the shared cooldown: no bounded 3.1s admission wait or
  // implicit refresh may bypass this known failure cooldown.
@@ -149,6 +149,6 @@ await withWorkers(async({mf,db,fetchers,calls})=>{
  assert.equal((await gate(db)).status,'busy');assert.equal((await cache(db)).results.length,0);
  await until(async()=> (await gate(db)).status==='idle','cancelled collection did not retain release');
  const ended=await gate(db);assert.equal(ended.not_before_ms-ended.finished_ms,60000);assert.equal(ended.lease_token,null);
- assert.equal((await cache(db)).results.length,0);await unavailable(fetchers[1],'level1','source_cooldown');assert.equal(calls(),0);
+ assert.equal((await cache(db)).results.length,0);await unavailable(fetchers[1],'level1','aborted');assert.equal(calls(),0);
 });
 console.log('PASS cancellation during collection retains cleanup and publishes no incomplete snapshot');

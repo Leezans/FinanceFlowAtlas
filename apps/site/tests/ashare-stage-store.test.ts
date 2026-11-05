@@ -8,7 +8,7 @@ import {FIELDS,parseScope,type Row} from '../lib/ashare/snapshot';
 
 function fixture(){
  const sqlite=new DatabaseSync(':memory:');
- for(const name of ['0001_wild_jigsaw','0014_ashare_staged_acquisitions'])sqlite.exec(readFileSync(new URL(`../drizzle/${name}.sql`,import.meta.url),'utf8'));
+ for(const name of ['0001_wild_jigsaw','0019_lean_golden_guardian','0014_ashare_staged_acquisitions'])sqlite.exec(readFileSync(new URL(`../drizzle/${name}.sql`,import.meta.url),'utf8'));
  let failAt=-1,unknownWrite=false,hideChanges=false,reads=0;const statements:string[]=[];
  const db:StageD1={
   prepare(sql){return {bind(...values:unknown[]){return {async run():Promise<D1Result>{
@@ -103,7 +103,7 @@ test('expired prefix is deleted only by the current owner, with no gate reset or
 test.each([0,1,2,3])('transaction error at statement %s preserves old payload, all scopes, and the original lease',async index=>{
  const f=fixture(),stage=evidence();await save(f,stage);const lease=await acquire(f),before=state(f);
  f.failAt(index);await expect(f.store.save(lease.token,evidence('BK0001'))).rejects.toMatchObject({code:'source_gate_unavailable'});
- expect(state(f)).toEqual(before);expect(f.statements.filter(sql=>sql===SQL.finish)).toHaveLength(1);
+ expect(state(f)).toEqual(before);expect(f.statements.filter(sql=>sql===SQL.preserve)).toHaveLength(1);
 });
 
 test('unknown committed write outcome is not retried or followed by a second gate release',async()=>{
@@ -112,13 +112,13 @@ test('unknown committed write outcome is not retried or followed by a second gat
  await expect(pending).rejects.toMatchObject({code:'source_gate_unavailable'});
  await expect(pending).rejects.not.toHaveProperty('saveNotStarted');
  expect(state(f).stages).toHaveLength(1);expect(state(f).gate?.status).toBe('idle');
- expect(f.statements.filter(sql=>sql===SQL.finish)).toHaveLength(1);
+ expect(f.statements.filter(sql=>sql===SQL.preserve)).toHaveLength(1);
 });
 
 test('missing write confirmation fails closed without a second write',async()=>{
  const f=fixture(),lease=await acquire(f);f.hideChanges();
  await expect(f.store.save(lease.token,evidence())).rejects.toMatchObject({code:'source_gate_unavailable'});
- expect(f.statements.filter(sql=>sql===SQL.finish)).toHaveLength(1);
+ expect(f.statements.filter(sql=>sql===SQL.preserve)).toHaveLength(1);
 });
 
 test.each(['expired','future_started'])('D1 clock rejects %s before releasing the owner',async kind=>{

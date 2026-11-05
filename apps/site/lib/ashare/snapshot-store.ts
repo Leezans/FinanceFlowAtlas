@@ -1,9 +1,9 @@
 import {STAGE_MAX_AGE_MS} from './stage';
 import {STAGE_SQL} from './stage-store';
-import {inspectGateState,NOW,SQL,SUCCESS_QUIET_MS,SourceGateError,type GateD1,type D1Result,type SourceGateCode} from './source-gate';
+import {retainedFailureCode,inspectGateState,NOW,SQL,SUCCESS_QUIET_MS,SourceGateError,type GateD1,type D1Result,type SourceGateCode} from './source-gate';
 import {decodeSnapshot,encodeSnapshot,scopeKey,SNAPSHOT_MAX_AGE_MS,SNAPSHOT_MAX_SCOPES,type Snapshot,type Scope} from './snapshot';
 
-export type SnapshotRead={snapshot?:Snapshot;ageMs?:number;code?:SourceGateCode|'snapshot_invalid'|'snapshot_store_unavailable';canAcquire:boolean};
+export type SnapshotRead={snapshot?:Snapshot;ageMs?:number;committedMs?:number;code?:SourceGateCode|'snapshot_invalid'|'snapshot_store_unavailable'|'collection_in_progress';canAcquire:boolean;failureCode?:string;retryAfterMs?:number;durableBackoff?:boolean};
 export interface SnapshotStore {
   read(scope:Scope):Promise<SnapshotRead>;
   /** Commits the snapshot AND releases this lease in one primary-D1 transaction. */
@@ -13,7 +13,7 @@ type Statement=ReturnType<ReturnType<GateD1['prepare']>['bind']>;
 export interface SnapshotD1 extends GateD1 {batch(statements:Statement[]):Promise<D1Result[]>;}
 const ownsLease="EXISTS (SELECT 1 FROM ashare_source_gate WHERE id='single_upstream' AND status='busy' AND lease_token=?)";
 export const SNAPSHOT_SQL={
-  read:`SELECT g.status,g.acquired_ms,g.finished_ms,g.not_before_ms,${NOW} AS now_ms,
+  read:`SELECT g.status,g.acquired_ms,g.finished_ms,g.not_before_ms,g.failure_count,g.last_failure_ms,g.failure_code,${NOW} AS now_ms,
     CASE WHEN g.status='idle' THEN s.payload ELSE NULL END AS payload,
     s.format_version,s.committed_ms,s.expires_ms
     FROM ashare_source_gate g LEFT JOIN ashare_snapshot_cache s ON s.scope_key=? WHERE g.id='single_upstream'`,
@@ -37,7 +37,10 @@ export class D1SnapshotStore implements SnapshotStore {
   constructor(private readonly db:SnapshotD1,private readonly options:{staged?:boolean}={}) {}
   async read(scope:Scope):Promise<SnapshotRead> {
     let result:D1Result;
-    try{result=await this.db.prepare(SNAPSHOT_SQL.read).bind(scopeKey(scope)).run();}
+    try{
+      const sql=this.options.staged?SNAPSHOT_SQL.read.replace('SELECT g.status',`SELECT EXISTS(SELECT 1 FROM ashare_staged_acquisitions WHERE scope_key=? AND expires_ms>${NOW}) AS stage_pending,g.status`):SNAPSHOT_SQL.read;
+      result=await this.db.prepare(sql).bind(...(this.options.staged?[scopeKey(scope),scopeKey(scope)]:[scopeKey(scope)])).run();
+    }
     catch{return {code:'snapshot_store_unavailable',canAcquire:false};}
     if(!result.success)return {code:'snapshot_store_unavailable',canAcquire:false};
     const row=result.results?.[0];
@@ -45,10 +48,14 @@ export class D1SnapshotStore implements SnapshotStore {
     try{gateCode=inspectGateState(row);}catch{return {code:'source_gate_unavailable',canAcquire:false};}
     if(gateCode&&gateCode!=='source_cooldown')return {code:gateCode,canAcquire:false};
     // A successful 3s pacing interval is not a failed refresh. A temporary
-    // failure's shared 60s cooldown must remain visible even on a cold isolate.
+    // failure's shared durable cooldown must remain visible even on a cold isolate.
     const failedCooldown=gateCode==='source_cooldown'&&
       (typeof row!.finished_ms!=='number'||Number(row!.not_before_ms)-row!.finished_ms>SUCCESS_QUIET_MS);
-    const base:SnapshotRead={canAcquire:!failedCooldown,...(gateCode?{code:gateCode}:{})};
+    const durableBackoff=Number.isSafeInteger(row!.failure_count)&&Number(row!.failure_count)>=0;
+    const failureCode=durableBackoff&&Number(row!.failure_count)>0?retainedFailureCode(row!.failure_code):undefined;
+    const base:SnapshotRead={canAcquire:!failedCooldown,...(gateCode?{code:gateCode}:{}),
+      durableBackoff,failureCode,retryAfterMs:Math.max(0,Number(row!.not_before_ms)-Number(row!.now_ms)),
+      ...(row!.stage_pending===1&&!failureCode?{code:'collection_in_progress' as const}:{})};
     if(row!.payload===null||row!.payload===undefined)return base;
     const {committed_ms:committed,expires_ms:expires,now_ms:now}=row!;
     if(row!.format_version!==1||typeof committed!=='number'||!Number.isSafeInteger(committed)||committed<0||
@@ -63,7 +70,7 @@ export class D1SnapshotStore implements SnapshotStore {
       // Oldest-page age may legitimately make a completed staged snapshot stale.
       // That does not turn the normal post-success pacing interval into a failed
       // refresh. Retain the age and gate, but report only a failure cooldown.
-      return {...base,snapshot,ageMs,code:failedCooldown?gateCode!:undefined};
+      return {...base,snapshot,ageMs,committedMs:committed,code:base.code==='collection_in_progress'?base.code:failedCooldown?gateCode!:undefined};
     }catch{return {code:'snapshot_invalid',canAcquire:false};}
   }
   async commit(token:string,snapshot:Snapshot):Promise<void> {

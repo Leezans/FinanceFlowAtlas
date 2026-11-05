@@ -1,8 +1,9 @@
+import {safeSourceCode,isSourceStopped} from './recovery';
 /** Metadata-only, shared across ALL isolates via a single primary D1 row.
  * No timers, expiry, reset, takeover, source requests, payloads, or user identities.
  * Pass the D1 binding directly, NOT a read-replica session.
  */
-export type SourceOutcome = { kind: 'success' | 'temporary_failure' | 'denied'; reason?: string };
+export type SourceOutcome = { kind: 'success' | 'temporary_failure' | 'denied' | 'cancelled'; reason?: string };
 export type SourceLease = { token: string; acquiredAtMs?:number };
 export interface SourceGate {
   acquire(scope: string, signal?: AbortSignal): Promise<SourceLease>;
@@ -25,17 +26,26 @@ export interface GateD1 {
 // Database clock, not independently skewed isolate clocks.
 export const NOW = "(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 export const SUCCESS_QUIET_MS = 3_000;
-// In-memory exponential backoff does not survive a new isolate. Keep its first
-// 60s failure window in shared metadata so cold isolates cannot retry after 3s.
-const TEMPORARY_FAILURE_QUIET_MS = 60_000;
+// The database computes each failure window from the previous durable count.
 // A diagnostic threshold only, not a lease expiry or proof of source outcome.
 // This deliberately conservative diagnostic does not expire the 20s operation.
 export const UNCONFIRMED_AFTER_MS = 180_000;
 export const SQL = {
   acquire: `UPDATE ashare_source_gate SET status='busy', lease_token=?, acquired_ms=${NOW}, updated_ms=${NOW}
-    WHERE id='single_upstream' AND status='idle' AND not_before_ms <= ${NOW} RETURNING status, acquired_ms`,
+    WHERE id='single_upstream' AND status='idle' AND not_before_ms <= ${NOW}
+    AND typeof(failure_count)='integer' AND failure_count BETWEEN 0 AND 5 RETURNING status, acquired_ms`,
   inspect: `SELECT status, acquired_ms, not_before_ms, ${NOW} AS now_ms FROM ashare_source_gate WHERE id='single_upstream'`,
-  finish: `UPDATE ashare_source_gate SET status=?, lease_token=NULL, reason_code=?,
+  failure: `UPDATE ashare_source_gate SET status='idle', lease_token=NULL, failure_code=?,
+    failure_count=min(failure_count+1,5), last_failure_ms=${NOW},
+    finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+min(900000,60000*(1 << min(failure_count,4)))
+    WHERE id='single_upstream' AND status='busy' AND lease_token=? RETURNING status`,
+  denied: `UPDATE ashare_source_gate SET status='blocked', lease_token=NULL, reason_code=?,
+    finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+${SUCCESS_QUIET_MS}
+    WHERE id='single_upstream' AND status='busy' AND lease_token=? RETURNING status`,
+  preserve: `UPDATE ashare_source_gate SET status=?, lease_token=NULL,
+    finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+?
+    WHERE id='single_upstream' AND status='busy' AND lease_token=? RETURNING status`,
+  finish: `UPDATE ashare_source_gate SET status=?, lease_token=NULL, reason_code=?, failure_count=0, last_failure_ms=NULL, failure_code=NULL,
     finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+?
     WHERE id='single_upstream' AND status='busy' AND lease_token=? RETURNING status`,
 } as const;
@@ -63,7 +73,7 @@ export class D1SourceGate implements SourceGate {
     const acquired = await this.run(SQL.acquire, token);
     if (acquired.meta?.changes === 1) {
       if (signal?.aborted) {
-        await this.release(token, { kind: 'temporary_failure' });
+        await this.release(token, { kind: 'cancelled' });
         throw new SourceGateError('source_aborted');
       }
       const acquiredAtMs=acquired.results?.[0]?.acquired_ms;
@@ -78,11 +88,16 @@ export class D1SourceGate implements SourceGate {
     return inspectGateState(state);
   }
   async release(token: string, outcome: SourceOutcome): Promise<void> {
-    if (!token || !['success', 'temporary_failure', 'denied'].includes(outcome.kind))
+    if (!token || !['success', 'temporary_failure', 'denied', 'cancelled'].includes(outcome.kind))
       throw new SourceGateError('source_gate_unavailable');
     // Denial is persisted atomically WITH releasing ownership, never after it.
-    const quietMs = outcome.kind === 'temporary_failure' ? TEMPORARY_FAILURE_QUIET_MS : SUCCESS_QUIET_MS;
-    const result = await this.run(SQL.finish, outcome.kind === 'denied' ? 'blocked' : 'idle', reasonCode(outcome), quietMs, token);
+    const result = outcome.kind === 'temporary_failure'
+      ? await this.run(SQL.failure, retainedFailureCode(outcome.reason), token)
+      : outcome.kind === 'cancelled'
+        ? await this.run(SQL.preserve, 'idle', SUCCESS_QUIET_MS, token)
+        : outcome.kind === 'denied'
+          ? await this.run(SQL.denied,reasonCode(outcome),token)
+          : await this.run(SQL.finish, 'idle', null, SUCCESS_QUIET_MS, token);
     if (result.meta?.changes === 0) throw new SourceGateError('source_stale_lease');
     if (result.meta?.changes !== 1) throw new SourceGateError('source_gate_unavailable');
   }
@@ -105,4 +120,10 @@ export function inspectGateState(state:Record<string,unknown>|undefined):SourceG
       return state.not_before_ms > state.now_ms ? 'source_cooldown' : null;
     // Concurrent changes or absent/malformed row are fail-closed too.
     throw new SourceGateError('source_gate_unavailable');
+}
+
+/** Persist only bounded failure codes, never raw exception content. */
+export function retainedFailureCode(reason:unknown):string {
+  const code=safeSourceCode(reason);
+  return code&&!isSourceStopped(code)?code:'collection_failed';
 }

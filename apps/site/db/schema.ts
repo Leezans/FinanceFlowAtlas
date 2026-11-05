@@ -14,6 +14,9 @@ export const ticCache=sqliteTable('tic_snapshot_cache',{
 
 /** Coordination metadata only. No A-share observations or identities are stored. */
 export const ashareSourceGate=sqliteTable('ashare_source_gate',{
+ failureCount:integer('failure_count').notNull().default(0),
+ lastFailureMs:integer('last_failure_ms'),
+ failureCode:text('failure_code'),
  id:text('id').primaryKey(),
  status:text('status').notNull(),
  leaseToken:text('lease_token'),

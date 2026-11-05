@@ -6,7 +6,7 @@ import { D1SourceGate, SQL, UNCONFIRMED_AFTER_MS, type GateD1, type D1Result } f
 
 class FakeD1 implements GateD1 {
   now=1000; acquired:number|null=null; status='idle'; token: unknown=null; notBefore=0; reason: unknown=null;
-  fail=false; afterAcquire?:()=>void;
+  failures=0; fail=false; afterAcquire?:()=>void;
   prepare(sql: string) { return { bind: (...v: unknown[]) => ({ run: async ():Promise<D1Result> => {
     if(this.fail) throw new Error('SECRET SQL ERROR token=private');
     let changes=0;
@@ -14,6 +14,12 @@ class FakeD1 implements GateD1 {
       if(this.status==='idle' && this.notBefore<=this.now) {
         this.status='busy'; this.acquired=this.now; this.token=v[0]; changes=1; this.afterAcquire?.();
       }
+    } else if(sql===SQL.failure) {
+      if(this.status==='busy'&&this.token===v[1]){this.status='idle';this.token=null;this.notBefore=this.now+Math.min(900000,60000*2**this.failures);this.failures=Math.min(5,this.failures+1);changes=1;}
+    } else if(sql===SQL.preserve) {
+      if(this.status==='busy'&&this.token===v[2]){this.status='idle';this.token=null;this.notBefore=this.now+Number(v[1]);changes=1;}
+    } else if(sql===SQL.denied) {
+      if(this.status==='busy'&&this.token===v[1]){this.status='blocked';this.reason=v[0];this.token=null;changes=1;}
     } else if(sql===SQL.finish) {
       if(this.status==='busy' && this.token===v[3]) {
         this.status=v[0] as string; this.reason=v[1]; this.token=null; this.notBefore=this.now+Number(v[2]); changes=1;
@@ -76,7 +82,7 @@ test('abort before acquisition avoids write; abort during DB acquisition awaits 
   await assert.rejects(new D1SourceGate(db).acquire('x',controller.signal),hasCode('source_aborted'));
   assert.equal(db.status,'idle'); const c=new AbortController(); db.afterAcquire=()=>c.abort();
   await assert.rejects(new D1SourceGate(db).acquire('x',c.signal),hasCode('source_aborted'));
-  assert.equal(db.status,'idle'); assert.equal(db.notBefore,61000);
+  assert.equal(db.status,'idle'); assert.equal(db.notBefore,4000);
 });
 test('failed denied-state write leaves busy, never reopens gate',async()=>{
   const db=new FakeD1(); const g=new D1SourceGate(db); const l=await g.acquire('x'); db.fail=true;
@@ -86,7 +92,7 @@ test('failed denied-state write leaves busy, never reopens gate',async()=>{
   assert.equal(db.status,'busy'); assert.equal(db.token,token);
 });
 test('actual SQLite syntax, CAS changes, constraints and permanent blocked row',async()=>{
-  const db=new DatabaseSync(':memory:'); db.exec(readFileSync(new URL('../drizzle/0001_wild_jigsaw.sql',import.meta.url),'utf8'));
+  const db=new DatabaseSync(':memory:'); db.exec(readFileSync(new URL('../drizzle/0001_wild_jigsaw.sql',import.meta.url),'utf8')); db.exec(readFileSync(new URL('../drizzle/0019_lean_golden_guardian.sql',import.meta.url),'utf8'));
   const adapter:GateD1={prepare:(sql)=>({bind:(...v)=>({run:async()=>{
     const stmt=db.prepare(sql); const results=stmt.all(...v as SQLInputValue[]) as Record<string,unknown>[];
     const changed=db.prepare('SELECT changes() AS n').get() as {n:number};

@@ -8,7 +8,7 @@ import {FIELDS,parseScope,encodeSnapshot,decodeSnapshot,SNAPSHOT_MAX_AGE_MS,SNAP
 
 function fixture(){
  const sqlite=new DatabaseSync(':memory:');
- for(const name of ['0001_wild_jigsaw','0012_ashare_shared_snapshots'])sqlite.exec(readFileSync(new URL(`../drizzle/${name}.sql`,import.meta.url),'utf8'));
+ for(const name of ['0001_wild_jigsaw','0019_lean_golden_guardian','0012_ashare_shared_snapshots'])sqlite.exec(readFileSync(new URL(`../drizzle/${name}.sql`,import.meta.url),'utf8'));
  let failAt=-1,reads=0;
  const db:SnapshotD1={
   prepare(sql){
@@ -176,5 +176,57 @@ test('successful pacing does not label an old-first-page staged snapshot as a fa
  const failure=await store.read(snapshot.scope);expect(failure.code).toBe('source_cooldown');expect(failure.canAcquire).toBe(false);
  const failedResponse=await handler(new Request('https://private.invalid/api/v1/ashare/status?scope=BK1216'));
  expect(await failedResponse.json()).toMatchObject({state:'ready',stale:true,has_error:true});
- expect(failedResponse.headers.get('X-Ashare-Error-Code')).toBe('source_cooldown');expect(sourceCalls).toBe(0);
+ expect(failedResponse.headers.get('X-Ashare-Error-Code')).toBe('collection_failed');expect(sourceCalls).toBe(0);
+});
+
+test('durable failure history survives cold reads, cooldown expiry and stale isolate scheduling; success resets it',async()=>{
+ const f=fixture(),snapshot=evidence();await publish(f,snapshot);age(f,61000);f.elapse();
+ let calls=0;
+ const handler=createAshareHandler({enabled:()=>true,isolatedForTests:true,sourceGate:f.gate,snapshotStore:f.store,
+  fetcher:async()=>{calls++;return new Response('',{status:502,headers:{'content-type':'application/json'}});}});
+ const request=()=>new Request('https://private.invalid/api/v1/ashare/snapshot');
+ const first=await handler(request());expect(first.status).toBe(200);expect(first.headers.get('Retry-After')).toBe('60');
+ expect(await first.json()).toMatchObject({stale:true,has_error:true});expect(calls).toBe(1);
+ const cold=createAshareHandler({enabled:()=>true,isolatedForTests:true,sourceGate:new D1SourceGate(f.db),snapshotStore:new D1SnapshotStore(f.db),fetcher:async()=>{throw new Error('must not fetch');}});
+ const held=await cold(request());expect(held.headers.get('X-Ashare-Error-Code')).toBe('upstream_http');expect(held.headers.get('Retry-After')).toBe('60');
+ f.elapse();
+ const status=await cold(new Request('https://private.invalid/api/v1/ashare/status'));
+ expect(status.headers.get('X-Ashare-Error-Code')).toBe('upstream_http');expect(status.headers.get('Retry-After')).toBe('1');expect(await status.json()).toMatchObject({has_error:true,stale:true});
+ // The old handler must not extend the expired authoritative delay with its own 60s timer.
+ const second=await handler(request());expect(calls).toBe(2);expect(second.headers.get('Retry-After')).toBe('120');
+ await publish(f,evidence());
+ const restored=await handler(request());expect(restored.headers.get('X-Ashare-Error-Code')).toBeNull();expect(restored.headers.get('X-Ashare-Refresh-After')).not.toBeNull();
+ expect(await restored.json()).toMatchObject({has_error:false,stale:false});expect(calls).toBe(2);
+ expect(f.sqlite.prepare('SELECT failure_count,failure_code,last_failure_ms FROM ashare_source_gate').get()).toMatchObject({failure_count:0,failure_code:null,last_failure_ms:null});
+});
+
+test('pre-source failure remains visible locally without incrementing durable count, until verified publication',async()=>{
+ const f=fixture();await publish(f);age(f,61000);f.elapse();let calls=0;
+ const handler=createAshareHandler({enabled:()=>true,isolatedForTests:true,sourceGate:f.gate,snapshotStore:f.store,
+  stageStore:{read:async()=>{throw new Error('stage_invalid');},save:async()=>{},discard:async()=>{}},
+  fetcher:async()=>{calls++;throw new Error('must not fetch');}});
+ const response=await handler(new Request('https://private.invalid/api/v1/ashare/snapshot'));
+ expect(calls).toBe(0);expect(response.headers.get('X-Ashare-Error-Code')).toBe('stage_invalid');expect(await response.json()).toMatchObject({stale:true,has_error:true});
+ expect(f.sqlite.prepare('SELECT failure_count,failure_code FROM ashare_source_gate').get()).toMatchObject({failure_count:0,failure_code:null});
+ f.elapse();const unrelated=await f.gate.acquire('other');
+ const busy=await handler(new Request('https://private.invalid/api/v1/ashare/status'));expect(busy.headers.get('X-Ashare-Error-Code')).toBe('source_busy');
+ await f.gate.release(unrelated.token,{kind:'cancelled'});
+ const unchanged=await handler(new Request('https://private.invalid/api/v1/ashare/status'));expect(unchanged.headers.get('X-Ashare-Error-Code')).toBe('stage_invalid');
+ await publish(f);const restored=await handler(new Request('https://private.invalid/api/v1/ashare/status'));
+ expect(restored.headers.get('X-Ashare-Error-Code')).toBeNull();expect(await restored.json()).toMatchObject({has_error:false,stale:false});
+});
+
+test('missing baseline and delayed older snapshot revisions cannot prove transient error recovery',async()=>{
+ let shared:import('../lib/ashare/snapshot-store').SnapshotRead={canAcquire:true,durableBackoff:true,retryAfterMs:0};
+ const handler=createAshareHandler({enabled:()=>true,isolatedForTests:true,
+  sourceGate:{acquire:async()=>({token:'synthetic'}),release:async()=>{}},
+  snapshotStore:{read:async()=>shared,commit:async()=>{}},
+  stageStore:{read:async()=>{throw new Error('stage_invalid');},save:async()=>{},discard:async()=>{}},fetcher:async()=>{throw new Error('must not fetch');}});
+ const failed=await handler(new Request('https://private.invalid/api/v1/ashare/snapshot'));expect(failed.headers.get('X-Ashare-Error-Code')).toBe('stage_invalid');
+ const snapshot=evidence();
+ for(const revision of [100,99,100]){
+  shared={canAcquire:true,durableBackoff:true,snapshot,ageMs:0,committedMs:revision};
+  const status=await handler(new Request('https://private.invalid/api/v1/ashare/status'));expect(status.headers.get('X-Ashare-Error-Code')).toBe('stage_invalid');
+ }
+ shared={...shared,committedMs:101};const recovered=await handler(new Request('https://private.invalid/api/v1/ashare/status'));expect(recovered.headers.get('X-Ashare-Error-Code')).toBeNull();
 });
