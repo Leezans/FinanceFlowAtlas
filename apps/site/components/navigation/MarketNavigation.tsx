@@ -6,6 +6,7 @@ import s from './navigation.module.css';
 
 export const marketLinks = [
   {href: '/ashare', label: 'A 股热力图'},
+  {href: '/taiwan', label: '台股法人矩阵'},
   {href: '/markets', label: '全球市场'},
   {href: '/crypto', label: '加密现货'},
   {href: '/futures', label: '期货持仓'},
