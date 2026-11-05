@@ -6,7 +6,7 @@ const SOURCE_FAILURES:Record<string,string>={
  source_gate_unavailable:'数据协调存储尚未就绪，请检查数据库迁移。',
  source_busy:'另一项数据采集仍在进行，请稍后重试。',
  source_cooldown:'来源限速等待中，请稍后重试。',
- compressed_body_denied:'来源返回压缩内容，传输兼容性校验未通过。',
+ unsupported_content_encoding:'来源返回不支持的内容编码，传输校验未通过。',
  source_access_denied:'来源限制访问，已停止采集。',
  persistent_source_denial:'来源限制访问，已停止采集。',
  source_denied:'来源限制访问，已停止采集。',

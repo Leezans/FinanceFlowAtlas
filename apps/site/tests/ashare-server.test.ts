@@ -46,7 +46,7 @@ describe('validation and publication',()=>{
  it.each(['changed','duplicate','truncated'])('rejects %s pagination without partial data',async mode=>{let n=0;const f=vi.fn(async()=>++n===1?upstream(Array.from({length:100},(_,i)=>item(i+1)),101):upstream(mode==='truncated'?[]:[item(mode==='duplicate'?1:101)],mode==='changed'?102:101));const r=await settle(make(f)(request()));expect(r.status).toBe(503);expect(await r.text()).not.toContain('合成');});
  it.each([NaN,Infinity,true,'123',9007199254740992])('rejects invalid numeric %s',async value=>{const row={...item(),f62:value};const encoded=JSON.stringify({rc:0,data:{total:1,diff:[row]}});const f=vi.fn(async()=>new Response(Number.isNaN(value)?encoded.replace('"f62":null','"f62":NaN'):value===Infinity?encoded.replace('"f62":null','"f62":1e999'):encoded,{headers:{'content-type':'application/json'}}));expect((await make(f)(request())).status).toBe(503);});
  it('permits explicit missing values and rejects negative price/return bounds',async()=>{for(const value of [null,'-','--','']){expect((await make(async()=>upstream([{...item(),f62:value}]))(request())).status).toBe(200);}for(const patch of [{f2:-1},{f3:-101},{f12:'BK１２３４'},{f14:''}])expect((await make(async()=>upstream([{...item(),...patch}]))(request())).status).toBe(503);});
- it('rejects invalid bytes, compression, oversized body and duplicate JSON keys',async()=>{for(const response of [new Response('{"rc":0,"rc":1}',{headers:{'content-type':'application/json'}}),new Response('{}',{headers:{'content-type':'text/html'}}),new Response('{}',{headers:{'content-type':'application/json','content-encoding':'gzip'}}),new Response('{}',{headers:{'content-length':'4000001'}}),new Response(new Uint8Array([0xff]),{headers:{'content-type':'application/json'}}),new Response(new Uint8Array(4_000_001),{headers:{'content-type':'application/json'}})])expect((await make(async()=>response)(request())).status).toBe(503);});
+ it('rejects invalid bytes, compression, oversized body and duplicate JSON keys',async()=>{for(const response of [new Response('{"rc":0,"rc":1}',{headers:{'content-type':'application/json'}}),new Response('{}',{headers:{'content-type':'text/html'}}),new Response('{}',{headers:{'content-type':'application/json','content-encoding':'compress'}}),new Response('{}',{headers:{'content-length':'4000001'}}),new Response(new Uint8Array([0xff]),{headers:{'content-type':'application/json'}}),new Response(new Uint8Array(4_000_001),{headers:{'content-type':'application/json'}})])expect((await make(async()=>response)(request())).status).toBe(503);});
  it('keeps last-good explicitly stale with a different etag after failure, then backs off',async()=>{let n=0;const f=vi.fn(async()=>++n===1?upstream():new Response('',{status:429}));const h=make(f);const first=await h(request());await vi.advanceTimersByTimeAsync(60001);const second=await h(request('level1','snapshot',{'If-None-Match':first.headers.get('etag')!}));expect(second.status).toBe(200);expect(second.headers.get('etag')).not.toBe(first.headers.get('etag'));expect(await second.json()).toMatchObject({stale:true,has_error:true,source_total:1});await h(request());expect(f).toHaveBeenCalledTimes(2);});
  it('revocation suppresses cached data',async()=>{let enabled=true;const h=make(async()=>upstream(),{enabled:()=>enabled});expect((await h(request())).status).toBe(200);enabled=false;expect((await h(request())).status).toBe(403);});
  it('aborts pending fetch on request cancellation and marks unavailable',async()=>{const c=new AbortController();const f=vi.fn(async(_url:string,init:RequestInit)=>new Promise<Response>((_,reject)=>init.signal?.addEventListener('abort',()=>reject(new Error('aborted')))));const h=make(f);const p=h(new Request('https://x/api/v1/ashare/snapshot',{signal:c.signal}));await vi.advanceTimersByTimeAsync(1);c.abort();expect((await p).status).toBe(503);expect(f).toHaveBeenCalledTimes(1);});
@@ -58,11 +58,11 @@ describe('validation and publication',()=>{
 
 describe('safe acquisition diagnostics',()=>{
  it('reports known failure without exposing upstream content and repeats it in status',async()=>{
-  const h=make(async()=>new Response('private-provider-body',{headers:{'content-type':'application/json','content-encoding':'gzip'}}));
+  const h=make(async()=>new Response('private-provider-body',{headers:{'content-type':'application/json','content-encoding':'compress'}}));
   const response=await h(request());expect(response.status).toBe(503);
-  const result=await response.json();expect(result).toMatchObject({error_code:'compressed_body_denied'});
+  const result=await response.json();expect(result).toMatchObject({error_code:'unsupported_content_encoding'});
   expect(JSON.stringify(result)).not.toContain('private-provider-body');
-  expect(await (await h(request('level1','status'))).json()).toMatchObject({error_code:'compressed_body_denied',has_error:true});
+  expect(await (await h(request('level1','status'))).json()).toMatchObject({error_code:'unsupported_content_encoding',has_error:true});
  });
  it('does not expose arbitrary transport exception text',async()=>{
   const h=make(async()=>{throw new Error('private-token-or-target');});
@@ -73,5 +73,41 @@ describe('safe acquisition diagnostics',()=>{
   const f=vi.fn();const gate={async acquire(){throw Object.assign(new Error('SQL detail'),{code:'source_gate_unavailable'});},async release(){}};
   const result=await (await make(f,{sourceGate:gate})(request())).json();
   expect(result).toMatchObject({error_code:'source_gate_unavailable'});expect(f).not.toHaveBeenCalled();
+ });
+});
+
+
+describe('native decoded response handling',()=>{
+ it.each(['gzip','br'])('accepts runtime-decoded %s JSON while preserving strict validation',async encoding=>{
+  const f=vi.fn(async()=>{const result=upstream();result.headers.set('content-encoding',encoding);return result;});
+  const response=await make(f)(request());expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({source_total:1,rows:[{f12:'BK0001'}]});
+  const init=(f.mock.calls as unknown as [string,RequestInit][])[0][1];
+  expect(new Headers(init.headers).has('accept-encoding')).toBe(false);
+ });
+ it('limits decoded bytes even when compressed content length is small',async()=>{
+  const f=vi.fn(async()=>new Response(new Uint8Array(4_000_001),{headers:{'content-type':'application/json','content-encoding':'gzip','content-length':'50'}}));
+  const response=await make(f)(request());expect(response.status).toBe(503);expect(await response.json()).toMatchObject({error_code:'byte_budget'});
+ });
+ it.each(['gzip, br','compress','deflate'])('rejects unsupported or chained coding %s without retry',async encoding=>{
+  const f=vi.fn(async()=>{const result=upstream();result.headers.set('content-encoding',encoding);return result;});
+  const h=make(f);const response=await h(request());expect(response.status).toBe(503);expect(await response.json()).toMatchObject({error_code:'unsupported_content_encoding'});
+  await h(request());expect(f).toHaveBeenCalledTimes(1);
+ });
+ it('counts decoded bytes over multiple stream chunks',async()=>{
+  const stream=new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new Uint8Array(2_000_000));controller.enqueue(new Uint8Array(2_000_001));controller.close();}});
+  const response=await make(async()=>new Response(stream,{headers:{'content-type':'application/json','content-encoding':'br','content-length':'50'}}))(request());
+  expect(response.status).toBe(503);expect(await response.json()).toMatchObject({error_code:'byte_budget'});
+ });
+ it('still latches provider denial in decoded compressed JSON',async()=>{
+  const gate={acquire:vi.fn(async()=>({token:'one'})),release:vi.fn(async()=>{})};
+  const f=vi.fn(async()=>new Response('{"rc":1,"data":null}',{headers:{'content-type':'application/json','content-encoding':'gzip'}}));
+  const h=make(f,{sourceGate:gate});expect((await h(request())).status).toBe(503);
+  expect(gate.release).toHaveBeenCalledWith('one',{kind:'denied',reason:'source_denial'});
+  await vi.advanceTimersByTimeAsync(86400000);await h(request());expect(f).toHaveBeenCalledTimes(1);
+ });
+ it('does not mistake raw compressed bytes for a decoded JSON snapshot',async()=>{
+  const response=await make(async()=>new Response(new Uint8Array([31,139,8,0,0,0,0,0]),{headers:{'content-type':'application/json','content-encoding':'gzip'}}))(request());
+  expect(response.status).toBe(503);
  });
 });

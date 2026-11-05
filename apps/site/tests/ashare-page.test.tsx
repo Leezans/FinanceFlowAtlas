@@ -9,8 +9,8 @@ const stock={...root,rows:[{...row,f12:'000001',f14:'合成股票'}],scope:{kind
 afterEach(()=>{cleanup();vi.unstubAllGlobals()});
 describe('private A-share page integration',()=>{
  it('shows known source failure while ignoring untrusted error message text',async()=>{
-  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error_code:'compressed_body_denied',message:'do not display private source text'}),{status:503})));
-  render(<Page/>);await screen.findByText('来源返回压缩内容，传输兼容性校验未通过。');
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error_code:'unsupported_content_encoding',message:'do not display private source text'}),{status:503})));
+  render(<Page/>);await screen.findByText('来源返回不支持的内容编码，传输校验未通过。');
   expect(screen.queryByText('do not display private source text')).toBeNull();
  });
  it('uses generic error for unknown source codes',async()=>{
