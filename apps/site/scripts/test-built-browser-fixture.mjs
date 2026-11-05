@@ -1,0 +1,24 @@
+/** Self-test for the synthetic browser transport. No network or built app needed. */
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+const source=await readFile(new URL('./prepare-built-browser-fixture.mjs',import.meta.url),'utf8');
+const bootstrap=source.match(/const bootstrap=String\.raw`([\s\S]*?)`;/)?.[1];assert.ok(bootstrap);
+const script=bootstrap.match(/<script data-offline-qa-bootstrap>([\s\S]*?)<\/script>/)?.[1];assert.ok(script);
+const nativeRequests=[];const handlers={};
+const window={fetch:async(url)=>{nativeRequests.push(String(url));return new Response('synthetic-local-asset');}};
+const context={window,URL,Headers,Response,DOMException,location:{href:'https://local.invalid/',origin:'https://local.invalid'},navigator:{},document:{addEventListener:(name,fn)=>{handlers[name]=fn;}}};
+vm.runInNewContext(script,context);
+const api=await window.fetch('/api/v1/ashare/snapshot');assert.equal(api.status,200);assert.equal((await api.json()).synthetic,true);assert.equal(nativeRequests.length,0);
+await assert.rejects(window.fetch('https://provider.invalid/data'),/blocks external fetch/);assert.equal(nativeRequests.length,0);
+await assert.rejects(window.fetch('/unexpected'),/blocks unexpected/);
+await window.fetch('/geography/countries.json');assert.deepEqual(nativeRequests,['/geography/countries.json']);
+await window.fetch('/ashare?_rsc=test',{headers:{RSC:'1'}});assert.equal(nativeRequests.at(-1),'/__offline/rsc/ashare.txt');
+assert.throws(()=>new window.WebSocket('wss://provider.invalid'),/blocks WebSocket/);
+assert.throws(()=>new window.EventSource('https://provider.invalid'),/blocks EventSource/);
+assert.equal(context.navigator.sendBeacon('https://provider.invalid'),false);
+let prevented=false;handlers.click({target:{closest:()=>({href:'https://provider.invalid'})},preventDefault(){prevented=true;}});assert.equal(prevented,true);
+assert.equal(window.open('https://provider.invalid'),null);
+const controller=new AbortController();controller.abort();await assert.rejects(window.fetch('/api/test',{signal:controller.signal}),{name:'AbortError'});
+assert.ok(bootstrap.indexOf('Content-Security-Policy')<bootstrap.indexOf('<script'));
+console.log('PASS offline bootstrap: API synthetic stub, local assets/RSC, abort, external fetch/WebSocket/EventSource/beacon/navigation blocked.');

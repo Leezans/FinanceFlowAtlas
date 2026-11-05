@@ -16,6 +16,25 @@ npm run dev
 
 `npm run lint` runs the starter and application ESLint rules. The build generates local worker configuration under `dist/server`; generated builds and runtime state are not source files. For a local database, apply `drizzle/0000_silly_ogun.sql` to the D1 binding `DB` using the local worker configuration before exercising cache-backed routes. Do not apply migrations to production as part of a local test.
 
+### Production asset integrity and offline browser QA
+
+`npm run build` verifies the emitted client assets in both RSC/SSR manifests,
+the Vite client graph and the browser bootstrap on both execution profiles. The
+managed build wrapper also performs the same assertion when invoked directly.
+The pinned RSC plugin collects its manifest after Vite removes CSS-only JS
+chunks, preserving the real CSS dependencies without creating dummy JS files.
+
+`npm run test:build-assets` reproduces the original dangling CSS-only chunk with
+the actual pinned Vite/RSC compiler, proves the corrected ordering preserves CSS
+and verifies the isolated browser transport. No external requests are needed.
+After building, `node scripts/prepare-built-browser-fixture.mjs` executes the
+unmodified production Worker in native Miniflare with network disabled and saves
+12 routes' original HTML, RSC responses and real client assets under the ignored
+`.offline-built-browser` directory. Preview HTML only adds an early isolation
+bootstrap that stubs every API request. These fixtures exercise hydration,
+navigation and honest schema-error states, not populated or live market data.
+They must not be deployed; regenerate them after any build change.
+
 ## Deployment configuration
 
 `.openai/hosting.json` declares `DB` and no R2 bucket. Project identifiers, credentials and provider runtime state are deliberately omitted. Configure a new deployment through supported Sites tooling, retaining the authentication boundary in `worker/index.ts` and `app/chatgpt-auth.ts`. Do not commit generated deployment identifiers or authentication tokens. Public source publication does not make an existing deployment public.
