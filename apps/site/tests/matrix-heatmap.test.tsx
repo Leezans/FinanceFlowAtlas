@@ -23,7 +23,7 @@ describe('shared category/instrument matrix',()=>{
  it('does not color unsigned references as inflows and supports keyboard drilldown',()=>{
   const onSelect=vi.fn();const {container}=render(<MatrixHeatmap {...props} colorMode="neutral" onSelect={onSelect}/>);
   expect(container.querySelectorAll('[data-color=missing]')).toHaveLength(4);
-  fireEvent.keyDown(screen.getByRole('button',{name:/合成测试分类 · 测试正值/}),{key:'Enter'});
+  fireEvent.click(screen.getByRole('button',{name:/合成测试分类 · 测试正值/}));
   expect(onSelect).toHaveBeenCalledWith(groups[0].items[0],groups[0]);
  });
  it('retains a large honest matrix canvas with no synthetic tiles when unavailable',()=>{

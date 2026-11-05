@@ -7,8 +7,8 @@ describe('CFTC category matrix semantics',()=>{
   const groups=futuresMatrixGroups(reply().snapshot!,'noncommercial');
   expect(groups.map(group=>group.label)).toEqual(['贵金属','能源','农产品','外汇期货']);
   expect(groups.map(group=>group.items.length)).toEqual([1,1,1,1]);
-  expect(groups.flatMap(group=>group.items).map(item=>item.weight)).toEqual([1,1,1,1]);
-  expect(groups[0].items[0]).toEqual({id:'088691',label:'黄金',displayValue:'+10.0% OI',detail:'非商业交易者净持仓 +100 张',colorValue:.1,weight:1});
+  expect(groups.flatMap(group=>group.items).map(item=>item.amount)).toEqual([undefined,undefined,undefined,undefined]);
+  expect(groups[0].items[0]).toEqual({id:'088691',label:'黄金',displayValue:'+10.0% OI',detail:'非商业交易者净持仓 +100 张',colorValue:.1});
   expect(groups[3].items[0].displayValue).toBe('+16.0% OI');
  });
  it('preserves negative and zero positioning independently of equal tile area',()=>{
@@ -18,7 +18,7 @@ describe('CFTC category matrix semantics',()=>{
   for(const group of futuresMatrixGroups(snapshot,'nonreportable')){
    expect(group.items[0].colorValue).toBe(0);
    expect(group.items[0].displayValue).toBe('0.0% OI');
-   expect(group.items[0].weight).toBe(1);
+   expect(group.items[0].amount).toBeUndefined();
   }
  });
  it('does not manufacture items for a missing contract',()=>{

@@ -57,7 +57,7 @@ describe('complete reachable A-share evidence list',()=>{
  });
  it('keeps the treemap primary and hides the supplementary table until requested',()=>{
   const {container}=render(<EvidenceHeatmap state={state()}/>);
-  expect(screen.getByRole('group',{name:'当前筛选范围的主力净额矩形热力图'})).toBeTruthy();
+  expect(screen.getByRole('group',{name:'当前筛选范围的主力净额矩形热力图区块'})).toBeTruthy();
   expect(container.querySelector('details.evidence-list')?.hasAttribute('open')).toBe(false);
   openList();expect(container.querySelector('details.evidence-list')?.hasAttribute('open')).toBe(true);expect(screen.getByRole('table')).toBeTruthy();
  });
@@ -69,7 +69,7 @@ describe('complete reachable A-share evidence list',()=>{
   expect(within(table).getByText('33.33%')).toBeTruthy();expect(within(table).getByText('66.67%')).toBeTruthy();
   expect(within(table).getByText('—（零值）')).toBeTruthy();expect(within(table).getByText('—（缺失）')).toBeTruthy();
   expect(within(table).getByText('未提供，不是零')).toBeTruthy();
-  expect(screen.getByRole('group',{name:'当前筛选范围的主力净额矩形热力图'}).querySelectorAll('.tile')).toHaveLength(2);
+  expect(screen.getByRole('group',{name:'当前筛选范围的主力净额矩形热力图区块'}).querySelectorAll('g[data-id]')).toHaveLength(2);
   // Read-only industry embedding does not offer an unusable drilldown button.
   expect(within(table).queryByRole('button')).toBeNull();
  });
@@ -78,7 +78,7 @@ describe('complete reachable A-share evidence list',()=>{
   fireEvent.click(screen.getByRole('button',{name:'进入合成零值的成分股'}));
   expect(select).toHaveBeenLastCalledWith({kind:'industry_stocks',fs:'b:BK0003',classification_level:'unknown_may_mix_levels'},expect.objectContaining({f62:0}));
   fireEvent.change(screen.getByLabelText('主力净额方向'),{target:{value:'missing'}});
-  expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图'})).toBeNull();
+  expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图区块'})).toBeNull();
   fireEvent.click(screen.getByRole('button',{name:'进入合成缺失的成分股'}));
   expect(select).toHaveBeenLastCalledWith({kind:'industry_stocks',fs:'b:BK0004',classification_level:'unknown_may_mix_levels'},expect.objectContaining({f62:null}));
  });
@@ -89,10 +89,10 @@ describe('complete reachable A-share evidence list',()=>{
   fireEvent.change(screen.getByLabelText('主力净额方向'),{target:{value:'positive'}});
   expect(tableCodes()).toEqual(['BK0001']);expect(within(screen.getByRole('table')).getByText('100.00%')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('搜索代码或名称'),{target:{value:'不存在'}});
-  expect(tableCodes()).toEqual([]);expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图'})).toBeNull();expect(screen.getByText('没有匹配的行业或股票。')).toBeTruthy();
+  expect(tableCodes()).toEqual([]);expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图区块'})).toBeNull();expect(screen.getByText('没有匹配的行业或股票。')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('搜索代码或名称'),{target:{value:''}});
   fireEvent.change(screen.getByLabelText('主力净额方向'),{target:{value:'zero'}});
-  expect(tableCodes()).toEqual(['BK0003']);expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图'})).toBeNull();
+  expect(tableCodes()).toEqual(['BK0003']);expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图区块'})).toBeNull();
  });
  it('keeps controls, selected evidence and exact updated values during same-scope refresh',()=>{
   const initial=snapshot(true);const view=render(<EvidenceHeatmap state={state(initial)}/>);openList();
@@ -132,7 +132,7 @@ describe('complete reachable A-share evidence list',()=>{
   view.rerender(<EvidenceHeatmap state={state({...snapshot(true),scope:{kind:'industry_stocks',fs:'b:BK0002',classification_level:'unknown_may_mix_levels'}})}/>);
   expect(screen.getByLabelText<HTMLInputElement>('搜索代码或名称').value).toBe('');openList();expect(tableCodes()).toHaveLength(4);expect(screen.queryByRole('article')).toBeNull();
   view.rerender(<EvidenceHeatmap state={{...emptyState(),status:'blocked',message:'来源已拒绝'}}/>);
-  expect(screen.queryByRole('table')).toBeNull();expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图'})).toBeNull();expect(screen.queryByText('+12,500.25')).toBeNull();
+  expect(screen.queryByRole('table')).toBeNull();expect(screen.queryByRole('group',{name:'当前筛选范围的主力净额矩形热力图区块'})).toBeNull();expect(screen.queryByText('+12,500.25')).toBeNull();
  });
  it('opens zero/missing stock evidence and hides a selection removed by refreshed coverage',()=>{
   const initial=snapshot(true);const view=render(<EvidenceHeatmap state={state(initial)}/>);openList();

@@ -22,7 +22,7 @@ describe('FX reference matrix adapter',()=>{
   const groups=fxReferenceGroups(fxPayload().snapshot);
   expect(groups[0].items).toHaveLength(3);
   expect(groups[0].items.find(item=>item.id==='USD')?.displayValue).toBe('2.0000 USD');
-  expect(groups[0].items.every(item=>item.weight===1&&item.colorValue===null)).toBe(true);
+  expect(groups[0].items.every(item=>item.amount===undefined&&item.colorValue===null)).toBe(true);
   expect(groups[0].items.some(item=>item.id==='EUR')).toBe(false);
  });
  it('filters observed currencies by code or name without introducing missing values',()=>{
@@ -37,7 +37,7 @@ describe('Kraken metric matrix adapter',()=>{
  it('colors only the explicitly calculated price/VWAP deviation, not prices or flows',()=>{
   const data=snapshot(),items=cryptoMatrixGroups(data,'last_price_usd')[0].items;
   expect(items.map(item=>item.colorValue)).toEqual([25,-25]);
-  expect(items.map(item=>item.weight)).toEqual([1,1]);
+  expect(items.map(item=>item.amount)).toEqual([undefined,undefined]);
   expect(cryptoColorMaximum(data)).toBe(25);
   expect(items[0].detail).toContain('相对 24h 成交均价 +25%');
   expect(cryptoMatrixGroups(data,'vwap_usd_24h')[0].items.every(item=>item.colorValue===null)).toBe(true);

@@ -12,7 +12,7 @@ export function industries(snapshot:TpexSnapshot,participant:Participant){
 }
 export function tpexMatrixGroups(snapshot:TpexSnapshot,participant:Participant,industry:string|null):MatrixGroup[]{
  const groups=industries(snapshot,participant);
- if(industry===null)return [{id:'industries',label:'TPEx 官方产业分类',items:groups.map(g=>({id:g.code,label:g.label,displayValue:g.totals?`${signed(g.totals.net)} 股`:'缺失',detail:`已报告 ${g.known}/${g.rows.length} 家${g.missing?' · 部分覆盖':''}`,colorValue:intensity(g.totals),weight:1}))}];
+ if(industry===null)return [{id:'industries',label:'TPEx 官方产业分类',items:groups.map(g=>({id:g.code,label:g.label,displayValue:g.totals?`${signed(g.totals.net)} 股`:'缺失',detail:`已报告 ${g.known}/${g.rows.length} 家${g.missing?' · 部分覆盖':''}`,colorValue:intensity(g.totals)}))}];
  const g=groups.find(g=>g.code===industry);if(!g)return [];
- return [{id:g.code,label:g.label,items:g.rows.map(r=>({id:r.code,label:r.name,displayValue:r.flow?`${signed(r.flow[participant].net)} 股`:'缺失',detail:`${r.code} · ${snapshot.report_date}`,colorValue:intensity(r.flow?.[participant]??null),weight:1}))}];
+ return [{id:g.code,label:g.label,items:g.rows.map(r=>({id:r.code,label:r.name,displayValue:r.flow?`${signed(r.flow[participant].net)} 股`:'缺失',detail:`${r.code} · ${snapshot.report_date}`,colorValue:intensity(r.flow?.[participant]??null)}))}];
 }

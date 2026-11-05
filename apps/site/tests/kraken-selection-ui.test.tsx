@@ -55,7 +55,7 @@ describe('bounded Kraken selection',()=>{
   const row=parseKrakenTrades({error:[],result:{ADAUSD:[['10','2',(at-1000)/1000,'b','m','',1]],last:'123'}},{pair:quote.pair,source_pair:quote.source_pair,base:quote.base,quote:quote.quote},at-300_000,at,at);
   fetcher.mockImplementation(async()=>Response.json({...reply(),requested_pairs:['ADA/USD'],trade_snapshot:tradeSnapshot([row],at,at,['ADA/USD'])}));selectAda();await tick();
   const matrix=screen.getByRole('region',{name:'来源买卖标记成交额差矩阵工作区'});
-  expect(matrix.querySelectorAll('[data-id]')).toHaveLength(1);expect(matrix.textContent).toContain('20 USD');expect(matrix.textContent).toContain('仅 Kraken 的 ADA/USD');expect(matrix.textContent).not.toContain('BTC/USD');
+  expect(matrix.querySelectorAll('details [data-id]')).toHaveLength(1);expect(matrix.textContent).toContain('20 USD');expect(matrix.textContent).toContain('仅 Kraken 的 ADA/USD');expect(matrix.textContent).not.toContain('BTC/USD');
  });
  it('rejects missing selection identity instead of accepting legacy data for explicit selection',async()=>{
   const fetcher=vi.fn<typeof fetch>(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();selectAda();await tick();expect(screen.getByText('响应数据未通过校验，已清空浏览器行情。')).toBeTruthy();expect(screen.queryByRole('checkbox')).toBeNull();
@@ -64,13 +64,13 @@ describe('bounded Kraken selection',()=>{
   const fetcher=vi.fn<typeof fetch>(async()=>Response.json(defaultTradesReply()));vi.stubGlobal('fetch',fetcher);await start();
   let resolve!:(r:Response)=>void;fetcher.mockImplementation(()=>new Promise<Response>(done=>{resolve=done;}));
   fireEvent.click(screen.getByRole('button',{name:'检查更新'}));selectAda();expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();expect(screen.getByRole('region',{name:'来源买卖标记成交额差矩阵工作区'}).querySelectorAll('[data-id]')).toHaveLength(0);
+  expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();expect(screen.getByRole('region',{name:'来源买卖标记成交额差矩阵工作区'}).querySelectorAll('details [data-id]')).toHaveLength(0);
   await act(async()=>resolve(Response.json(defaultTradesReply())));expect(screen.queryByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();
   await act(()=>vi.advanceTimersByTimeAsync(60_000));expect(fetcher).toHaveBeenCalledTimes(3);expect(fetcher.mock.calls[2][0]).toContain('pairs=ADA%2FUSD');
  });
  it('does not revive old A trades after switching A to B and back to A in flight',async()=>{
   const fetcher=vi.fn<typeof fetch>(async()=>Response.json(defaultTradesReply()));vi.stubGlobal('fetch',fetcher);await start();
-  const trades=()=>screen.getByRole('region',{name:'来源买卖标记成交额差矩阵工作区'}).querySelectorAll('[data-id]');expect(trades()).toHaveLength(3);
+  const trades=()=>screen.getByRole('region',{name:'来源买卖标记成交额差矩阵工作区'}).querySelectorAll('details [data-id]');expect(trades()).toHaveLength(3);
   let resolve!:(r:Response)=>void;fetcher.mockImplementation(()=>new Promise<Response>(done=>{resolve=done;}));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));selectAda();
   fireEvent.click(screen.getByRole('button',{name:'恢复默认选择'}));fireEvent.click(screen.getByRole('button',{name:'应用选择'}));expect(trades()).toHaveLength(0);
   await act(async()=>resolve(Response.json(defaultTradesReply())));expect(trades()).toHaveLength(0);expect(screen.getByRole('img',{name:/ · BTC\/USD · /})).toBeTruthy();expect(fetcher).toHaveBeenCalledTimes(2);

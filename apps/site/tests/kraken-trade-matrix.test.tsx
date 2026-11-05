@@ -16,17 +16,18 @@ function snapshot():KrakenTradeSnapshot{return {
 };}
 afterEach(cleanup);
 describe('bounded Kraken trade matrix',()=>{
- it('keeps equal area, source normalized color and capped rows unknown rather than zero',()=>{
+ it('uses USD net amount area, source normalized color and capped rows unknown rather than zero',()=>{
   const items=tradeMatrixGroups(snapshot())[0].items;
-  expect(items.map(item=>item.weight)).toEqual([1,1]);expect(items.map(item=>item.colorValue)).toEqual([33.0612,null]);
+  expect(items.map(item=>item.amount?.value)).toEqual([10,null]);expect(items.every(item=>item.amount?.currency==='USD')).toBe(true);expect(items.map(item=>item.colorValue)).toEqual([33.0612,null]);
   expect(items[0].displayValue).toBe('10 USD');expect(items[1].displayValue).toBe('覆盖不完整 · 金额不展示');expect(tradeMatrixGroups(null)).toEqual([]);
  });
- it('reuses shared readable-grid rendering at fixed ±100%, with exact details and source links',()=>{
+ it('reuses shared amount treemap rendering at fixed ±100%, with exact details and source links',()=>{
   const {container}=render(<KrakenTradeMatrix snapshot={snapshot()}/>);
-  expect(container.querySelector('[data-layout="readable-grid"]')).toBeTruthy();
+  expect(container.querySelector('[data-layout="treemap"]')).toBeTruthy();
   expect(container.querySelector('[data-id="BTC/USD"]')?.getAttribute('data-color')).toBe('positive-1');
   expect(container.querySelector('[data-id="ETH/USD"]')?.getAttribute('data-color')).toBe('missing');
-  expect(container.querySelectorAll('[data-id]')).toHaveLength(2);
+  expect(container.querySelectorAll('g[data-id]')).toHaveLength(1);
+  expect(container.querySelectorAll('details [data-id]')).toHaveLength(2);
   fireEvent.click(screen.getByText('逐交易对成交额、时间与覆盖明细'));
   expect(screen.getByText('20.123456789012345678901234 USD')).toBeTruthy();expect(screen.getByText('10.123456789012345678901234 USD')).toBeTruthy();
   expect(screen.getByText(/官方在线 USD 现货目录未纳入：SOL\/USD/)).toBeTruthy();
@@ -40,7 +41,7 @@ describe('bounded Kraken trade matrix',()=>{
  });
  it('distinguishes genuine zero turnover from missing capped evidence without a directional color',()=>{
   const data=snapshot();data.rows=[{...data.rows[0],returned_count:0,trade_count:0,excluded_after_window_count:0,first_trade_at:null,last_trade_at:null,buy_notional_usd:'0',sell_notional_usd:'0',imbalance_usd:'0',imbalance_pct:null}];
-  const item=tradeMatrixGroups(data)[0].items[0];expect(item.displayValue).toBe('0 USD');expect(item.colorValue).toBeNull();expect(item.detail).toContain('无可计算成交额');
+  const item=tradeMatrixGroups(data)[0].items[0];expect(item.amount?.value).toBe(0);expect(item.displayValue).toBe('0 USD');expect(item.colorValue).toBeNull();expect(item.detail).toContain('无可计算成交额');
  });
  it('removes matrix amounts and details on invalidation, including an open inspector',()=>{
   const {container,rerender}=render(<KrakenTradeMatrix snapshot={snapshot()}/>);

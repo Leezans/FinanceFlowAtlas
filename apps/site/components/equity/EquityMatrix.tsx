@@ -22,9 +22,10 @@ export default function EquityMatrix({snapshot, loading, onSelect}: Props) {
       </div>
     </div>
     <p className={s.coverage}>{year ?? '—'} 年 · {projection.observed} 个国家 / 地区有{label}观测 · {equityCountries.length} 个地理索引不等于数据覆盖。当前区域 {count} 格，其中 {projection.displayedObserved} 格有观测。</p>
-    <MatrixHeatmap groups={projection.groups} title="全球股市年度矩阵" layout="readable-grid" colorMode="sequential" colorMaxAbs={projection.maximum}
+    <MatrixHeatmap groups={projection.groups} title="全球股市年度矩阵" layout="treemap" colorMode="sequential" colorMaxAbs={projection.maximum}
+      scopeKey={JSON.stringify([metric, year, region])}
       description={`${label} · ${year ?? '未核验'} · 当年美元（USD）。点击国家查看两项指标各自的最近观测。`}
-      areaMeaning="国家等面积；不代表市值占比或完整全球总额"
+      areaMeaning="国家面积按同指标、同年度的 USD 金额；区域为已报告国家金额之和，不是完整全球总额"
       colorMeaning="蓝色越亮，所选年度数值越大；不表示涨跌或资金流入。灰格区分零与缺失"
       emptyTitle={loading ? '正在检查年度股市数据' : '年度股市矩阵暂无可核验数据'}
       emptyMessage="只有官方响应通过国家、年份、指标、单位和完整分页校验后才显示矩阵数值。"

@@ -23,13 +23,13 @@ describe('opt-in readable matrix density',()=>{
   expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
   expect(screen.getByText(`全部 ${count} 个区块 · 在矩阵内滚动查看，或按 Tab 逐项选择`)).toBeTruthy();
   const last=screen.getByRole('button',{name:new RegExp(`名称${count-1} ·`)});
-  fireEvent.keyDown(last,{key:'Enter'});expect(onSelect).toHaveBeenCalledWith(groups[0].items[count-1],groups[0]);
-  fireEvent.keyDown(last,{key:' '});expect(onSelect).toHaveBeenCalledTimes(2);
+  fireEvent.click(last);expect(onSelect).toHaveBeenCalledWith(groups[0].items[count-1],groups[0]);
+  fireEvent.click(last);expect(onSelect).toHaveBeenCalledTimes(2);
  });
- it('uses safe columns at narrow widths and never changes default treemap mode',()=>{
+ it('uses safe columns and never invents area without monetary metadata',()=>{
   expect(readableGridColumns(289)).toBe(2);expect(readableGridColumns(240)).toBe(1);expect(readableGridColumns(0)).toBe(1);
   const {container}=render(<MatrixHeatmap {...props} groups={dense(28)}/>);
-  expect(container.querySelector('svg')).not.toBeNull();expect(container.querySelector('[data-layout=readable-grid]')).toBeNull();
+  expect(container.querySelector('svg')).toBeNull();expect(container.querySelector('[data-layout=readable-grid]')).not.toBeNull();
  });
  it('retains missing/zero states and an honest empty canvas in readable mode',()=>{
   const groups=dense(2);groups[0].items[0].colorValue=0;groups[0].items[1].colorValue=null;

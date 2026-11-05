@@ -13,15 +13,15 @@ const globalMatrix = () => screen.getByRole('region', {name: '全球股市年度
 const focus = () => screen.getByRole('region', {name: '所选国家年度股市'});
 const expectEmpty = () => {
   expect(globalMatrix().querySelector('[data-matrix-empty=true]')).toBeTruthy();
-  expect(globalMatrix().querySelectorAll('[data-id]')).toHaveLength(0);
+  expect(globalMatrix().querySelectorAll('details [data-id]')).toHaveLength(0);
   expect(focus().querySelectorAll('[data-id]')).toHaveLength(0);
 };
 describe('annual equity context UI', () => {
   it('renders every numeric measure through the shared matrices and distinguishes annual size from flow', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(reply()))); await start();
     expect(screen.getByRole('heading', {name: '美国'})).toBeTruthy();
-    expect(globalMatrix().querySelectorAll('[data-id]')).toHaveLength(249);
-    expect(globalMatrix().querySelectorAll('[data-color^=magnitude]')).toHaveLength(2);
+    expect(globalMatrix().querySelectorAll('details [data-id]')).toHaveLength(249);
+    expect(globalMatrix().querySelectorAll('g[data-color^=magnitude]')).toHaveLength(2);
     expect(focus().querySelectorAll('[data-id]')).toHaveLength(2);
     expect(within(focus()).getByText('10 亿美元')).toBeTruthy(); expect(within(focus()).getByText('20 亿美元')).toBeTruthy();
     expect(screen.getByText(/这是年度市场规模与交易活跃度/)).toBeTruthy();
@@ -49,6 +49,17 @@ describe('annual equity context UI', () => {
     fireEvent.click(screen.getByRole('button', {name: '检查数据'})); await act(() => vi.advanceTimersByTimeAsync(1));
     expect((screen.getByLabelText('筛选区域') as unknown as {value: string}).value).toBe('Asia');
     expect(screen.getByRole('heading', {name: '日本'})).toBeTruthy();
+  });
+  it('resets zoom on region and metric changes while preserving same-scope refresh framing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(reply()))); await start();
+    const zoom = () => fireEvent.click(within(globalMatrix()).getByRole('button', {name: '放大矩阵'}));
+    const scale = () => globalMatrix().querySelector('[data-zoom]')?.getAttribute('data-zoom');
+    zoom(); expect(scale()).toBe('1.5');
+    fireEvent.change(screen.getByLabelText('筛选区域'), {target: {value: 'Asia'}}); expect(scale()).toBe('1');
+    zoom(); fireEvent.click(screen.getByRole('button', {name: '检查数据'}));
+    await act(() => vi.advanceTimersByTimeAsync(1)); expect(scale()).toBe('1.5');
+    fireEvent.change(screen.getByLabelText('筛选区域'), {target: {value: ''}}); expect(scale()).toBe('1');
+    zoom(); fireEvent.change(screen.getByLabelText('比较指标'), {target: {value: 'traded_value'}}); expect(scale()).toBe('1');
   });
   it('honors deep links, Back/Forward, and repeated selections without duplicate history', async () => {
     window.history.replaceState({}, '', '/equities?country=JPN');

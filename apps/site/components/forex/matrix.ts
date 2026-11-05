@@ -13,6 +13,6 @@ export function fxReferenceGroups(snapshot:FxSnapshot|null,query=''):MatrixGroup
   id:rate.currency,label:`${rate.currency} · ${currencyNames[rate.currency]??'来源新增币种'}`,
   displayValue:`${rate.per_eur} ${rate.currency}`,
   detail:`1 EUR = ${rate.per_eur} ${rate.currency} · 来源原始精度 · ${snapshot.reference_date}`,
-  colorValue:null,weight:1,
+  colorValue:null,
  }))}];
 }

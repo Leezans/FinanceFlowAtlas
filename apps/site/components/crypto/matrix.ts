@@ -39,6 +39,6 @@ export function cryptoMatrixGroups(snapshot:KrakenSnapshot|null,metric:CryptoMet
    :metric==='trades_24h'?'滚动 24 小时成交笔数；不是买卖净额或资金流'
    :'滚动 24 小时成交量加权均价；不是收益率或可成交报价';
   return {id:row.pair,label:row.pair,displayValue:`${formatCryptoNumber(row[metric])} ${unit}`,detail,
-   colorValue:metric==='last_price_usd'?priceVwapDeviation(row):null,weight:1};
+   colorValue:metric==='last_price_usd'?priceVwapDeviation(row):null};
  })}];
 }

@@ -18,7 +18,7 @@ describe('matrix renderer boundaries',()=>{
   expect(screen.getByText('Synthetic scope › Synthetic item')).toBeTruthy();
   rerender(<MatrixHeatmap {...props} groups={[{...groups[0],items:[{...groups[0].items[0],displayValue:'2.345600'}]}]} layout="readable-grid"/>);
   expect(screen.queryByText('1.234500')).toBeNull();expect(screen.getAllByText('2.345600')).toHaveLength(2);
-  expect(mocks.treemap).not.toHaveBeenCalled();rerender(<MatrixHeatmap {...props}/>);expect(mocks.treemap).toHaveBeenCalledTimes(1);
+  expect(mocks.treemap).not.toHaveBeenCalled();rerender(<MatrixHeatmap {...props} groups={[{...groups[0],items:[{...groups[0].items[0],amount:{value:12,currency:'USD',comparisonKey:'same-metric'}}]}]}/>);expect(mocks.treemap).toHaveBeenCalledTimes(1);
  });
  it('allows non-flow sources to describe unavailable evidence accurately',()=>{
   render(<MatrixHeatmap {...props} groups={[]} emptyTitle="Reference data unavailable" emptyMessage="No verified exchange rates" emptyNote="Prices are not net flows"/>);
