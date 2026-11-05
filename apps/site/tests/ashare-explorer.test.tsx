@@ -104,7 +104,7 @@ describe('complete reachable A-share evidence list',()=>{
   expect(screen.getByRole('article',{name:'股票原始证据'}).textContent).toContain('+32,000.75 元');
   expect(within(screen.getByRole('table')).getByText('+32,000.75')).toBeTruthy();
   view.rerender(<EvidenceHeatmap state={state({...fresh,stale:true,has_error:true})}/>);
-  expect(screen.getByText(/源明确标记陈旧且有刷新错误/)).toBeTruthy();
+  expect(screen.getByText(/服务器已标记缓存陈旧且有刷新错误/)).toBeTruthy();
   expect(screen.getByRole('article',{name:'股票原始证据'})).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'关闭原始证据'}));expect(screen.queryByRole('article')).toBeNull();
  });

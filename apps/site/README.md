@@ -38,6 +38,14 @@ A-share payloads remain ephemeral in process memory. D1 stores only shared acqui
 
 ### A-share exploration
 
+The time panel separates the scheduled ordinary auction session (published 2026
+exchange calendar, device clock in UTC+8), unknown source trading date/observation
+time, and the timestamp/age of the most recent complete acquisition. It warns when
+the displayed cache exceeds the 60-second check interval even while a background
+tab is stale; a recent fetch never becomes a claim of real-time data. Calendar
+coverage outside 2026 is explicitly unknown. See
+[time semantics and calendar sources](../../docs/ashare-market-timing.md).
+
 The treemap remains the primary view. Search and provider-net-direction filters apply to both the chart and its collapsed **数值明细** panel. The optional panel shows unscaled CNY amounts, deterministic magnitude/buy/sell/name sorting, and drilldown for zero/missing rows that have no treemap area. Missing amounts never become zero; area shares use only the absolute nonzero amounts in the current filter, not a whole-market denominator.
 
 Same-scope refreshes preserve search, palette, filters, sorting, the expanded panel and selected stock evidence. If a selected stock changes direction, its detail updates even when it no longer matches the filter. Changing scope resets exploration; a denied/error response clears all displayed evidence. Tests use synthetic observations only. This UI increment neither changes acquisition permissions nor verifies live source access, and a repository commit does not deploy it.
