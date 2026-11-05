@@ -205,8 +205,10 @@ network disabled. See [source evidence and limitations](../../docs/source-worldb
 
 `/polymarket` and `/api/v1/polymarket/{snapshot,status}` provide a separate,
 no-account Gamma market sample with category/tag → market matrix drilldown.
-The fixed request returns at most 200 active, open markets ordered by source
-24-hour volume. Visible pages check every 30 seconds, with cross-worker D1
+The fixed keyset request traverses at most five pages of 100 open-market records,
+ordered by descending market ID, and filters active/non-archived records locally.
+This is not a volume ranking or full-universe coverage. Visible pages check every
+30 seconds, with cross-worker D1
 cooldown; this is bounded polling, not a tick stream. Prices are explicitly named
 outcome-implied probabilities, not objective probabilities or recommendations.
 Volume retains the source unit as unverified, and neither metric is funds flow.
@@ -220,3 +222,13 @@ state fails closed; denied/challenged source access blocks persistently with no
 fallback or reset. Run `npm run test:polymarket-runtime` for offline native
 workerd/D1 checks. See [source contract and rights](../../docs/source-polymarket-gamma.md).
 No live provider access is claimed by synthetic tests or by a repository commit.
+
+### Bounded keyset coverage
+
+The official [keyset contract](https://docs.polymarket.com/api-reference/markets/list-markets-keyset-pagination) documents a 100-row maximum, opaque cursors, and no offset. Every refresh uses one existing durable lease, at most five sequential requests, 250 ms pacing, an 8-second page-start budget and the unchanged 12-second acquisition deadline. No page is fetched after denial, cancellation, cursor repetition, duplicate ID, or invalid ordering. A failed page invalidates the new acquisition rather than publishing an unmarked partial result. Ordinary failures retain only the previous completed age-valid snapshot.
+
+The UI/API report actual page sizes, distinct source records, eligible displayed records, exclusions, collection start/end, and whether a cursor remained at the budget. Total market count is always unknown; even an exhausted response is not claimed as an atomic or complete universe. ID order is deliberate: a changing volume order can move rows between pages. This sample favors higher market IDs and is not a representative category census. Grouping uses source category, else the smallest tag slug, and retains/searches every source tag. This is a deterministic display grouping, not the provider's primary or exhaustive taxonomy.
+
+The strict cache/browser schema accepts both v2 keyset and validated legacy v1 snapshots. A transient keyset failure preserves age-valid v1 rows with their original single-page, volume-ranked, 200-record coverage and grouping semantics, visibly labeled as a previous sample. No timestamp or field is relabeled to v2. Compatibility never resets a lease, alters a denial, or clears cooldown. No new SQL migration is needed. Keyset availability and ID ordering require a normal gated production verification. The docs allow 503 when keyset is not configured: report this honestly, with no automatic alternate endpoint.
+
+Official [rate limits](https://docs.polymarket.com/api-reference/rate-limits) list Gamma `/markets` at 300 requests per 10 seconds and may queue excess requests. They are an upper bound, not a target or freshness guarantee. Our maximum five calls per completed refresh plus at least 30 seconds of shared cooldown is deliberately much lower. No order, wallet, account, trading, or flow-inference endpoints are used.

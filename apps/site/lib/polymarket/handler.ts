@@ -1,6 +1,6 @@
 import {PolymarketError,parsePolymarket} from './adapter';
 import {fetchPolymarket} from './transport';
-import {REFRESH_MS,MAX_CACHE_AGE_MS,type PolymarketSnapshot,type PolymarketReply} from './model';
+import {REFRESH_MS,MAX_CACHE_AGE_MS,MAX_CACHE_BYTES,type PolymarketSnapshot,type PolymarketReply} from './model';
 export const DEADLINE_MS=12_000;
 export type PolymarketOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:PolymarketSnapshot;errorCode?:string};
 export type PolymarketGateState={state:'idle'|'busy'|'blocked';retryAt:number;snapshot:PolymarketSnapshot|null;errorCode:string|null;checkedAt:number};
@@ -32,16 +32,19 @@ export function createPolymarketHandler(options:{gate:PolymarketGate;fetcher?:ty
    const lease=await settleGate(track(options.gate.acquire(controller.signal)),deadline.signal);token=lease.token;
    if(!token)throw new PolymarketError('source_gate_unavailable');
    if(controller.signal.aborted)throw new PolymarketError(requestSignal.aborted?'source_aborted':'timeout');
-   const payload=await fetchPolymarket(fetcher,controller.signal,now);
+   const acquisition=await fetchPolymarket(fetcher,controller.signal,now);
    if(controller.signal.aborted)throw new PolymarketError(requestSignal.aborted?'source_aborted':'timeout');
-   const candidate=parsePolymarket(payload,new Date(started).toISOString(),new Date(now()).toISOString());
+   const candidate=parsePolymarket(acquisition.rows,new Date(started).toISOString(),new Date(now()).toISOString(),acquisition.coverage);
    // Metadata update clocks are not price observation clocks. Never synthesize
    // the latter from acquisition time or a market's record-level updatedAt.
+   // Reject oversize evidence before entering uncertain publication state, so
+   // the exact owner can release its lease as an ordinary failed acquisition.
+   if(new TextEncoder().encode(JSON.stringify(candidate)).byteLength>MAX_CACHE_BYTES)throw new PolymarketError('snapshot_byte_budget');
    releasing=true;
    await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate})),AbortSignal.timeout(2_000));
    token=undefined;snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
-   const code=caught instanceof PolymarketError?caught.code:typeof (caught as {code?:unknown})?.code==='string'&&gateErrors.has((caught as {code:string}).code)?(caught as {code:string}).code:requestSignal.aborted?'source_aborted':controller.signal.aborted?'timeout':'source_unavailable';
+   const code=caught instanceof PolymarketError?(requestSignal.aborted&&!caught.denied&&caught.code==='timeout'?'source_aborted':caught.code):typeof (caught as {code?:unknown})?.code==='string'&&gateErrors.has((caught as {code:string}).code)?(caught as {code:string}).code:requestSignal.aborted?'source_aborted':controller.signal.aborted?'timeout':'source_unavailable';
    denied=denied||(caught instanceof PolymarketError&&caught.denied)||code==='source_denied';error=code;
    const coordinating=code==='source_busy'||code==='source_cooldown';
    if(!coordinating)failures++;

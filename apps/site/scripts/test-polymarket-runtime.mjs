@@ -27,19 +27,22 @@ const {outputFiles}=await build({stdin:{contents:`
   return polymarketHandler(request);
  }};`,resolveDir:root,sourcefile:'polymarket-offline-worker.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
 const migration=await readFile(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8');
-const {outputFiles:modelFiles}=await build({stdin:{contents:"export {SOURCE_URL,MAX_CACHE_AGE_MS} from './lib/polymarket/model';export {fixture} from './tests/polymarket-fixture';",resolveDir:root,sourcefile:'polymarket-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
-const {SOURCE_URL,MAX_CACHE_AGE_MS,fixture}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
+const {outputFiles:modelFiles}=await build({stdin:{contents:"export {MAX_CACHE_AGE_MS} from './lib/polymarket/model';export {fixture,market,snapshot} from './tests/polymarket-fixture';",resolveDir:root,sourcefile:'polymarket-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
+const {MAX_CACHE_AGE_MS,fixture,market,snapshot}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
 const url='https://test.invalid/api/v1/polymarket/snapshot';
 async function scenario(mode,fn){
  let calls=0;const mock=createFetchMock();mock.disableNetConnect();
- const interception=mock.get('https://gamma-api.polymarket.com').intercept({method:'GET',path:new URL(SOURCE_URL).pathname+new URL(SOURCE_URL).search}).reply(()=>{
+ const interception=mock.get('https://gamma-api.polymarket.com').intercept({method:'GET',path:/^\/markets\/keyset\?/}).reply(()=>{
   calls++;
+  if(mode==='paged_denied'&&calls===2)return {statusCode:403,data:''};
   if(mode==='denied')return {statusCode:403,data:''};
   if(mode==='rate_denied')return {statusCode:429,data:''};
   if(mode==='challenge')return {statusCode:200,data:'<html>challenge</html>',responseOptions:{headers:{'content-type':'application/json'}}};
   if(mode==='temporary')return {statusCode:503,data:'{}',responseOptions:{headers:{'content-type':'application/json','retry-after':'3600'}}};
-  const data=fixture();for(const market of data)if(market.updatedAt)market.updatedAt=new Date(Date.now()-60_000).toISOString();
-  const raw=Buffer.from(JSON.stringify(data)),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
+  const paged=mode.startsWith('paged');
+  const tags=Array.from({length:20},(_,i)=>({slug:`tag-${String(i).padStart(2,'0')}`,label:'x'.repeat(190)}));
+  const data=paged?Array.from({length:100},(_,i)=>market(String(1000-(calls-1)*100-i),mode==='paged_oversize'?{tags}:{})):fixture();for(const market of data)if(market.updatedAt)market.updatedAt=new Date(Date.now()-60_000).toISOString();
+  const raw=Buffer.from(JSON.stringify({markets:data,...(paged?{next_cursor:`cursor-${calls}`}:{})})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
   return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json','content-length':String(encoded.length),...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};
  }).persist();
  if(mode==='disconnect')interception.delay(5000);
@@ -66,6 +69,21 @@ for(const encoding of ['plain','gzip','br'])await scenario(encoding,async(mf,db,
  await db.prepare("UPDATE polymarket_source_gate SET payload='{}'").run();
  const corrupt=await (await mf.getWorker('cold')).fetch(url);assert.equal(corrupt.status,503);assert.equal((await corrupt.json()).status.error_code,'source_gate_unavailable');assert.equal(calls(),1);
  console.log(`PASS native Polymarket ${encoding}; shared cold cache/cooldown; explicit time semantics; strict corrupt-cache rejection`);
+});
+await scenario('paged',async(mf,db,calls)=>{
+ const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,200,JSON.stringify(body));assert.equal(body.snapshot.rows.length,500);assert.equal(body.snapshot.source_market_count,500);assert.deepEqual(body.snapshot.source_page_sizes,[100,100,100,100,100]);assert.equal(body.snapshot.has_more,true);assert.equal(body.snapshot.total_market_count,null);assert.equal(body.snapshot.complete_universe,false);assert.equal(calls(),5);assert.equal(new Set(body.snapshot.rows.map(row=>row.id)).size,500);
+ const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,200);assert.equal((await cold.json()).snapshot.rows.length,500);assert.equal(calls(),5);assert.equal((await db.prepare('SELECT status FROM polymarket_source_gate').first()).status,'idle');console.log('PASS five native keyset pages, exact 500-market bounded sample, one lease and shared cooldown');
+});
+await scenario('paged_denied',async(mf,db,calls)=>{
+ const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,503);assert.equal(body.snapshot,null);assert.equal(body.status.state,'denied');assert.equal(calls(),2);const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal((await cold.json()).status.state,'denied');assert.equal(calls(),2);assert.equal((await db.prepare('SELECT status,payload FROM polymarket_source_gate').first()).payload,null);console.log('PASS second-page denial discards all partial evidence and permanently stops across isolates');
+});
+await scenario('paged_oversize',async(mf,db,calls)=>{
+ const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,503);assert.equal(body.snapshot,null);assert.equal(body.status.error_code,'snapshot_byte_budget');assert.equal(calls(),5);const row=await db.prepare('SELECT status,lease_token,payload FROM polymarket_source_gate').first();assert.equal(row.status,'idle');assert.equal(row.lease_token,null);assert.equal(row.payload,null);console.log('PASS oversized normalized snapshot releases exact lease before publication, without permanent busy state');
+});
+await scenario('temporary',async(mf,db,calls,setMode)=>{
+ const legacy={...snapshot(),schema:'polymarket-gamma/1',sample_limit:200,ordering:'source_volume24hr_descending'};for(const key of ['total_market_count','pagination','source_page_count','source_page_sizes','stop_reason','has_more','grouping'])delete legacy[key];legacy.fetched_at=new Date(Date.now()-1000).toISOString();legacy.acquisition_started_at=legacy.fetched_at;for(const row of legacy.rows)row.source_record_updated_at=null;
+ const raw=JSON.stringify(legacy);await db.prepare('UPDATE polymarket_source_gate SET payload=?,not_before_ms=0').bind(raw).run();const r=await mf.dispatchFetch(url),body=await r.json();assert.equal(r.status,200);assert.equal(body.status.state,'stale');assert.deepEqual(body.snapshot,legacy);assert.equal((await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload,raw);const cold=await (await mf.getWorker('cold')).fetch(url);assert.equal(cold.status,200);assert.deepEqual((await cold.json()).snapshot,legacy);assert.equal(calls(),1);
+ await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();setMode('denied');const denied=await (await mf.getWorker('virgin')).fetch(url);assert.equal((await denied.json()).status.state,'denied');assert.equal((await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload,null);assert.equal(calls(),2);console.log('PASS native v1 source evidence preserved unchanged after keyset503 across cold workers; denial still clears all rows');
 });
 await scenario('temporary',async(mf,db,calls)=>{
  const r=await mf.dispatchFetch(url);assert.equal(r.status,503);assert.equal((await r.json()).status.state,'unavailable');

@@ -1,9 +1,10 @@
 /** Public informational Gamma records. No wallets, positions, orders or flow inference. */
 import {z} from 'zod';
-export const SOURCE_URL='https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&archived=false&order=volume24hr&ascending=false&include_tag=true';
-export const SOURCE_DOCS='https://docs.polymarket.com/api-reference/markets/list-markets';
+export const SOURCE_URL='https://gamma-api.polymarket.com/markets/keyset?limit=100&closed=false&order=id&ascending=false&include_tag=true';
+export const SOURCE_DOCS='https://docs.polymarket.com/api-reference/markets/list-markets-keyset-pagination';
 export const SOURCE_TERMS='https://polymarket.com/tos';
-export const REFRESH_MS=30_000,MAX_CACHE_AGE_MS=300_000,MAX_MARKETS=200;
+export const REFRESH_MS=30_000,MAX_CACHE_AGE_MS=300_000,MAX_MARKETS=500;
+export const PAGE_SIZE=100,MAX_PAGES=5,MAX_CACHE_BYTES=2_000_000;
 const instant=z.string().datetime({offset:true});
 const text=z.string().min(1).max(1000).refine(v=>!/[\u0000-\u001f\u007f]/.test(v));
 const probability=z.string().regex(/^(?:0(?:\.\d{1,12})?|1(?:\.0{1,12})?)$/);
@@ -18,13 +19,26 @@ export const marketSchema=z.object({
  accepting_orders:z.boolean().nullable(),
 }).strict().refine(r=>new Set(r.outcomes.map(o=>o.name.toLowerCase())).size===r.outcomes.length&&new Set(r.tags.map(t=>t.slug)).size===r.tags.length);
 export type PolymarketMarket=z.infer<typeof marketSchema>;
-export const snapshotSchema=z.object({
+export const legacySnapshotSchema=z.object({
  schema:z.literal('polymarket-gamma/1'),source:z.literal('Polymarket Gamma'),coverage:z.literal('bounded_active_market_sample'),
- sample_limit:z.literal(MAX_MARKETS),source_market_count:z.number().int().min(0).max(MAX_MARKETS),excluded_market_count:z.number().int().min(0).max(MAX_MARKETS),
+ sample_limit:z.literal(200),source_market_count:z.number().int().min(0).max(200),excluded_market_count:z.number().int().min(0).max(200),
  ordering:z.literal('source_volume24hr_descending'),complete_universe:z.literal(false),
  acquisition_started_at:instant,fetched_at:instant,source_observed_at:z.null(),net_capital_flow:z.null(),
- rows:z.array(marketSchema).min(1).max(MAX_MARKETS),
+ rows:z.array(marketSchema).min(1).max(200),
 }).strict().refine(s=>Date.parse(s.fetched_at)>=Date.parse(s.acquisition_started_at)&&s.rows.length+s.excluded_market_count===s.source_market_count&&new Set(s.rows.map(r=>r.id)).size===s.rows.length&&s.rows.every(r=>!r.source_record_updated_at||Date.parse(r.source_record_updated_at)<=Date.parse(s.fetched_at)+60_000));
+export const keysetSnapshotSchema=z.object({
+ schema:z.literal('polymarket-gamma/2'),source:z.literal('Polymarket Gamma'),coverage:z.literal('bounded_active_market_sample'),
+ sample_limit:z.literal(MAX_MARKETS),source_market_count:z.number().int().min(0).max(MAX_MARKETS),excluded_market_count:z.number().int().min(0).max(MAX_MARKETS),
+ ordering:z.literal('source_id_descending'),complete_universe:z.literal(false),
+ total_market_count:z.null(),pagination:z.literal('keyset'),source_page_count:z.number().int().min(1).max(MAX_PAGES),
+ source_page_sizes:z.array(z.number().int().min(0).max(PAGE_SIZE)).min(1).max(MAX_PAGES),
+ stop_reason:z.enum(['source_exhausted','page_limit','time_budget']),has_more:z.boolean(),
+ grouping:z.literal('source_category_else_smallest_tag_slug'),
+ acquisition_started_at:instant,fetched_at:instant,source_observed_at:z.null(),net_capital_flow:z.null(),
+ rows:z.array(marketSchema).min(1).max(MAX_MARKETS),
+}).strict().refine(s=>Date.parse(s.fetched_at)>=Date.parse(s.acquisition_started_at)&&s.source_page_sizes.length===s.source_page_count&&s.source_page_sizes.reduce((a,b)=>a+b,0)===s.source_market_count&&(s.stop_reason==='source_exhausted'?s.has_more===false:s.has_more===true)&&(s.stop_reason!=='page_limit'||s.source_page_count===MAX_PAGES)&&s.rows.length+s.excluded_market_count===s.source_market_count&&new Set(s.rows.map(r=>r.id)).size===s.rows.length&&s.rows.every((r,i)=>/^(?:0|[1-9]\d{0,23})$/.test(r.id)&&(i===0||s.rows[i-1].id.length>r.id.length||s.rows[i-1].id.length===r.id.length&&s.rows[i-1].id>r.id))&&s.rows.every(r=>!r.source_record_updated_at||Date.parse(r.source_record_updated_at)<=Date.parse(s.fetched_at)+60_000));
+export const snapshotSchema=z.union([keysetSnapshotSchema,legacySnapshotSchema]);
+export type PolymarketKeysetSnapshot=z.infer<typeof keysetSnapshotSchema>;
 export type PolymarketSnapshot=z.infer<typeof snapshotSchema>;
 export const statusSchema=z.object({state:z.enum(['available','stale','unavailable','denied']),error_code:z.string().regex(/^[a-z_]{1,64}$/).nullable(),last_attempt_at:instant.nullable(),fetched_at:instant.nullable(),cache_age_ms:z.number().int().safe().nullable(),refresh_ms:z.literal(REFRESH_MS),max_cache_age_ms:z.literal(MAX_CACHE_AGE_MS),next_retry_at:instant.nullable()}).strict();
 export const replySchema=z.object({status:statusSchema,snapshot:snapshotSchema.nullable()}).strict().refine(r=>(r.status.state==='available'||r.status.state==='stale')===!!r.snapshot&&(!r.snapshot||r.snapshot.fetched_at===r.status.fetched_at));

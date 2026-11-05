@@ -1,5 +1,17 @@
 # Polymarket informational market matrix
 
+## Current version and historical contract
+
+The current v2 collector uses bounded ID-ordered keyset paging, at most five
+pages of 100 records, with explicit partial coverage and unknown total size.
+See the [current implementation and compatibility contract](../apps/site/README.md#bounded-keyset-coverage)
+and [official keyset evidence](../apps/site/docs/polymarket-coverage-contract.md).
+The fixed single-page request and first-tag grouping described below document
+the initial v1 release and its retained legacy cache, not the current collector.
+Rights, unknown price timestamps, unverified volume units, and source-stop
+restrictions still apply. Valid old samples retain their original semantics
+and expire normally; they are never relabeled as keyset data.
+
 ## Scope and permissions
 
 The owner-private `/polymarket` page reads a single fixed, public Gamma market
