@@ -29,3 +29,16 @@ export const ashareSourceGate=sqliteTable('ashare_source_gate',{
  check('ashare_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
  check('ashare_gate_block',sql`(${t.status} = 'blocked' AND ${t.reasonCode} IS NOT NULL) OR (${t.status} != 'blocked' AND ${t.reasonCode} IS NULL)`),
 ]);
+
+/** Independent Sina coordination only. No source observations or identities. */
+export const sinaSourceGate=sqliteTable('sina_source_gate',{
+ id:text('id').primaryKey(),
+ status:text('status').notNull(),
+ leaseToken:text('lease_token'),
+ updatedMs:integer('updated_ms').notNull().default(0),
+ notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('sina_gate_id',sql`${t.id} = 'industry_0'`),
+ check('sina_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('sina_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);
