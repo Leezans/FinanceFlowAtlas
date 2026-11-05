@@ -34,7 +34,7 @@ See [HOSTED_PROOF.md](HOSTED_PROOF.md) for cache validation and endpoint details
 
 The separate `/ashare` page provides industry/stock provider evidence using bounded access to public Eastmoney endpoints. It does not replace TIC or assert general market-data redistribution rights. Source observation time, trading date and latency remain unknown; acquisition time is labeled separately. Provider order-classified main-net figures are estimates, not actual market-wide net money creation.
 
-A-share payloads remain ephemeral in process memory. D1 stores only shared acquisition coordination and permanent denial metadata in `ashare_source_gate`; it never stores A-share market observations. Apply the additional `0001_wild_jigsaw.sql` migration through the deployment's supported migration workflow. Authentication remains owner-only. Denials/challenges stop acquisition persistently rather than triggering alternate-route retries. See HOSTED_PROOF.md for limitations; actual authenticated production source access is not claimed to have been verified.
+A-share payloads remain ephemeral in process memory. D1 stores only shared acquisition coordination and permanent denial metadata in `ashare_source_gate`; it never stores A-share market observations. Apply the additional `0001_wild_jigsaw.sql` migration through the deployment's supported migration workflow. Authentication remains owner-only. Denials/challenges stop acquisition persistently rather than triggering alternate-route retries. Temporary collection failures enforce a shared minimum 60-second pause across isolates; successful acquisitions retain the 3-second quiet interval. The longer in-isolate exponential backoff remains in place. See HOSTED_PROOF.md for limitations; actual authenticated production source access is not claimed to have been verified.
 
 ### A-share exploration
 
@@ -55,3 +55,13 @@ Same-scope refreshes preserve search, palette, filters, sorting, the expanded pa
 The A-share heatmap uses three equal-width positive and negative color bands anchored to the largest absolute reported `f62` value in the complete current scope. Search and direction filters change area shares but do not change this color scale; a new source snapshot can update it. The legend labels the signed range in CNY. No price-return or industry-aggregation estimate is used to produce a color.
 
 Compact tiles retain signed amounts where they fit, and hover or keyboard focus shows unscaled net amounts, source-reported price change and the current area share. The chart lays out in measured CSS pixels, including on narrow screens, rather than shrinking a fixed 1000px canvas. Zero and missing values remain in the details panel without invented area. The view is still industry-to-constituent drilldown, not a whole-market nested hierarchy: verified, mutually exclusive constituent membership is not available in the current source contract. Tests and local visual fixtures use synthetic rows only; no test fixture is bundled in a production route.
+
+### Offline A-share runtime checks
+
+`npm run test:ashare-runtime` exercises the checked-in A-share host in native
+workerd with a shared D1 database and separate warm/cold workers. Synthetic
+plain/gzip/Brotli responses verify decoding and cache behavior. Temporary
+failures must preserve a 60-second shared cooldown across workers and scopes;
+a denial must remain blocked. All external network access is disabled. These
+checks do not establish live provider availability or authenticated production
+access. No database migration is needed for the cooldown change.

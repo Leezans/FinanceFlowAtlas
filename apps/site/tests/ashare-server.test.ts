@@ -4,7 +4,8 @@ import {strictJSON} from '../lib/ashare/strict-json';
 const request=(scope='level1',path='snapshot',headers?:HeadersInit)=>new Request(`https://private.example/api/v1/ashare/${path}?scope=${scope}`,{headers});
 const item=(i=1,stock=false)=>Object.fromEntries(FIELDS.map(f=>[f,f==='f12'?(stock?String(i).padStart(6,'0'):`BK${String(i).padStart(4,'0')}`):f==='f14'?'合成行业':1]));
 const upstream=(rows:unknown[]=[item()],total=rows.length)=>new Response(JSON.stringify({rc:0,data:{total,diff:rows}}),{headers:{'content-type':'application/json'}});
-const make=(fetcher:any,extra:any={})=>createAshareHandler({enabled:()=>true,fetcher,isolatedForTests:true,...extra});
+type HandlerOptions=NonNullable<Parameters<typeof createAshareHandler>[0]>;
+const make=(fetcher:HandlerOptions['fetcher'],extra:HandlerOptions={})=>createAshareHandler({enabled:()=>true,fetcher,isolatedForTests:true,...extra});
 async function settle<T>(promise:Promise<T>){let done=false;promise.finally(()=>done=true);for(let i=0;i<40&&!done;i++)await vi.advanceTimersByTimeAsync(3000);return promise;}
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-04T12:00:00Z'));});
 afterEach(()=>vi.useRealTimers());

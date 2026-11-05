@@ -23,12 +23,16 @@ export interface GateD1 {
 }
 // Database clock, not independently skewed isolate clocks.
 const NOW = "(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
+const SUCCESS_QUIET_MS = 3_000;
+// In-memory exponential backoff does not survive a new isolate. Keep its first
+// 60s failure window in shared metadata so cold isolates cannot retry after 3s.
+const TEMPORARY_FAILURE_QUIET_MS = 60_000;
 export const SQL = {
   acquire: `UPDATE ashare_source_gate SET status='busy', lease_token=?, acquired_ms=${NOW}, updated_ms=${NOW}
     WHERE id='single_upstream' AND status='idle' AND not_before_ms <= ${NOW} RETURNING status`,
   inspect: `SELECT status, not_before_ms, ${NOW} AS now_ms FROM ashare_source_gate WHERE id='single_upstream'`,
   finish: `UPDATE ashare_source_gate SET status=?, lease_token=NULL, reason_code=?,
-    finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+3000
+    finished_ms=${NOW}, updated_ms=${NOW}, not_before_ms=${NOW}+?
     WHERE id='single_upstream' AND status='busy' AND lease_token=? RETURNING status`,
 } as const;
 function reasonCode(outcome: SourceOutcome): string | null {
@@ -75,7 +79,8 @@ export class D1SourceGate implements SourceGate {
     if (!token || !['success', 'temporary_failure', 'denied'].includes(outcome.kind))
       throw new SourceGateError('source_gate_unavailable');
     // Denial is persisted atomically WITH releasing ownership, never after it.
-    const result = await this.run(SQL.finish, outcome.kind === 'denied' ? 'blocked' : 'idle', reasonCode(outcome), token);
+    const quietMs = outcome.kind === 'temporary_failure' ? TEMPORARY_FAILURE_QUIET_MS : SUCCESS_QUIET_MS;
+    const result = await this.run(SQL.finish, outcome.kind === 'denied' ? 'blocked' : 'idle', reasonCode(outcome), quietMs, token);
     if (result.meta?.changes === 0) throw new SourceGateError('source_stale_lease');
     if (result.meta?.changes !== 1) throw new SourceGateError('source_gate_unavailable');
   }
