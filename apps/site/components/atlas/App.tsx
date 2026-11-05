@@ -1,8 +1,9 @@
 "use client";
 import React from 'react';
 import TicLayer from './TicLayer';
+import MarketLanding from '@/components/home/MarketLanding';
 import './styles.css';
-/** Hosted proof exposes only the connected TIC experience. */
+/** The landing exposes independent market views without mixing their observations. */
 export default function App(){
- return <main className="hosted-atlas"><header className="hosted-header"><div className="brand"><span className="brand-icon" aria-hidden="true">▦</span><h1>Finance Flow Atlas</h1></div></header><TicLayer/></main>
+ return <main className="hosted-atlas"><MarketLanding/><div id="tic-view" style={{scrollMarginTop:16}}><TicLayer/></div></main>
 }
