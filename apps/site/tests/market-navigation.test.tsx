@@ -47,19 +47,17 @@ describe('visual market entry',()=>{
   expect(within(section).getByRole('link',{name:'继续看美国 TIC'}).getAttribute('href')).toBe('#tic-view');
   expect(within(section).queryByRole('table')).toBeNull();
   expect(within(section).getByRole('link',{name:'打开外汇参考：ECB 每日汇率'}).getAttribute('href')).toBe('/forex');
-  expect(within(section).getByText('参考汇率不是资金流或实时交易报价')).toBeTruthy();
+  expect(within(section).getByRole('navigation',{name:'选择矩阵市场'})).toBeTruthy();
  });
  it('does not fetch other sources or invent observations to decorate the landing',()=>{
   const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);const {container}=render(<MarketLanding/>);
   expect(fetcher).not.toHaveBeenCalled();
   expect(container.querySelectorAll('svg:not([aria-hidden=true])')).toHaveLength(0);
-  expect(screen.getByText('订单分类估算，非市场真实新增资金')).toBeTruthy();
-  expect(screen.getByText('地理范围不等于数据覆盖')).toBeTruthy();
-  expect(screen.getByText('成交量不是资金净流入')).toBeTruthy();
-  expect(screen.getByText(/入口表示已有页面，不保证来源此刻可用/)).toBeTruthy();
+  expect(screen.getByText(/主力净额是订单分类估算，非市场真实新增资金/)).toBeTruthy();
+  expect(screen.getByText(/不混合单位、时点或口径/)).toBeTruthy();
  });
  it('preserves the homepage TIC component and its direct anchor',()=>{
   const app=readFileSync(resolve(process.cwd(),'components/atlas/App.tsx'),'utf8');
-  expect(app).toContain('<MarketLanding/>');expect(app).toContain('id="tic-view"');expect(app).toContain('<TicLayer/>');
+  expect(app).toContain('<MarketLanding onOpenTic=');expect(app).toContain('<AshareWorkspace embedded/>');expect(app).toContain('id="tic-view"');expect(app).toContain('{ticOpen&&<TicLayer/>}');
  });
 });

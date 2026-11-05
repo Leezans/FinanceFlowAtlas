@@ -32,3 +32,5 @@
 .evidence-heatmap .tile-inspector dd.negative{color:#73d7a1}
 .evidence-heatmap.palette-global .tile-inspector dd.positive{color:#73d7a1}
 .evidence-heatmap.palette-global .tile-inspector dd.negative{color:#ff9299}
+/* The homepage also imports atlas styles, whose generic header has fixed height. */
+.evidence-heatmap header{height:auto;min-height:0}

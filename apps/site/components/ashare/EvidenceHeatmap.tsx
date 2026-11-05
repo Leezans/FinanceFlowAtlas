@@ -4,9 +4,10 @@ import {hierarchy,treemap,treemapSquarify} from 'd3-hierarchy';
 import {type Scope,type EvidenceRow,type ValidEvidence,coverage,numeric,signedCny,scopeKey,selectEvidenceRows,exactAmount,type FlowFilter,type EvidenceSort} from './model';
 import type {EvidenceState} from './client';
 import {flowScaleMaximum,flowStrength,fitTileFont} from './heatmap';
+import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import './styles.css';
 export type Props={state:EvidenceState;onIndustrySelect?:(scope:Scope,row:EvidenceRow)=>void};
-export default function EvidenceHeatmap({state,onIndustrySelect}:Props){if(!state.snapshot||state.status==='error'||state.status==='blocked'||state.status==='empty')return <section className="evidence-heatmap empty" role="status"><h2>行业 / 股票订单分类证据</h2><p>{state.message||'数据未接入；不会生成模拟区块。'}</p></section>;const s=state.snapshot;// Preserve exploration across same-scope polling, but reset when the industry changes.
+export default function EvidenceHeatmap({state,onIndustrySelect}:Props){if(!state.snapshot||state.status==='error'||state.status==='blocked'||state.status==='empty')return <MatrixHeatmap groups={[]} title="A 股行业矩阵" description="行业 → 成分股 · 供应商订单分类主力净额" areaMeaning="可用时按主力净额绝对值" colorMeaning="可用时红色净买入 / 绿色净卖出；当前无数值" emptyMessage={state.message||'数据未接入；不会生成模拟区块。'}/>;const s=state.snapshot;// Preserve exploration across same-scope polling, but reset when the industry changes.
  const identity=scopeKey(s.scope);return <Heatmap key={identity} snapshot={s} retainedAfterFailure={state.retainedAfterFailure} onIndustrySelect={onIndustrySelect}/>}
 function Heatmap({snapshot:s,onIndustrySelect,retainedAfterFailure}:{snapshot:ValidEvidence;retainedAfterFailure?:boolean;onIndustrySelect?:Props['onIndustrySelect']}){
  const clipPrefix=useId().replace(/:/g,'');
@@ -33,7 +34,7 @@ function Heatmap({snapshot:s,onIndustrySelect,retainedAfterFailure}:{snapshot:Va
  const industry=s.scope.kind==='industry_rank';
  const title=(row:EvidenceRow)=>`${row.f14} · ${row.f12} · 主力净额 ${exactAmount(numeric(row.f62))} 元 · 涨跌幅 ${numeric(row.f3)===null?'未提供':`${row.f3}%`} · 供应商订单分类代理，非真实新增资金`;
  const pick=(row:EvidenceRow)=>{if(industry){onIndustrySelect?.({kind:'industry_stocks',fs:`b:${row.f12}`,classification_level:'unknown_may_mix_levels'},row)}else setSelected(row.f12)};
- return <section className={`evidence-heatmap palette-${palette}`}><header><div><h2>{industry?'A股行业':'行业成分股'} · 主力净额</h2><p>行情时间与延迟未提供</p></div><select aria-label="正负配色" value={palette} onChange={e=>setPalette(e.target.value as 'china'|'global')}><option value="china">红正 / 绿负</option><option value="global">绿正 / 红负</option></select></header>
+ return <section className={`evidence-heatmap palette-${palette}`}><header><div><h2>{industry?'A 股行业矩阵':'行业成分股矩阵'} · 主力净额</h2><p>行情时间与延迟未提供</p></div><select aria-label="正负配色" value={palette} onChange={e=>setPalette(e.target.value as 'china'|'global')}><option value="china">红正 / 绿负</option><option value="global">绿正 / 红负</option></select></header>
  {retainedAfterFailure&&<p className="warning" role="status">本次刷新失败；保留浏览器内上次核对完整的快照，不是最新行情。采集时间未更新。</p>}
  {s.stale&&!retainedAfterFailure&&<p className="warning" role="status">服务器已标记缓存陈旧{s.has_error?'且有刷新错误':''}；只展示此带标记快照，行情日期仍未知。</p>}
  <div className="semantics">面积按主力净额绝对值，颜色区分净买与净卖。单位：人民币。供应商订单分类估算，非市场新增资金。</div><div className="tools"><input aria-label="搜索代码或名称" value={query} onChange={e=>{setQuery(e.target.value);setSelected(null)}} placeholder="供应商代码 / 名称"/><label>主力净额方向 <select aria-label="主力净额方向" value={filter} onChange={e=>{setFilter(e.target.value as FlowFilter);setSelected(null)}}><option value="all">全部</option><option value="positive">净买入</option><option value="negative">净卖出</option><option value="zero">已报告零值</option><option value="missing">未提供</option></select></label><span>{palette==='china'?'红正 / 绿负':'绿正 / 红负'}；零值与缺失见明细。</span></div>

@@ -1,0 +1,39 @@
+'use client';
+import React,{useEffect,useId,useMemo,useRef,useState} from 'react';
+import {hierarchy,treemap,treemapSquarify} from 'd3-hierarchy';
+import s from './matrix.module.css';
+
+export type MatrixItem={id:string;label:string;displayValue:string;detail?:string;colorValue?:number|null;weight?:number|null};
+export type MatrixGroup={id:string;label:string;items:MatrixItem[]};
+export type MatrixHeatmapProps={groups:MatrixGroup[];title:string;description?:string;colorMeaning:string;areaMeaning:string;colorMode?:'signed'|'neutral';colorMaxAbs?:number;emptyMessage?:string;onSelect?:(item:MatrixItem,group:MatrixGroup)=>void};
+type Node={id:string;label:string;item?:MatrixItem;group?:MatrixGroup;children?:Node[]};
+/** Presentation only. No observations, classification inference, source requests, or monetary conversion. */
+export default function MatrixHeatmap({groups,title,description,colorMeaning,areaMeaning,colorMode='signed',colorMaxAbs,emptyMessage='尚无通过核验的数据。缺失不是零，矩阵不会用示例数值填满。',onSelect}:MatrixHeatmapProps){
+ const host=useRef<HTMLDivElement>(null),prefix=useId().replace(/:/g,'');
+ const [width,setWidth]=useState(1100),[inspected,setInspected]=useState<string|null>(null);
+ useEffect(()=>{if(!host.current)return;const measure=()=>{const next=host.current?.clientWidth;if(next&&next>0)setWidth(Math.round(next))};measure();if(typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(measure);observer.observe(host.current);return()=>observer.disconnect()},[]);
+ const height=width<600?440:520;
+ const populated=useMemo(()=>groups.filter(group=>group.items.length>0),[groups]);
+ const layout=useMemo(()=>treemap<Node>().tile(treemapSquarify).size([width,height]).paddingOuter(3).paddingInner(3).paddingTop(node=>node.depth===1?28:0).round(true)(hierarchy<Node>({id:'root',label:title,children:populated.map(group=>({id:group.id,label:group.label,group,children:group.items.map(item=>({id:`${group.id}/${item.id}`,label:item.label,item,group}))}))}).sum(node=>node.item?(typeof node.item.weight==='number'&&Number.isFinite(node.item.weight)&&node.item.weight>0?node.item.weight:1):0)),[populated,width,height,title]);
+ const leaves=layout.leaves().filter(node=>node.data.item),maximum=typeof colorMaxAbs==='number'&&Number.isFinite(colorMaxAbs)&&colorMaxAbs>0?colorMaxAbs:Math.max(0,...leaves.map(node=>Math.abs(node.data.item?.colorValue??0)).filter(Number.isFinite));
+ const inspectedNode=leaves.find(node=>node.data.id===inspected),active=inspectedNode?.data.item;
+ const color=(item:MatrixItem)=>{const value=item.colorValue;if(colorMode==='neutral'||value==null||!Number.isFinite(value))return 'missing';if(value===0)return 'zero';return `${value>0?'positive':'negative'}-${Math.min(3,Math.max(1,Math.ceil(Math.abs(value)/maximum*3)))}`};
+ const describe=(item:MatrixItem,group:MatrixGroup)=>`${group.label} · ${item.label} · ${item.displayValue}${item.detail?` · ${item.detail}`:''}`;
+ return <section className={s.root} aria-label={title}>
+  <header className={s.heading}><div><p className={s.eyebrow}>MATRIX VIEW</p><h2>{title}</h2>{description&&<p>{description}</p>}</div><span className={s.viewLabel}>矩形热力矩阵</span></header>
+  <div className={s.meanings}><span>面积：{areaMeaning}</span><span>颜色：{colorMeaning}</span></div>
+  <div ref={host} className={s.canvas} data-matrix-empty={leaves.length===0?'true':undefined}>
+   {leaves.length?<svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${title}区块`}>
+    {layout.children?.map(group=><g key={group.data.id}><rect className={s.group} x={group.x0} y={group.y0} width={group.x1-group.x0} height={group.y1-group.y0}/><text className={s.groupLabel} x={group.x0+10} y={group.y0+19}>{group.data.label}</text></g>)}
+    {leaves.map((node,index)=>{const item=node.data.item!,group=node.data.group!,w=node.x1-node.x0,h=node.y1-node.y0,cx=(node.x0+node.x1)/2,cy=(node.y0+node.y1)/2,clip=`${prefix}-${index}`,large=w>=180&&h>=110,font=Math.min(large?25:17,(w-16)/Math.max(item.label.length,1)),valueFont=Math.min(large?23:15,(w-16)/Math.max(item.displayValue.length*.58,1));return <g key={node.data.id} className={s.tile} data-color={color(item)} data-id={item.id} tabIndex={0} role={onSelect?'button':'img'} aria-label={describe(item,group)} onMouseEnter={()=>setInspected(node.data.id)} onMouseLeave={()=>setInspected(null)} onFocus={()=>setInspected(node.data.id)} onBlur={()=>setInspected(null)} onClick={onSelect?()=>onSelect(item,group):undefined} onKeyDown={onSelect?event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelect(item,group)}}:undefined}>
+     <title>{describe(item,group)}</title><defs><clipPath id={clip}><rect x={node.x0} y={node.y0} width={w} height={h}/></clipPath></defs>
+     <rect x={node.x0} y={node.y0} width={w} height={h}/><g clipPath={`url(#${clip})`}>
+      {w>40&&h>35&&font>=10&&<text className={s.name} textAnchor="middle" x={cx} y={cy-(h>=65?8:-4)} fontSize={font}>{item.label}</text>}
+      {w>55&&h>=65&&valueFont>=10&&<text className={s.value} textAnchor="middle" x={cx} y={cy+20} fontSize={valueFont}>{item.displayValue}</text>}
+      {large&&item.detail&&<text className={s.detail} textAnchor="middle" x={cx} y={cy+45} fontSize={11}>{item.detail.length>Math.floor(w/8)?`${item.detail.slice(0,Math.max(1,Math.floor(w/8)-1))}…`:item.detail}</text>}
+     </g></g>})}
+   </svg>:<div className={s.empty} role="status"><span className={s.emptyIcon} aria-hidden="true">▦</span><h3>矩阵已保留，等待可核验数据</h3><p>{emptyMessage}</p><small>不以价格、持仓或模拟数值填充资金流。</small></div>}
+  </div>
+  <div className={s.inspector} aria-live="polite">{active?<><strong>{inspectedNode?.data.group?.label} › {active.label}</strong><span>{active.displayValue}</span>{active.detail&&<span>{active.detail}</span>}</>:<p>{leaves.length?`指向区块或按 Tab 查看完整数值。${onSelect?'点击区块下钻。':''}`:'数据缺失时保留矩阵画布，不画虚构热力块。'}</p>}</div>
+ </section>;
+}

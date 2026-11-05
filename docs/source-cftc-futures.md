@@ -30,8 +30,14 @@ category's long minus short count. The comparison is current net minus previous
 reported net. The exact two dates and elapsed days accompany every comparison;
 it is called a seven-day comparison only when the interval actually is seven.
 
-The visual uses net contracts / current market open interest, on a common
-negative 100% to positive 100% axis. Contract size differs between markets, so no
+The primary visual is a nested asset-category / instrument matrix. Precious
+metals, energy, agriculture and currency futures are application navigation
+categories, not CFTC industry classifications or sector aggregates. Each category
+contains only its reviewed selected market. Every instrument has equal tile area;
+color uses net contracts / current market open interest on a fixed negative 100%
+to positive 100% scale. Zero positions keep their neutral tile and do not imply
+zero open interest. Selecting a tile opens the source contract counts, exact
+current/prior dates and changes. Contract size differs between markets, so no
 combined contract total, dollar notional or money-flow estimate is calculated.
 Every open contract has both a long and a short side. Non-commercial spreading
 is included on both sides of the source OI identity but cancels in directional
@@ -111,7 +117,7 @@ remain visible. No accounts, private positions or trading execution are added.
   completeness, byte/deadline limits, caching, stale/expired states, stop behavior,
   persistent-gate errors, query refusal, concurrent checks, cancellation, rejected
   lifetime registration, retained late D1 settlement and no-secret diagnostics.
-- Browser component tests cover category switching, signed normalized bars,
+- Browser component tests cover trader and instrument switching, signed normalized matrix colors,
   incomplete data, two-day intervals, expiry while hidden, access removal,
   malformed successful replies, authentication redirects, double clicks, unmount
   aborts and source denial.
