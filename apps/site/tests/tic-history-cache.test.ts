@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest';
 import {getCachedSource, DAY_MS, type CacheRepository, type CacheRow} from '../lib/tic/cache';
-import {normalizeHistory, historySchema, HISTORY_MONTHS, type TicHistory} from '../lib/tic/history';
+import {normalizeHistory, historySchema, trailingMonths, type TicHistory} from '../lib/tic/history';
+const HISTORY_MONTHS = trailingMonths('2026-08');
 import {sample} from './tic-fixture';
 function memory(): CacheRepository<TicHistory> {
  let row: CacheRow = {payload: null, version: null, lastAttemptMs: null, lastSuccessMs: null, error: null, leaseUntilMs: 0, leaseToken: null};
@@ -24,8 +25,15 @@ describe('history cache integration', () => {
   const recovered = await read(repo, sample(totals), now + DAY_MS * 2);
   expect(recovered.status.state).toBe('available');
  });
- it('preserves explicitly unavailable endpoint values without manufacturing zero', async () => {
+ it('rolls the history window forward after a new release with missing interior months intact',async()=>{
+  const repo=memory();const first=await read(repo,sample(totals),now);
+  const newer=await read(repo,sample([...totals,'Grand Total\t99996\t2026-09\t-4']),now+DAY_MS);
+  expect(newer.status.state).toBe('available');expect(newer.snapshot?.start_period).toBe('2025-10');
+  expect(newer.snapshot?.end_period).toBe('2026-09');expect(newer.snapshot?.version).not.toBe(first.snapshot?.version);
+  expect(newer.snapshot?.observations.at(-1)?.net_foreign_purchases_usd).toBe(-4000000);
+ });
+ it('refuses an incomplete latest month without manufacturing zero', async () => {
   const result = await read(memory(), sample([...totals.slice(0, -1), 'Grand Total\t99996\t2026-08\tn.a.']), now);
-  expect(result.status.state).toBe('available'); expect(result.snapshot?.observations[11].net_foreign_purchases_usd).toBeNull();
+  expect(result.status.state).toBe('unavailable'); expect(result.snapshot).toBeNull();
  });
 });

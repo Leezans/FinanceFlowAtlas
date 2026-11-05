@@ -42,3 +42,13 @@ export const sinaSourceGate=sqliteTable('sina_source_gate',{
  check('sina_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
  check('sina_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
+
+/** Kraken coordination only. No source observations, accounts or credentials. */
+export const krakenSourceGate=sqliteTable('kraken_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('kraken_gate_id',sql`${t.id} = 'spot_usd'`),
+ check('kraken_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('kraken_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+]);

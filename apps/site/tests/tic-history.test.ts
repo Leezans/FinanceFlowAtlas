@@ -1,5 +1,6 @@
 import {describe, it, expect} from 'vitest';
-import {normalizeHistory, historySchema, HISTORY_MONTHS} from '../lib/tic/history';
+import {normalizeHistory, historySchema, trailingMonths} from '../lib/tic/history';
+const HISTORY_MONTHS = trailingMonths('2026-08');
 import {sample} from './tic-fixture';
 const retrieved = '2026-11-04T12:00:00Z';
 const totals = () => HISTORY_MONTHS.map((month, i) => `Grand Total\t99996\t${month}\t${i === 4 ? '-9' : i === 3 ? '0' : String(i + 1)}`);
@@ -23,15 +24,18 @@ describe('bounded Treasury Grand Total history', () => {
   expect(data.observations.slice(0, 3).every(r => r.state === 'not_reported' && r.net_foreign_purchases_usd === null)).toBe(true);
   expect(data.observations).toHaveLength(12);
  });
- it('does not pull outside-month values into missing months, including pre-series rows', async () => {
-  const data = await normalizeHistory(sample(['Grand Total\t99996\t2022-12\t100', 'Grand Total\t99996\t2026-09\t500', 'Grand Total\t99996\t2026-08\tn.a.', totals()[0]]));
+ it('advances the calendar window from actual source months, never from the clock', async () => {
+  const data = await normalizeHistory(sample(['Grand Total\t99996\t2022-12\t100', 'Grand Total\t99996\t2026-09\t500', 'Grand Total\t99996\t2026-08\tn.a.', totals()[0]]), retrieved);
+  expect(data.start_period).toBe('2025-10'); expect(data.end_period).toBe('2026-09');
   expect(data.observations.filter(r => r.state === 'reported')).toHaveLength(1);
-  expect(data.observations[11].net_foreign_purchases_usd).toBeNull();
+  expect(data.observations[10].net_foreign_purchases_usd).toBeNull();
+  expect(data.observations[11].net_foreign_purchases_usd).toBe(500000000);
  });
- it('rejects an absent verified endpoint, but retains source-declared missingness', async () => {
-  await expect(normalizeHistory(sample(totals().slice(0, -1)))).rejects.toThrow('endpoint month is absent');
-  const data = await normalizeHistory(sample([...totals().slice(0, -1), 'Grand Total\t99996\t2026-08\tn.a.']));
-  expect(data.observations[11].state).toBe('not_reported');
+ it('accepts an older initial source endpoint but rejects a missing latest total without silently falling back', async () => {
+  const older = await normalizeHistory(sample(totals().slice(0, -1)), retrieved);
+  expect(older.end_period).toBe('2026-07');
+  await expect(normalizeHistory(sample([...totals().slice(0, -1), 'Grand Total\t99996\t2026-08\tn.a.']), retrieved)).rejects.toThrow('no valid published');
+  await expect(normalizeHistory(sample([...totals(), 'Japan\t42609\t2026-09\t3']), retrieved)).rejects.toThrow('one valid Grand Total');
  });
  it('normalizes negative zero to a reported zero', async () => {
   const data = await normalizeHistory(sample(['Grand Total\t99996\t2026-08\t-0']));

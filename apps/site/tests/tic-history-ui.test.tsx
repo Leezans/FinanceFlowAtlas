@@ -3,7 +3,8 @@ import React from 'react';
 import {afterEach, describe, it, expect, vi} from 'vitest';
 import {render, screen, waitFor, fireEvent, cleanup} from '@testing-library/react';
 import TicHistory from '../components/atlas/TicHistory';
-import {HISTORY_MONTHS} from '../lib/tic/history';
+import {trailingMonths} from '../lib/tic/history';
+const HISTORY_MONTHS = trailingMonths('2026-08');
 const fixture = {
  version: 'a'.repeat(20), concept: 'reported_net_transactions', scope: 'foreign_residents_us_equity_including_fund_shares',
  aggregation: 'published_grand_total', source_field: 'for_lt_eqty_net',
@@ -30,6 +31,14 @@ describe('foreign-resident US equity historical chart', () => {
   expect(screen.getByRole('table', {name: '美国股权境外净交易历史数值'})).toBeTruthy();
   expect(container.querySelectorAll('tbody tr')).toHaveLength(12);
   expect(screen.getByText('未报告，不是零')).toBeTruthy();
+ });
+ it('shows actual rolling bounds after refresh without retaining the old August caption',async()=>{
+  let newer=false;
+  const advanced={...fixture,start_period:'2025-10',end_period:'2026-09',observations:trailingMonths('2026-09').map(period=>({period,state:'reported',net_foreign_purchases_usd:1000000}))};
+  vi.stubGlobal('fetch',vi.fn(async()=>response(newer?advanced:fixture)));
+  render(<TicHistory/>);await screen.findByText(/2025-09 至 2026-08/);newer=true;
+  fireEvent.click(screen.getByRole('button',{name:'刷新美国历史数据'}));await screen.findByText(/2025-10 至 2026-09/);
+  expect(screen.queryByText(/2025-09 至 2026-08/)).toBeNull();expect(screen.queryByText(/窗口固定/)).toBeNull();
  });
  it('reuses 304 with a visible stale warning, clears invalid data, and recovers', async () => {
   let step = 0;

@@ -97,3 +97,10 @@ endpoint remained 503. Remaining operational limitation: manual ingestion is
 intended for one operator; multi-process scheduling and concurrent same-month
 vintage ordering are not implemented. No UI wiring, deployment or scheduler
 is included in this connector increment.
+
+## Hosted automatic discovery update
+
+The Python manual connector described above remains explicit-month. The hosted
+`apps/site` endpoints and chart now discover the latest validated source-table
+month and roll the 12-month history forward automatically. See
+[hosted discovery, safeguards and verification](tic-latest-discovery.md).
