@@ -37,11 +37,10 @@ future reference dates and empty datasets. The original decimal representation i
 preserved for the source table. A same-day revision is accepted; a date regression
 cannot overwrite a newer validated snapshot.
 
-HTTP redirects, 401/403/407/429 and HTML responses clear the in-memory snapshot
-and stop automatic acquisition for that service process. There are no alternate
-hosts, authenticated routes, bypasses, retry overrides or reset controls. The latch
-is **not durable across process restarts**; deployment operators must investigate a
-source stop rather than restart to evade it. The page also clears data and stops
+HTTP redirects, already-redirected responses, 401/403/407/429/451 and HTML/XHTML
+responses clear the in-memory snapshot and persist a shared acquisition stop in D1. There are no alternate
+hosts, authenticated routes, bypasses, retry overrides or reset controls. The latch survives process restarts and new isolates. Deployment operators must
+investigate a source stop; there is no application reset or lease takeover. The page also clears data and stops
 checks if its own access returns 401/403. This change does not alter site access
 control, publish an existing private deployment, or establish new account access.
 
@@ -52,9 +51,17 @@ control, publish an existing private deployment, or establish new account access
   snapshot, with its original acquisition time and an explicit stale state.
 - Failure imposes a 15-minute source cooldown. No first snapshot means HTTP 503,
   not zero values or sample data. Stopped acquisition clears data.
-- State is memory-only, per process/isolate. Separate isolates do not share the
-  rate limit or denial latch. No D1 migration, persistent credentials, account
-  information, browser storage or raw-data files are added.
+- Rate snapshots are memory-only, per process/isolate. Migration 0004 adds a
+  dedicated metadata-only ECB gate using the existing primary D1 binding. It
+  stores only status, an internal coordination token, and timestamps, never rates,
+  account information or credentials. Applied migrations 0000–0003 are unchanged.
+- Atomic acquisition serializes all isolates. Success enforces a shared one-hour
+  cooldown; temporary failures enforce fifteen minutes. Busy leases never expire
+  or admit takeover. A crash or uncertain DB write fails closed and requires
+  operator investigation. Denial and lease release are one atomic transition.
+- Every cache read first inspects the shared gate. A blocked, busy or unavailable
+  gate clears local values; no DB confirmation means no provider request. A cold
+  isolate during cooldown may return no values because rates are not persisted.
 - The API uses `Cache-Control: private, no-store`. The UI polls hourly and does not
   bypass source cooldown via its manual check button. Browser connection failures
   are marked separately; invalid successful payloads clear the display.
@@ -94,14 +101,16 @@ npm run test:fx-runtime
 
 Tests use synthetic rates only. Native-workerd checks disable real networking and
 exercise the actual route with plain/gzip/Brotli synthetic XML, malformed source,
-access denial and cached responses. UI tests cover filtering, cross-rate direction,
+access denial, cross-isolate stops/cooldowns, DB failures and cached responses. UI tests cover filtering, cross-rate direction,
 swap, invalid amounts, stale preservation/recovery, schema rejection, access
 clearing, interrupted navigation and repeated clicks. Source availability remains
 a separate live check, not something inferred from passing mock tests.
 
 The implementation was also checked against the actual downloaded XML above:
 namespace parsing and schema validation accepted its 29 quotes and reference
-date. Local Chromium visual QA could not run because the environment denied its
-process singleton socket, including the permitted escalated attempt. Desktop and
-mobile screenshots therefore remain unverified; automated component interaction
-coverage must not be presented as visual inspection or production validation.
+date. The initial local Chromium visual-QA attempt was blocked by its process singleton
+socket. Subsequent supported CUA inspection verified desktop and 375px-wide
+synthetic FX views, including conversion, search, swap, stale and old-date warnings.
+That fixture inspection does not establish live preview or production provider
+reachability; the preview network attempt was unavailable. The original direct
+HTTP 200 source check above remains separate evidence.

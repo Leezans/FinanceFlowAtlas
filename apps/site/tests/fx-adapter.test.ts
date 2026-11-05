@@ -34,8 +34,16 @@ describe('ECB daily XML reference contract',()=>{
   const fetcher=vi.fn(async()=>fxResponse());await fetchEcb(fetcher,()=>FX_NOW);
   expect(fetcher).toHaveBeenCalledWith(ECB_URL,expect.objectContaining({redirect:'manual',cache:'no-store'}));expect(fetcher.mock.calls).toHaveLength(1);
  });
- it.each([301,302,303,307,308,401,403,407,429])('stops on HTTP %s instead of following alternatives',async status=>{
+ it.each([301,302,303,307,308,401,403,407,429,451])('stops on HTTP %s instead of following alternatives',async status=>{
   const fetcher=vi.fn(async()=>new Response(null,{status}));await expect(fetchEcb(fetcher,()=>FX_NOW)).rejects.toMatchObject({code:'source_stopped'});expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('stops if the fetch implementation has already followed a redirect',async()=>{
+  const response=fxResponse();Object.defineProperty(response,'redirected',{value:true});
+  const fetcher=vi.fn(async()=>response);await expect(fetchEcb(fetcher,()=>FX_NOW)).rejects.toMatchObject({code:'source_stopped'});expect(fetcher).toHaveBeenCalledTimes(1);expect(response.bodyUsed).toBe(false);
+ });
+ it.each([200,503])('stops on XHTML challenge pages with HTTP %s',async status=>{
+  const fetcher=vi.fn(async()=>new Response('<html xmlns="http://www.w3.org/1999/xhtml">challenge</html>',{status,headers:{'content-type':'application/xhtml+xml; charset=utf-8'}}));
+  await expect(fetchEcb(fetcher,()=>FX_NOW)).rejects.toMatchObject({code:'source_stopped'});expect(fetcher).toHaveBeenCalledTimes(1);
  });
  it('rejects invalid content type, oversized streams and bad UTF-8',async()=>{
   await expect(fetchEcb(async()=>new Response('<html>challenge</html>',{headers:{'content-type':'text/html'}}),()=>FX_NOW)).rejects.toMatchObject({code:'source_stopped'});

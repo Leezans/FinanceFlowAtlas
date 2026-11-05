@@ -53,10 +53,10 @@ export async function fetchEcb(fetcher:typeof fetch,now:()=>number):Promise<FxSn
  try{
   const response=await fetcher(ECB_URL,{redirect:'manual',signal:controller.signal,headers:{Accept:'application/xml, text/xml'},cache:'no-store'});
   // Never follow login/challenge/redirect routes or rotate hosts after a denial.
-  if([301,302,303,307,308,401,403,407,429].includes(response.status))throw new FxSourceError('source_stopped');
-  if(!response.ok)throw new FxSourceError('source_unavailable');
+  if(response.redirected||[301,302,303,307,308,401,403,407,429,451].includes(response.status))throw new FxSourceError('source_stopped');
   const type=response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-  if(type==='text/html')throw new FxSourceError('source_stopped');
+  if(type==='text/html'||type==='application/xhtml+xml')throw new FxSourceError('source_stopped');
+  if(!response.ok)throw new FxSourceError('source_unavailable');
   if(type!=='text/xml'&&type!=='application/xml')throw new FxSourceError('invalid_source');
   const xml=await readBounded(response);
   return parseEcb(xml,new Date(now()).toISOString());

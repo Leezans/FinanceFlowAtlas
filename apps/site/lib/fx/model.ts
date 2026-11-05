@@ -18,7 +18,7 @@ export const fxSnapshotSchema=z.object({
  if(Number.isFinite(Date.parse(v.retrieved_at))&&v.reference_date>berlinDate(Date.parse(v.retrieved_at)))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Future reference date'});
 });
 export type FxSnapshot=z.infer<typeof fxSnapshotSchema>;
-export const fxErrorCode=z.enum(['network_error','source_unavailable','invalid_source','source_older','source_stopped']);
+export const fxErrorCode=z.enum(['network_error','source_unavailable','invalid_source','source_older','source_stopped','source_busy','source_cooldown','source_gate_unavailable']);
 export type FxErrorCode=z.infer<typeof fxErrorCode>;
 export const fxPayloadSchema=z.object({snapshot:fxSnapshotSchema.nullable(),source_state:z.enum(['available','stale','unavailable','stopped']),checked_at:timestamp.nullable(),next_check_at:timestamp.nullable(),error_code:fxErrorCode.nullable()}).strict().superRefine((v,ctx)=>{
  if((v.source_state==='available'||v.source_state==='stale')&&!v.snapshot||v.source_state==='available'&&v.error_code!==null||v.source_state==='stopped'&&(v.next_check_at!==null||v.snapshot!==null))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Inconsistent source status'});

@@ -77,10 +77,14 @@ cross-rates. It links the official source and usage terms, and retains the exist
 private site boundary.
 
 A bounded namespace-aware XML parser rejects malformed data and date regressions.
-Per-process memory caches successful checks for an hour; temporary failures retain
-explicitly stale validated rates, and access denials stop checks and clear data.
-No real rates are committed, no credentials are required and no database migration
-is added. `npm run test:fx-runtime` verifies native-workerd parsing and caching with
+Rates remain in per-process memory; temporary source failures retain explicitly
+stale validated rates. Apply appended migration `0004_ecb_fx_gate.sql` through the
+supported deployment workflow. The dedicated metadata-only D1 gate serializes
+acquisition across isolates, enforcing one-hour success and fifteen-minute failure
+cooldowns. Denials persist across restarts, and every cache read checks the shared
+gate. Busy/uncertain operations have no automatic lease takeover or reset. Missing
+or unavailable gate state fails closed. Cold isolates may lack rates during cooldown.
+No real rates or credentials are persisted in this gate or committed. `npm run test:fx-runtime` verifies native-workerd parsing and caching with
 synthetic plain/gzip/Brotli XML and real networking disabled. See
 [the FX source contract](../../docs/source-ecb-fx.md) for timing, rights and limits.
 ## Personal Kraken spot layer
@@ -126,4 +130,3 @@ responses, 304 recovery, exponential backoff, permanent stops and preservation o
 search, palette, details and selected-stock evidence. These are synthetic local
 checks, not proof of authenticated production source availability. No database
 migration is required for this change.
-
