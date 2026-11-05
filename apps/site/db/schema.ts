@@ -201,3 +201,14 @@ export const cboeDelayedSourceGate=sqliteTable('cboe_delayed_source_gate',{
  check('cboe_delayed_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
  check('cboe_delayed_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
 ]);
+
+/** Latest normalized MOF weekly observation; no raw source archive. */
+export const japanMofSourceGate=sqliteTable('japan_mof_source_gate',{
+ id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),
+ updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+},t=>[
+ check('japan_mof_gate_id',sql`${t.id} = 'weekly_liabilities'`),
+ check('japan_mof_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
+ check('japan_mof_gate_lease',sql`(${t.status} = 'busy' AND ${t.leaseToken} IS NOT NULL) OR (${t.status} != 'busy' AND ${t.leaseToken} IS NULL)`),
+ check('japan_mof_gate_payload',sql`${t.payload} IS NULL OR (json_valid(${t.payload}) AND length(CAST(${t.payload} AS BLOB)) <= 20000)`),
+]);

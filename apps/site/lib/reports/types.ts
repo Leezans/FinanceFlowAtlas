@@ -12,8 +12,10 @@ export interface ReportGate<T> {
 }
 export interface ReportDefinition<T extends ReportSnapshot> {
  url:string;parse:(raw:unknown,started:string,fetched:string)=>T;validate:(raw:unknown)=>T;
+ /** Dataset-specific monotonic source metadata, checked before publication. */
+ validateRevision?:(candidate:T,previous:T)=>void;
  refreshMs:number;maxCacheAgeMs:number;maxReportAgeDays:number;staleReportDays:number;
- reportAge:(snapshot:T,now:number)=>number;maxBytes?:number;deadlineMs?:number;
+ reportAge:(snapshot:T,now:number)=>number;responseFormat?:'cp932_csv';maxBytes?:number;deadlineMs?:number;
 }
 export interface ReportOptions<T> {gate:ReportGate<T>;fetcher?:typeof fetch;now?:()=>number;waitUntil?:(promise:Promise<unknown>)=>void;isolatedForTests?:boolean}
 export interface ReportStatus {state:'available'|'stale'|'unavailable'|'denied';error_code:string|null;last_attempt_at:string|null;fetched_at:string|null;cache_age_ms:number|null;report_age_days:number|null;refresh_ms:number;max_cache_age_ms:number;next_retry_at:string|null}

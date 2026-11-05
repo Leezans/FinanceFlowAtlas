@@ -43,8 +43,8 @@
 
 |优先级/状态|来源、入口|数据语义与范围|频率、单位、获取方式|采集与限制|
 |---|---|---|---|---|
-|P0 / V1|日本 [MOF International Transactions in Securities](https://www.mof.go.jp/english/policy/international_policy/reference/itn_transactions_in_securities/index.htm)|居民境外、非居民境内股票/基金和债务买卖；月度有投资者类别|周/月；周表亿日元；历史文件/PDF|指定大型机构样本，不是完整 BOP。**2014-01 起对外投资净额正号由净卖出改为净买入**。按成交日；债券处置含偿还。|
-|P0 / V1|日本 [JPX investor type](https://www.jpx.co.jp/english/markets/statistics-equities/investor-type/index.html)，[J-Quants Pro 产品](https://pro.jpx-jquants.com/datasets/1)|海外、个人及细分机构买/卖/净额；市场分部；股票、ETF、REIT 有分别统计|周/月/年；数量和金额分文件；周报约下周第 4 工作日；Pro REST/SFTP/Snowflake、CSV/JSON、历史从 2008-01|原文件金额倍率必须核验；市场分部重组设断点。Pro 商业报价/授权待确认，不可假定免费。|
+|P0 / V1|日本 [MOF International Transactions in Securities](https://www.mof.go.jp/english/policy/international_policy/reference/itn_transactions_in_securities/index.htm)|居民境外、非居民境内股票/基金和债务买卖；月度有投资者类别|周/月；周表亿日元；历史文件/PDF|指定大型机构样本，不是完整 BOP。**2014-01 起对外投资净额正号由净卖出改为净买入**。按成交日；债券处置含偿还。周度对内栏目已实现独立接入，PDL 1.0，非行业净额；[来源契约](../source-jp-mof.md)。|
+|P0 / V1|日本 [JPX investor type](https://www.jpx.co.jp/english/markets/statistics-equities/investor-type/index.html)，[J-Quants Pro 产品](https://pro.jpx-jquants.com/datasets/1)|海外、个人及细分机构买/卖/净额；市场分部；股票、ETF、REIT 有分别统计|周/月/年；2026-09 第 3 周起数量/金额合为单个文件；周报约下周第 4 工作日 15:30 JST；Pro 为独立产品|样本已核验金额单位千日元、净额为买入减卖出；市场合计与分部不重复。自动化私人展示许可尚未确认，未启用；[核验详情](../source-jp-jpx.md)。|
 |P0 / V1|印度 [SEBI FPI 来源目录](https://www.sebi.gov.in/curation/fpi.html)，链接 NSDL/CDSL|FPI 投资、历史汇总及行业统计|日/月/年，行业为半月；公开网页及归档；单位依报告|校验成交/结算日期、一级市场范围与币种；不得与交易所现货净额混接。|
 |P0 / V1|印度 [NSE FII/FPI & DII](https://www.nseindia.com/reports/fii-dii?os=___)|资本市场的境内机构和外国投资者交易；NSE 单独及 NSE/BSE/MSEI 合计|日度；INR crore/billion 可选；CSV|与 NSDL 范围不同，分开保存。自动化和再分发权待确认。|
 |P1 / V1|韩国 [KRX Data Marketplace](https://data.krx.co.kr/contents/MDC/MAIN/main/index.cmd?locale=en)|KOSPI/KOSDAQ/KONEX 按投资者买/卖/净额；期货期权另表|日度；主仪表盘十亿 KRW；网页门户|官方产品确认；稳定 API、历史权限和商业再分发未验证。不得把非官方抓取接口视为承诺的 API。|

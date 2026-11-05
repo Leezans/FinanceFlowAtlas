@@ -1,5 +1,5 @@
 import {ReportError,type ReportDefinition,type ReportOptions,type ReportSnapshot,type ReportReply} from './types';
-import {readJSON,boundedFetch} from './json';
+import {readJSON,readCp932CSV,boundedFetch} from './json';
 function fail(code:string):never{throw new ReportError(code);}
 const gateErrors=new Set(['source_denied','source_busy','source_cooldown','source_gate_unavailable','source_stale_lease','source_aborted']);
 function settleGate<T>(operation:Promise<T>,signal:AbortSignal):Promise<T>{
@@ -32,18 +32,19 @@ export function createReportHandler<T extends ReportSnapshot>(definition:ReportD
    if(admitted.state==='blocked')throw new ReportError('source_denied',true);
    if(admitted.providerUnavailable)throw new ReportError(admitted.providerError??'source_busy');
    if(controller.signal.aborted)fail(requestSignal.aborted?'source_aborted':'timeout');
-   const response=await boundedFetch(fetcher,definition.url,{method:'GET',headers:{Accept:'application/json'},credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal});
+   const response=await boundedFetch(fetcher,definition.url,{method:'GET',headers:{Accept:definition.responseFormat==='cp932_csv'?'text/csv':'application/json'},credentials:'omit',redirect:'manual',cache:'no-store',signal:controller.signal});
    let raw:unknown;
    try{
     if([401,403,407,429,451].includes(response.status))throw new ReportError('source_access_denied',true);
     if(response.redirected||response.status>=300&&response.status<400)throw new ReportError('redirect_denied',true);
     if(/^(text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(response.headers.get('content-type')??''))throw new ReportError('html_challenge',true);
     if(response.status!==200)throw new ReportError('upstream_http',false,retryAfter(response.headers.get('retry-after'),now()));
-    raw=await readJSON(response,controller.signal,definition.maxBytes??1_000_000);
+    raw=await (definition.responseFormat==='cp932_csv'?readCp932CSV:readJSON)(response,controller.signal,definition.maxBytes??1_000_000);
    }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
    const candidate=definition.validate(definition.parse(raw,new Date(started).toISOString(),new Date(now()).toISOString()));
    const previousDate=snapshot?.report_date;
    if(previousDate&&candidate.report_date<previousDate)fail('report_date_regression');
+   if(snapshot)definition.validateRevision?.(candidate,snapshot);
    releasing=true;const publication=await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate})),deadline.signal);token=undefined;
    if(publication&&!publication.published){snapshot=null;error=publication.error_code??'source_gate_unavailable';denied=denied||error==='source_denied';retryAt=now()+REFRESH_MS;return;}
    snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;

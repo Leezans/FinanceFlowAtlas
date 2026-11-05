@@ -141,6 +141,13 @@
       "when": 1793920040410,
       "tag": "0019_lean_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793940000000,
+      "tag": "0020_japan_mof_weekly",
+      "breakpoints": true
     }
   ]
 }

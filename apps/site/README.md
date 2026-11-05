@@ -41,6 +41,17 @@ They must not be deployed; regenerate them after any build change.
 
 ## Data semantics
 
+The Japan entry at `/markets?country=JPN` is a separate MOF weekly
+nonresident-transactions sample for Japanese-issued securities. It is not
+industry data, all domestic Japanese investors, JPX investor trading or a
+whole-economy flow total. Equity/fund shares and two debt classes keep their
+official signed amounts in 100 million JPY. Apply migration
+`0020_japan_mof_weekly.sql` through the supported deployment workflow. It adds
+an isolated six-hour source gate and normalized latest-report cache; no other
+provider gate is reset. See [MOF source contract](../../docs/source-jp-mof.md)
+and [JPX candidate assessment](../../docs/source-jp-jpx.md). JPX remains disabled
+pending clarification of hosted secondary-display rights.
+
 The hosted adapter discovers the latest complete, validated observation month present in the fetched official TIC table, with a rolling twelve-month history. It never infers unpublished data from the clock or presents monthly statistics as real-time prices. Foreign country means reported residence; the security issuer economy remains the United States. Signed monthly net transactions are distinct from holdings and from gross purchases or sales.
 
 Treemap area is the absolute net amount divided by the sum of absolute net amounts of included reported countries, not market capitalization or the Treasury Grand Total. Zero rows are separate; missing rows have no area. No industry or individual-stock hierarchy is implied.

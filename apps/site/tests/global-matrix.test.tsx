@@ -7,6 +7,7 @@ import {ticFixture} from './ticTestFixture';
 vi.mock('../components/ashare/AshareWorkspace',()=>({default:()=> <section aria-label="中国行业测试工作区">中国自身 CNY 估算</section>}));
 vi.mock('../components/cvm/CvmFunds',()=>({default:()=> <section aria-label="巴西行业测试工作区">巴西公开基金 BRL 月报</section>}));
 vi.mock('../components/markets/TaiwanMoney',()=>({default:()=> <section aria-label="台湾金额测试工作区">台湾自身 TWD 日报</section>}));
+vi.mock('../components/markets/JapanMoney',()=>({default:()=> <section aria-label="日本金额测试工作区">日本证券非居民 JPY 周报</section>}));
 beforeEach(()=>{window.history.replaceState({},'','/markets');vi.stubGlobal('fetch',vi.fn(async(url:string)=>({ok:true,status:200,headers:new Headers(),json:async()=>url.endsWith('/status')?{state:'available'}:ticFixture})));});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 describe('country-owned global matrix',()=>{
@@ -28,7 +29,14 @@ describe('country-owned global matrix',()=>{
   expect(screen.queryByRole('region',{name:'台湾金额测试工作区'})).toBeNull();
   expect(screen.getByText('月度披露，每日检查；非实时',{selector:'dd'})).toBeTruthy();expect(fetch).not.toHaveBeenCalled();
  });
- it.each(['FRA','USA','JPN'])('keeps %s unknown, with no TIC fallback or fake country blocks',async iso=>{
+ it('routes Japan to its own issuer market while keeping cross-border sample scope explicit',async()=>{
+  window.history.replaceState({},'','/markets?country=JPN');render(<Markets/>);
+  expect(await screen.findByRole('region',{name:'日本金额测试工作区'})).toBeTruthy();
+  expect(screen.getByText(/仅跨境证券交易样本，不是全国所有资金流/)).toBeTruthy();
+  expect(screen.getByText('按资产类别；无行业 / 公司分解')).toBeTruthy();
+  expect(screen.queryByRole('region',{name:'美国股权跨境净交易矩阵'})).toBeNull();expect(fetch).not.toHaveBeenCalled();
+ });
+ it.each(['FRA','USA'])('keeps %s unknown, with no TIC fallback or fake country blocks',async iso=>{
   window.history.replaceState({},'',`/markets?country=${iso}`);const {container}=render(<Markets/>);
   expect(await screen.findByText('该市场资金流尚未接入')).toBeTruthy();
   expect(container.querySelector('[data-matrix-empty=true]')).toBeTruthy();expect(container.querySelector('[data-id]')).toBeNull();
