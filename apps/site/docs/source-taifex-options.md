@@ -10,9 +10,12 @@ not issuer industries. Stock and ETF options are source aggregates, not
 individual securities. This is not all investors, global options or net capital
 inflow. The institutional classes are aggregates, not one coherent strategy.
 
-The only source request is one unauthenticated fixed GET:
+The options source remains one unauthenticated fixed GET:
 
 `https://openapi.taifex.com.tw/v1/MarketDataOfMajorInstitutionalTradersDetailsOfCallsAndPutsBytheDate`
+
+The shared TAIFEX provider also reads the fixed futures report in the same
+hourly acquisition. See [complete bundle and shared admission](source-taifex-futures.md#shared-provider-admission-and-complete-cache).
 
 No account, cookie, token, URL parameter, alternate endpoint, historical scan,
 order, credential or user-supplied URL is used. The source served JSON with an
@@ -72,7 +75,7 @@ null. Report date, acquisition start and successful fetch time remain distinct.
 No numeric API quota or recommended polling interval was documented in the
 inspected official OpenAPI, portal metadata or terms. This is not evidence of
 unlimited access. The application conservatively shares one fixed one-hour
-minimum source cooldown across all viewers and filters. A visible page requests
+minimum source cooldown across all options/futures viewers and local filters. A visible page requests
 updates within that bound; no unattended scheduler is installed by this feature.
 
 Cache older than one hour or report older than four Taiwan calendar days is
@@ -100,9 +103,13 @@ site's access settings remain unchanged.
 Migration `0023_taifex_options_gate.sql` adds only `taifex_options_gate`, its
 `daily_institutions` row and constraints. It does not read, reset, expire,
 take over or mutate the existing Deribit gate or any stopped provider. All TAIFEX
-views/filters use this same row; there is no per-filter admission budget.
+options/futures views and filters use this same row; there is no per-page or
+per-filter admission budget. The futures extension adds no migration and reads
+the exact legacy options payload. New successful writes contain both complete
+reports in schema `taifex-institutions/2`; ordinary partial failures preserve the
+old payload and access denial from either endpoint clears both reports.
 
-Admission is atomic in D1 with one retained worker lifetime, a 15-second bounded
+Admission is atomic in D1 with one retained worker lifetime, a 25-second bounded
 request, bounded decoded JSON and no redirects. Busy or unknown admission is
 fail-closed, including last-good evidence. HTTP 401/403/407/429/451, redirects,
 HTML challenges and rejected content types stop this provider persistently and

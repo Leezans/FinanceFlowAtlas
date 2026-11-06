@@ -555,3 +555,17 @@ cache. Existing gates, including Deribit BTC/ETH and previously stopped sources,
 are untouched. Filters remain local. See [source, units, rights, date and gate
 contract](docs/source-taifex-options.md) and run `npm run test:taifex-options-runtime`.
 No provider observations are bundled or used as fallback data.
+
+## Taiwan daily institutional futures amounts
+
+`/futures/taiwan` adds a separate TAIFEX daily notional-turnover matrix for
+verified TWD stock-index and stock/ETF futures. It is not real-time, FX/commodity
+coverage, margin or capital flow. BUY/SELL area uses one source-reported side;
+source dates and actual covered/excluded product counts stay explicit. Foreign
+indices here have verified TWD contract definitions, not inferred FX conversion.
+
+Options and futures share the unchanged TAIFEX gate from migration `0023` and
+one hourly acquisition budget. A complete versioned bundle preserves legacy
+options caches, rejects partial publication and shares denial across both pages.
+No migration, new provider row, reset or unattended scheduler is added. See the
+[official units, rights, coverage and provider contract](docs/source-taifex-futures.md).

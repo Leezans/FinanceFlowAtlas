@@ -15,12 +15,12 @@ describe('market navigation',()=>{
  it('links only implemented pages including Polymarket and the bounded venue FX and optional daily reference',()=>{
   render(<MarketNavigation/>);
   const nav=screen.getByRole('navigation',{name:'市场导航'});
-  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/options','/options/taiwan','/forex','/diagnostics','/']);
+  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/futures/taiwan','/options','/options/taiwan','/forex','/diagnostics','/']);
   expect(within(nav).getByRole('link',{name:'外汇行情'}).getAttribute('href')).toBe('/forex');
   expect(within(nav).queryByText('即将接入')).toBeNull();
   for(const link of marketLinks)expect(existsSync(resolve(process.cwd(),`app${link.href==='/'?'':link.href}/page.tsx`))).toBe(true);
  });
- it.each(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/options','/options/taiwan','/forex','/diagnostics','/'])('marks the exact current page %s',route=>{
+ it.each(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/futures/taiwan','/options','/options/taiwan','/forex','/diagnostics','/'])('marks the exact current page %s',route=>{
   pathname=route;const {container}=render(<MarketNavigation/>);
   expect(container.querySelectorAll('[aria-current=page]')).toHaveLength(1);
   expect(container.querySelector('[aria-current=page]')?.getAttribute('href')).toBe(route);
@@ -49,6 +49,7 @@ describe('visual market entry',()=>{
   expect(within(section).getByRole('link',{name:'打开加密现货：Kraken BTC 和 ETH'}).getAttribute('href')).toBe('/crypto');
   expect(within(section).getByRole('link',{name:'继续看美国 TIC'}).getAttribute('href')).toBe('#tic-view');
   expect(within(section).getByRole('link',{name:'打开台湾期权日度金额矩阵：TAIFEX三类法人'}).getAttribute('href')).toBe('/options/taiwan');
+  expect(within(section).getByRole('link',{name:'打开台湾期货日度名义金额矩阵：TAIFEX三类法人'}).getAttribute('href')).toBe('/futures/taiwan');
   expect(within(section).queryByRole('table')).toBeNull();
   expect(within(section).getByRole('link',{name:'打开外汇行情：Kraken 法币现货与 ECB 每日参考'}).getAttribute('href')).toBe('/forex');
   expect(within(section).getByRole('navigation',{name:'选择矩阵市场'})).toBeTruthy();
