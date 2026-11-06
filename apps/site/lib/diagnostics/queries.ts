@@ -75,6 +75,7 @@ export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
     FROM tic_snapshot_cache g LEFT JOIN tic_snapshot_cache s ON s.id='${view === 'latest' ? 'tic-equity-latest-v2' : 'tic-equity-history-latest-12-v2'}'
     WHERE g.id='tic-treasury-source-gate-v1' LIMIT 1`})),
   common('deribit-options', 'deribit_options_gate', 'btc_options', ['deribit-btc-options/1','deribit-options/2']),
+  common('taifex-options', 'taifex_options_gate', 'daily_institutions', 'taifex-options-institutions/1'),
 ];
 
 // This optional table is evidence of observed work, never proof of cron installation.

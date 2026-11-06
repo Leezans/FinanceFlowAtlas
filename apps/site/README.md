@@ -539,3 +539,19 @@ data-use scope. BTC and ETH share the unchanged gate from migration `0022`;
 the extension adds no migration or reset and reads the exact old BTC cache format.
 See [source, units, rights and delay contract](docs/source-deribit-options.md) and
 run `npm run test:deribit-runtime`. No provider observations are bundled.
+
+## Taiwan daily institutional options matrix
+
+`/options/taiwan` adds a separate TAIFEX daily report, covering five product
+categories × call/put × three institutional classes. Matrix area uses source
+buy-side or sell-side premium transaction amounts, converted exactly from TWD
+thousands to TWD. It is not real-time capital flow, an issuer-industry breakdown
+or an all-investor market total. The API report date and acquisition time are
+shown separately; actual release time and API delay are unknown. Government Open
+Data License v1 attribution is included.
+
+Migration `0023` adds an independent hourly durable source gate and last report
+cache. Existing gates, including Deribit BTC/ETH and previously stopped sources,
+are untouched. Filters remain local. See [source, units, rights, date and gate
+contract](docs/source-taifex-options.md) and run `npm run test:taifex-options-runtime`.
+No provider observations are bundled or used as fallback data.

@@ -162,6 +162,13 @@
       "when": 1793940000002,
       "tag": "0022_deribit_options_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1793940000003,
+      "tag": "0023_taifex_options_gate",
+      "breakpoints": true
     }
   ]
 }

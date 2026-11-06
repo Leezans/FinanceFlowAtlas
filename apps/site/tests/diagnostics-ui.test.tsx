@@ -88,14 +88,14 @@ describe('read-only source status page', () => {
     const {container} = render(<Diagnostics/>); await screen.findByRole('article', {name: 'A 股 · Eastmoney'});
     expect(fetcher).toHaveBeenCalledTimes(1); expect(fetcher.mock.calls[0][0]).toBe('/api/v1/diagnostics');
     expect(fetcher.mock.calls[0][1]).toMatchObject({method: 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error'});
-    expect(screen.getAllByRole('article')).toHaveLength(17);
+    expect(screen.getAllByRole('article')).toHaveLength(18);
     expect(getCard('巴西 · CVM').getByText('月度公开基金股票买卖')).toBeTruthy();
     expect(getCard('A 股 · Eastmoney').getByText('已超过缓存期限')).toBeTruthy();
     expect(getCard('A 股 · Eastmoney').getByText('检查完成记录')).toBeTruthy();
     expect(getCard('美国 · TIC 最新期').getByText('检查开始记录')).toBeTruthy();
     expect(getCard('加密 / 外汇 · Kraken').getByText('已停止')).toBeTruthy();
     expect(getCard('外汇 · ECB').getByText('最早可再尝试')).toBeTruthy();
-    expect(screen.getAllByText('未核验')).toHaveLength(17);
+    expect(screen.getAllByText('未核验')).toHaveLength(18);
     expect(container.textContent).not.toContain('SECRET_');
     expect(container.querySelectorAll('a')).toHaveLength(0);
     expect(screen.getByRole('button', {name: '重新读取状态'})).toBeTruthy();
@@ -110,7 +110,7 @@ describe('read-only source status page', () => {
     expect(getCard('A 股 · Eastmoney').getByText(/尚无初始化记录/)).toBeTruthy();
     expect(getCard('加密 / 外汇 · Kraken').getByText(/元数据暂不可读/)).toBeTruthy();
     expect(screen.getByRole('status').textContent).toContain('未知状态已保留');
-    expect(screen.getByText('0 / 17')).toBeTruthy();
+    expect(screen.getByText('0 / 18')).toBeTruthy();
   });
   it.each([401, 403])('handles authorization HTTP %s without raw output or alternate source calls', async status => {
     const fetcher = vi.fn().mockResolvedValue(new Response('SECRET_LOGIN_PAGE', {status})); vi.stubGlobal('fetch', fetcher);
@@ -155,13 +155,13 @@ describe('read-only source status page', () => {
     expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
     render(<Diagnostics/>); await screen.findByRole('article', {name: 'A 股 · Eastmoney'});
     await act(async () => {finish(response({bad: true}));});
-    expect(screen.getAllByRole('article')).toHaveLength(17); expect(screen.getByRole('status').textContent).not.toContain('未能读取');
+    expect(screen.getAllByRole('article')).toHaveLength(18); expect(screen.getByRole('status').textContent).not.toContain('未能读取');
   });
   it('handles strict-mode remount without a stale result overriding the new request', async () => {
     let finish: (response: Response) => void = () => {};
     const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => {finish = resolve;})).mockResolvedValueOnce(response()); vi.stubGlobal('fetch', fetcher);
     render(<StrictMode><Diagnostics/></StrictMode>); await screen.findByRole('article', {name: 'A 股 · Eastmoney'});
-    await act(async () => {finish(response({bad: true}));}); expect(screen.getAllByRole('article')).toHaveLength(17);
+    await act(async () => {finish(response({bad: true}));}); expect(screen.getAllByRole('article')).toHaveLength(18);
     expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
   });
   it('keeps distinct view times and preserves provider stops and uncertainty', async () => {

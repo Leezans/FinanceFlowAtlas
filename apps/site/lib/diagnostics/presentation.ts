@@ -19,6 +19,7 @@ export const diagnosticViews = [
   {source: 'treasury-tic', view: 'latest', name: '美国 · TIC 最新期', scope: '月度跨境证券净交易，非交易所日内资金'},
   {source: 'treasury-tic', view: 'history', name: '美国 · TIC 历史', scope: '最近 12 期独立缓存，非实时数据'},
   {source: 'deribit-options', view: 'default', name: '期权 · Deribit', scope: 'BTC / ETH 单交易所期权快照，来源24小时成交额；非资金净流入'},
+  {source: 'taifex-options', view: 'default', name: '期权 · 台湾期交所', scope: '三类法人日度买卖契约金额，TWD；不是实时行情或净资金流'},
 ] as const;
 const instant = z.string().max(40).datetime({offset: true}).refine(value => Number.isFinite(Date.parse(value))).nullable();
 const state = z.enum(['idle', 'cooldown', 'busy_or_unconfirmed', 'stopped', 'outcome_unconfirmed', 'unknown']);
