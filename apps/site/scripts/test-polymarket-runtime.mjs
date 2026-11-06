@@ -26,7 +26,7 @@ const {outputFiles}=await build({stdin:{contents:`
   }
   return polymarketHandler(request);
  }};`,resolveDir:root,sourcefile:'polymarket-offline-worker.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
-const migration=await readFile(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8');
+const migration=(await readFile(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8'))+'\n--> statement-breakpoint\n'+(await readFile(new URL('../drizzle/0021_polymarket_interest_cooldown.sql',import.meta.url),'utf8'));
 const {outputFiles:modelFiles}=await build({stdin:{contents:"export {MAX_CACHE_AGE_MS} from './lib/polymarket/model';export {fixture,market,snapshot} from './tests/polymarket-fixture';",resolveDir:root,sourcefile:'polymarket-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
 const {MAX_CACHE_AGE_MS,fixture,market,snapshot}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
 const url='https://test.invalid/api/v1/polymarket/snapshot';

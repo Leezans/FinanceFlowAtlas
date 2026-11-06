@@ -503,3 +503,11 @@ its stage expires. The page uses the shared finite batch controller, and
 Only explicit, valid continuation hints advance that job; ordinary failures and
 cooldowns are not fast retries. No unattended collector is installed. See
 [batch bounds and the reproducible counterexample](docs/ASHARE-REFRESH-SCHEDULING.md#finite-acquisition-batches-are-separate-from-minute-checks).
+
+
+## Optional Polymarket open-interest amounts
+
+See [the source, coverage and cooldown contract](docs/polymarket-open-interest.md).
+This separate private view weights area by verified-unit USDC open interest for
+at most 20 hot-sample conditions, never by unverified Gamma volume or inferred
+net flow. Apply appended migration 0021; do not reset existing source gates.

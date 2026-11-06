@@ -34,3 +34,11 @@ export function categoryMatrix(rows:PolymarketMarket[]):MatrixGroup[]{
  return [{id:'categories',label:'来源分类与标签',items:[...categories].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([id,{row,count}])=>({id,label:categoryLabel(row),displayValue:`${count} 个市场`,detail:'点击查看完整市场问题',colorValue:count,weight:1}))}];
 }
 export function marketMatrix(rows:PolymarketMarket[],category:string,metric:Metric):MatrixGroup[]{const selected=rows.filter(r=>categoryKey(r)===category);return selected.length?[{id:category,label:categoryLabel(selected[0]),items:selected.map(r=>marketItem(r,metric))}]:[];}
+
+/** Only verified USDC open-interest values declare monetary comparability. */
+export function interestMatrix(rows:PolymarketMarket[],values:ReadonlyMap<string,number>):MatrixGroup[]{
+ return rows.length?[{id:'open-interest',label:'热门样本中的未平仓持仓',items:rows.map(row=>{
+  const value=row.condition_id?values.get(row.condition_id)??null:null;
+  return {id:row.id,label:row.question,displayValue:value===null?'来源未返回':`${formatSourceVolume(value)} USDC`,colorValue:value,amount:{value,currency:'USDC',comparisonKey:'polymarket-priced-gross-open-interest'},detail:'当前样本的持仓估值 · 非成交额、非净流入'};
+ })}]:[];
+}

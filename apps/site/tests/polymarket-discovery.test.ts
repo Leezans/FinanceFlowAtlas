@@ -9,7 +9,7 @@ import {D1PolymarketGate} from '../lib/polymarket/source-gate';
 import type {GateD1} from '../lib/ashare/source-gate';
 import {fixture,market,snapshot,ISO} from './polymarket-fixture';
 function database(){
- const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8'));
+ const sql=new DatabaseSync(':memory:');sql.exec((readFileSync(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../drizzle/0021_polymarket_interest_cooldown.sql',import.meta.url),'utf8')));
  const db:GateD1={prepare(query){return {bind(...values){return {async run(){const results=sql.prepare(query).all(...values as SQLInputValue[]) as Record<string,unknown>[];return {success:true,results,meta:{changes:query.startsWith('UPDATE')?results.length:0}};}};}};}};
  return {sql,db};
 }

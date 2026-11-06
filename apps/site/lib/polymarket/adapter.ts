@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {PolymarketCoverage} from './transport';
 import {strictJSON} from '../ashare/strict-json';
-import {marketSchema,keysetSnapshotSchema,hotSnapshotSchema,MAX_MARKETS,HOT_MARKETS,type PolymarketMarket,type PolymarketKeysetSnapshot,type PolymarketHotSnapshot} from './model';
+import {conditionSchema,marketSchema,keysetSnapshotSchema,hotSnapshotSchema,MAX_MARKETS,HOT_MARKETS,type PolymarketMarket,type PolymarketKeysetSnapshot,type PolymarketHotSnapshot} from './model';
 export class PolymarketError extends Error {
  constructor(readonly code:string,readonly denied=false,readonly retryAfterMs=0){super(code);}
 }
@@ -37,7 +37,7 @@ function parseMarket(value:unknown,fetched:string):PolymarketMarket|null{
  const direct=typeof row.category==='string'&&row.category.trim()?row.category.trim():null;
  const category=direct??tags[0]?.label??'未分类';
  const candidate=marketSchema.safeParse({
-  id:row.id,question:row.question,category,category_basis:direct?'source_category':tags.length?'source_tag':'unclassified',tags,
+  id:row.id,question:row.question,condition_id:typeof row.conditionId==='string'&&conditionSchema.safeParse(row.conditionId.toLowerCase()).success?row.conditionId.toLowerCase():null,category,category_basis:direct?'source_category':tags.length?'source_tag':'unclassified',tags,
   outcomes:outcomes.map((name,index)=>({name,price:prices[index]})),
   volume_24h:row.volume24hr??null,volume_unit:'source_reported',
   source_record_updated_at:nullableInstant(row.updatedAt),source_observed_at:null,

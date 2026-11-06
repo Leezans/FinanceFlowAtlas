@@ -70,7 +70,7 @@ export default function MatrixHeatmap({ groups, title, description, colorMeaning
   return <section className={s.root} aria-label={title} data-palette={colorPalette}>
     <header className={s.heading}><div><p className={s.eyebrow}>MATRIX VIEW</p><h2>{title}</h2>{description && <p>{description}</p>}</div><span className={s.viewLabel}>{area.compatible ? '金额面积矩阵' : '信息矩阵'}</span></header>
     <div className={s.meanings}><span>面积：{areaMeaning}</span><span>颜色：{colorMeaning}</span></div>
-    {area.entries.length > 0 && <p className={s.gridHint}>{area.compatible ? `区块面积严格按当前范围内金额绝对值分配（${area.currency}）；正负方向由颜色区分。零值与缺失不分配面积。` : area.reason === 'incomparable' ? '币种、指标或统计口径不可直接比较：使用等宽信息卡，面积不代表金额，不合计。' : '没有可比较的金额指标：使用等宽信息卡，面积不代表金额。'}</p>}
+    {area.entries.length > 0 && <p className={s.gridHint}>{area.compatible ? `区块面积严格按当前范围内金额绝对值分配（${area.currency}）；${colorMode==='signed'?'正负方向由颜色区分。':''}零值与缺失不分配面积。` : area.reason === 'incomparable' ? '币种、指标或统计口径不可直接比较：使用等宽信息卡，面积不代表金额，不合计。' : '没有可比较的金额指标：使用等宽信息卡，面积不代表金额。'}</p>}
     {!area.compatible && area.entries.length > 0 && <p className={s.gridHint}>全部 {area.entries.length} 个区块 · 在矩阵内滚动查看，或按 Tab 逐项选择</p>}
     <div ref={host} className={s.canvas} data-layout={layoutMode} data-matrix-empty={!area.entries.length ? 'true' : undefined}>
       {!area.entries.length ? <div className={s.empty} role="status"><span className={s.emptyIcon} aria-hidden="true">▦</span><h3>{emptyTitle}</h3><p>{emptyMessage}</p>{emptyNote && <small>{emptyNote}</small>}</div>

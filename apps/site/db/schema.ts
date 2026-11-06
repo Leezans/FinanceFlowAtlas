@@ -160,6 +160,8 @@ export const ashareStagedAcquisitions=sqliteTable('ashare_staged_acquisitions',{
 export const polymarketSourceGate=sqliteTable('polymarket_source_gate',{
  id:text('id').primaryKey(),status:text('status').notNull(),leaseToken:text('lease_token'),payload:text('payload'),errorCode:text('error_code'),
  checkedMs:integer('checked_ms').notNull().default(0),updatedMs:integer('updated_ms').notNull().default(0),notBeforeMs:integer('not_before_ms').notNull().default(0),
+ leaseView:text('lease_view'),interestNotBeforeMs:integer('interest_not_before_ms').notNull().default(0),
+ interestCheckedMs:integer('interest_checked_ms').notNull().default(0),interestErrorCode:text('interest_error_code'),
 },t=>[
  check('polymarket_gate_id',sql`${t.id} = 'active_markets'`),
  check('polymarket_gate_status',sql`${t.status} IN ('idle','busy','blocked')`),
