@@ -68,6 +68,14 @@ volume. Price/volume decimal strings stay exact through ingestion and display.
 The public API returns no per-ticker observation time: `source_observed_at` is
 `null`, latency is unknown, and `fetched_at` only records acquisition completion.
 
+The quote matrix calculates `(last price − 24h VWAP) / 24h VWAP × 100` for
+directional color. Both source decimals are scaled to exact integers before
+subtraction, so nearby prices cannot collapse into a false zero direction.
+Only the final display ratio is floating point; raw decimal text is unchanged.
+Nonzero deviations smaller than 0.0001% retain their sign and show `<0.0001%`.
+Equal values remain neutral. This calculated deviation is not a source-reported
+24h return, monetary turnover, or capital flow and never determines tile area.
+
 ## Acquisition, stale data and denial
 
 - `/api/v1/crypto/kraken/status` inspects metadata but never fetches the provider.

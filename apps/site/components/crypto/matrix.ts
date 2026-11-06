@@ -13,11 +13,21 @@ export function formatCryptoNumber(value:string|number):string{
  const [whole,fraction='']=String(value).split('.'),tail=fraction.replace(/0+$/,'');
  return whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')+(tail?'.'+tail:'');
 }
+/** Keep the source's 12 decimal places until after subtraction. Converting two
+ * nearby prices to Number first can round both to the same value and erase a
+ * known direction. Only the final presentation ratio uses floating point.
+ */
+function quoteInteger(value:string):bigint|null{
+ if(!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,12})?$/.test(value))return null;
+ const [whole,fraction='']=value.split('.');
+ const integer=BigInt(whole)*BigInt(10)**BigInt(12)+BigInt(fraction.padEnd(12,'0'));
+ return integer>BigInt(0)?integer:null;
+}
 /** A calculated price/VWAP comparison, never a return, volume flow or valuation. */
 export function priceVwapDeviation(row:KrakenRow):number|null{
- const price=Number(row.last_price_usd),vwap=Number(row.vwap_usd_24h);
- if(!Number.isFinite(price)||price<=0||!Number.isFinite(vwap)||vwap<=0)return null;
- const value=(price/vwap-1)*100;
+ const price=quoteInteger(row.last_price_usd),vwap=quoteInteger(row.vwap_usd_24h);
+ if(price===null||vwap===null)return null;
+ const value=Number(price-vwap)/Number(vwap)*100;
  return Number.isFinite(value)?value:null;
 }
 export function formatDeviation(value:number|null):string{
