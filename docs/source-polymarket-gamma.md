@@ -143,3 +143,28 @@ transient errors, expiry, denial persistence and cancellation after an early HTT
 response are tested. These checks do not prove provider availability from the
 production host. Live release verification must use the normal gated API route,
 not an ungated probe, and must stop if the source denies access.
+
+## Record and display integrity (2026-11-06)
+
+Source record timestamps are calendar-validated before UTC normalization. An
+impossible date such as February 30 is excluded and counted, never normalized
+into an invented March timestamp. Valid leap days, timezone offsets and
+microsecond inputs retain the existing millisecond timestamp contract. The
+record update time remains metadata, not price observation time.
+
+Malformed JSON inside a record's encoded `outcomes` or `outcomePrices` excludes
+that record, just like other invalid outcome arrays. It does not discard the
+other valid records. Malformed top-level transport JSON, duplicate market IDs,
+and an acquisition with no valid records still fail rather than publish an
+empty or ambiguous sample.
+
+Displayed probabilities shift the validated decimal price string by exactly
+two places. A nonzero source price cannot round to 0%, nor can a price below one
+round to 100%; cards, accessibility labels and outcome details agree. Volume
+retains the precision of the validated source JSON number, using scientific
+notation for very small values rather than displaying a false zero. This does
+not recover precision absent from the original JSON number contract. Unit,
+coverage and timestamps remain unverified where the source does not establish
+them. Neither probability nor unverified-unit volume is treated as a comparable
+monetary amount, so the matrix intentionally remains equal-area information
+cards and does not offer a misleading money-weighted treemap or sum.

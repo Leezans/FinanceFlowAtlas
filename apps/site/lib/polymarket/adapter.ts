@@ -1,3 +1,4 @@
+import {z} from 'zod';
 import type {PolymarketCoverage} from './transport';
 import {strictJSON} from '../ashare/strict-json';
 import {marketSchema,keysetSnapshotSchema,hotSnapshotSchema,MAX_MARKETS,HOT_MARKETS,type PolymarketMarket,type PolymarketKeysetSnapshot,type PolymarketHotSnapshot} from './model';
@@ -7,12 +8,19 @@ export class PolymarketError extends Error {
 function fail(code:string):never{throw new PolymarketError(code);}
 function object(value:unknown):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))fail('invalid_schema');return value as Record<string,unknown>;}
 function list(value:unknown):unknown[]{
- if(typeof value==='string'){if(value.length>16_384)fail('invalid_outcomes');value=strictJSON(value);}
+ if(typeof value==='string'){
+  if(value.length>16_384)fail('invalid_outcomes');
+  // Encoded fields belong to this record. Keep top-level transport JSON fatal,
+  // but classify malformed nested JSON like other invalid outcome arrays.
+  try{value=strictJSON(value);}catch{fail('invalid_outcomes');}
+ }
  if(!Array.isArray(value)||value.length<2||value.length>16)fail('invalid_outcomes');return value;
 }
+const sourceInstant=z.string().datetime({offset:true});
 function nullableInstant(value:unknown):string|null{
  if(value==null||value==='')return null;
- if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(value)||!Number.isFinite(Date.parse(value)))fail('invalid_timestamp');
+ // Date.parse alone normalizes impossible dates (such as February 30).
+ if(typeof value!=='string'||!sourceInstant.safeParse(value).success||!/(?:Z|[+-]\d{2}:\d{2})$/.test(value)||!Number.isFinite(Date.parse(value)))fail('invalid_timestamp');
  return new Date(value).toISOString();
 }
 function parseMarket(value:unknown,fetched:string):PolymarketMarket|null{

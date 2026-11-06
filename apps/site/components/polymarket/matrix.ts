@@ -1,6 +1,20 @@
 import type {PolymarketMarket} from '@/lib/polymarket/model';
 import type {MatrixGroup,MatrixItem} from '@/lib/matrix/model';
 export type Metric='probability'|'volume';
+/** Shift validated source decimal text by two places, without rounding a
+ * positive price to 0% or a price below one to 100%. */
+export function formatProbability(price:string|null):string{
+ if(price===null)return '来源未提供';
+ const [whole,fraction='']=price.split('.');
+ const integer=(whole+fraction.padEnd(2,'0').slice(0,2)).replace(/^0+(?=\d)/,'');
+ const tail=fraction.slice(2).replace(/0+$/,'');
+ return `${integer}${tail?'.'+tail:''}%`;
+}
+/** Volume is a source JSON number with an unverified unit, not money. Keep its
+ * represented precision; scientific notation avoids hundreds of leading zeros. */
+export function formatSourceVolume(value:number):string{
+ return value>0&&value<1e-20?String(value):value.toLocaleString('zh-CN',{maximumSignificantDigits:21});
+}
 export function namedOutcome(row:PolymarketMarket){
  const binary=row.outcomes.length===2&&row.outcomes.some(o=>o.name.toLowerCase()==='yes')&&row.outcomes.some(o=>o.name.toLowerCase()==='no');
  return binary?row.outcomes.find(o=>o.name.toLowerCase()==='yes')!:row.outcomes[0];
@@ -8,7 +22,7 @@ export function namedOutcome(row:PolymarketMarket){
 export function marketItem(row:PolymarketMarket,metric:Metric):MatrixItem{
  const outcome=namedOutcome(row),value=metric==='probability'?(outcome.price===null?null:Number(outcome.price)):row.volume_24h;
  return {id:row.id,label:row.question,weight:1,colorValue:value,
- displayValue:value===null?'来源未提供':metric==='probability'?`${(value*100).toLocaleString('zh-CN',{maximumFractionDigits:4})}%`:`${value.toLocaleString('zh-CN',{maximumFractionDigits:4})} · 来源单位`,
+ displayValue:value===null?'来源未提供':metric==='probability'?formatProbability(outcome.price):`${formatSourceVolume(value)} · 来源单位`,
  detail:metric==='probability'?`结果：${outcome.name} · 价格隐含概率`:'平台报告的 24 小时成交量 · 单位待核实'};
 }
 export function categoryKey(row:PolymarketMarket){return `${row.category_basis}:${row.category}`;}
