@@ -22,6 +22,7 @@ function setup(row: Record<string, unknown> = base()) {
 }
 afterEach(() => {vi.useRealTimers(); vi.unstubAllGlobals();});
 describe('strictly read-only source diagnostics', () => {
+  it('recognizes both recorded Deribit cache schema versions without selecting financial rows',()=>{const q=DIAGNOSTIC_QUERIES.find(q=>q.source==='deribit-options')!;expect(q.sql).toContain("IN ('deribit-btc-options/1','deribit-options/2')");expect(q.sql).toContain("'$.fetched_at'");expect(q.sql).toContain("'$.acquisition_started_at'");expect(q.sql).not.toContain("'$.rows'");});
   it('uses only fixed bounded SELECTs, zero network, and private responses', async () => {
     const t = setup(), response = await t.handler(request()), body = await readBody(response);
     expect(response.status).toBe(200);

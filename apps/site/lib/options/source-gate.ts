@@ -1,9 +1,9 @@
 import {SourceGateError,type GateD1,type D1Result} from '../ashare/source-gate';
-import {REFRESH_MS,MAX_BYTES,snapshotSchema,type OptionsSnapshot} from './model';
+import {REFRESH_MS,MAX_CACHE_BYTES,snapshotSchema,type OptionsSnapshot} from './model';
 import {strictJSON} from '../ashare/strict-json';
 import type {OptionsGate,OptionsOutcome} from './handler';
 const NOW="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
-/** Independent acquisition gate with validated public official report cache. Denied/busy states never expire or reset. */
+/** One Deribit provider gate for every supported option currency. The legacy btc_options ID is deliberately retained; adding currencies never resets its state. Denied/busy states never expire or reset. */
 export const DERIBIT_SQL={
  acquire:`UPDATE deribit_options_gate SET status='busy', lease_token=?, updated_ms=${NOW} WHERE id='btc_options' AND status='idle' AND not_before_ms<=${NOW} RETURNING status`,
  inspect:`SELECT status, not_before_ms, payload, ${NOW} AS now_ms FROM deribit_options_gate WHERE id='btc_options'`,
@@ -17,7 +17,7 @@ export class D1OptionsGate implements OptionsGate{
   if(!row||!['idle','busy','blocked'].includes(String(row.status))||typeof row.not_before_ms!=='number'||!Number.isSafeInteger(row.not_before_ms)||row.not_before_ms<0)throw new SourceGateError('source_gate_unavailable');
   const state=row.status as 'idle'|'busy'|'blocked';let snapshot:OptionsSnapshot|null=null;
   if(state==='idle'&&row.payload!==null){
-   try{if(typeof row.payload!=='string'||row.payload.length>MAX_BYTES)throw new Error();snapshot=snapshotSchema.parse(strictJSON(row.payload));}
+   try{if(typeof row.payload!=='string'||row.payload.length>MAX_CACHE_BYTES)throw new Error();const raw=strictJSON(row.payload);snapshot=snapshotSchema.parse(raw);if((raw as {schema?:unknown}).schema==='deribit-options/2'&&snapshot.coverage!=='deribit_btc_eth_options')throw new Error();}
    catch{throw new SourceGateError('source_gate_unavailable');}
   }
   return {state,retryAt:row.not_before_ms,snapshot};
@@ -38,8 +38,8 @@ export class D1OptionsGate implements OptionsGate{
   if(!token||!['success','temporary_failure','denied'].includes(outcome.kind)||!Number.isSafeInteger(delay)||delay<0)throw new SourceGateError('source_gate_unavailable');
   let payload:string|null=null;
   if(outcome.kind==='success'){
-   const candidate=snapshotSchema.safeParse(outcome.snapshot);if(!candidate.success)throw new SourceGateError('source_gate_unavailable');
-   payload=JSON.stringify(candidate.data);if(payload.length>MAX_BYTES)throw new SourceGateError('source_gate_unavailable');
+   const candidate=snapshotSchema.safeParse(outcome.snapshot);if(!candidate.success||candidate.data.coverage!=='deribit_btc_eth_options')throw new SourceGateError('source_gate_unavailable');
+   payload=JSON.stringify(candidate.data);if(payload.length>MAX_CACHE_BYTES)throw new SourceGateError('source_gate_unavailable');
   }else if(outcome.snapshot)throw new SourceGateError('source_gate_unavailable');
   const result=await this.run(DERIBIT_SQL.finish,outcome.kind==='denied'?'blocked':'idle',delay,outcome.kind==='denied'?1:0,payload,token);
   if(result.meta?.changes===0)throw new SourceGateError('source_stale_lease');if(result.meta?.changes!==1)throw new SourceGateError('source_gate_unavailable');

@@ -1,5 +1,5 @@
 import {strictJSON} from '../ashare/strict-json';
-import {SUMMARY_URL,INSTRUMENTS_URL,OptionsError,resultRows,parseMetadata,reusableMetadata,parseSummary} from './adapter';
+import {SUMMARY_URLS,INSTRUMENTS_URLS,OptionsError,resultRows,parseMetadata,reusableMetadata,parseSummary,combineSnapshots} from './adapter';
 import {REFRESH_MS,MAX_CACHE_AGE_MS,MAX_BYTES,type OptionsSnapshot,type OptionsReply} from './model';
 const DEADLINE_MS=15_000;
 export type OptionsOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:OptionsSnapshot};
@@ -52,10 +52,29 @@ export function createOptionsHandler(options:{gate:OptionsGate;fetcher?:typeof f
      return await readJSON(response,controller.signal);
     }finally{if(!response.body?.locked)void response.body?.cancel().catch(()=>{});}
    };
-   const summaries=resultRows(await fetchRows(SUMMARY_URL));
-   let metadata=reusableMetadata(snapshot,summaries,started),metadataFetched=snapshot?.metadata_fetched_at??'';
-   if(!metadata){metadata=parseMetadata(await fetchRows(INSTRUMENTS_URL));metadataFetched=new Date(now()).toISOString();}
-   const candidate=parseSummary(summaries,metadata,new Date(started).toISOString(),new Date(now()).toISOString(),metadataFetched);
+   // One fixed universe, one durable provider lease. A denied currency stops both.
+   // Summaries precede metadata so their observation interval stays coherent.
+   const currencies=['BTC','ETH'] as const, summaries=new Map<string,Record<string,unknown>[]>();
+   for(const currency of currencies)summaries.set(currency,resultRows(await fetchRows(SUMMARY_URLS[currency])));
+   const parts:OptionsSnapshot[]=[];let lastMetadataStart:number|undefined;
+   for(const currency of currencies){
+    const rows=summaries.get(currency)!;
+    let metadata=reusableMetadata(snapshot,rows,started,currency),metadataFetched=snapshot?.metadata_fetched_at[currency]??'';
+    if(!metadata){
+     // get_instruments has a separate low rate limit. Even one cold batch does not burst it.
+     if(lastMetadataStart!==undefined){
+      const delay=Math.max(0,1100-(performance.now()-lastMetadataStart));
+      if(delay)await new Promise<void>((resolve,reject)=>{
+       const stop=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);reject(new OptionsError(requestSignal.aborted?'source_aborted':'timeout'));};
+       const timer=setTimeout(()=>{controller.signal.removeEventListener('abort',stop);resolve();},delay);
+       controller.signal.addEventListener('abort',stop,{once:true});if(controller.signal.aborted)stop();
+      });
+     }
+     lastMetadataStart=performance.now();metadata=parseMetadata(await fetchRows(INSTRUMENTS_URLS[currency]),currency);metadataFetched=new Date(now()).toISOString();
+    }
+    parts.push(parseSummary(rows,metadata,new Date(started).toISOString(),new Date(now()).toISOString(),metadataFetched,currency));
+   }
+   const candidate=combineSnapshots(parts);
    releasing=true;await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate})),deadline.signal);token=undefined;
    snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
