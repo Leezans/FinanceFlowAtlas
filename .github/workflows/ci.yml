@@ -55,6 +55,36 @@ jobs:
       - name: Production build and asset verification
         run: npm run build
 
+  native:
+    name: Native workerd and D1 safety regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/site
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --include=dev --include=optional --no-audit --no-fund
+      # Each existing script owns an ephemeral local D1 database and intercepts
+      # every worker request with a network-disabled mock or synthetic service.
+      - name: Chronological migrations and read-only diagnostics
+        run: npm run test:diagnostics-runtime
+      - name: A-share CAS, backoff and permanent denial
+        run: npm run test:ashare-backoff-runtime
+      - name: A-share atomic snapshot rollback and cancellation
+        run: npm run test:ashare-snapshots-runtime
+      - name: TIC cross-worker denial, redirect refusal and Retry-After
+        run: npm run test:tic-runtime
+      - name: Deribit atomic commit, uncertain outcomes and migrations
+        run: npm run test:deribit-runtime
+
   web:
     name: Web tests, types and build
     runs-on: ubuntu-24.04

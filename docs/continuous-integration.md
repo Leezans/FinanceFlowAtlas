@@ -1,7 +1,7 @@
 # Continuous integration
 
 `.github/workflows/ci.yml` runs on pull requests targeting `main` and pushes
-to `main`. It reports three independent checks:
+to `main`. It reports four independent checks:
 
 - **Site:** existing synthetic Vitest tests, ESLint, TypeScript, the offline
   build-asset regression scripts, and the production build including its
@@ -11,6 +11,14 @@ to `main`. It reports three independent checks:
 - **Python:** synthetic core/API tests and the dependency-free AKShare
   normalization tests. The `test` extra declares the HTTPX dependency required
   by FastAPI's in-process TestClient.
+- **Native workerd/D1:** five existing offline suites exercise A-share gate
+  contention/backoff and atomic snapshot rollback, TIC cross-worker denials and
+  Retry-After, and Deribit atomic publication, uncertain acknowledgments and
+  preservation of other tables during migration. Diagnostics applies the full
+  migration sequence in filename order and verifies read-only queries preserve
+  the database. They use ephemeral local databases and synthetic
+  responses, with every worker fetch intercepted by a network-disabled mock or
+  a fixed synthetic outbound service. No remote D1 account is used.
 
 ## Boundaries
 
@@ -39,9 +47,12 @@ network access. This workflow is not an egress sandbox and does not establish
 provider availability or production readiness.
 
 The standalone `packages/ashare-renderer` package currently has no lockfile and
-is not a separate CI target. Native workerd/D1 runtime and browser acceptance
-checks remain separate release checks, rather than being silently presented
-as covered by these unit/build jobs.
+is not a separate CI target. Native coverage is limited to the five named
+suites, not every provider or runtime scenario. Browser acceptance and the
+remaining native suites remain separate release checks. Migration assertions
+in the existing Deribit suite intentionally fail when the expected migration
+set changes; review and update them alongside new migrations. The diagnostics
+suite checks the current fresh schema, not every historical upgrade path.
 
 ## Run the same checks locally
 
@@ -65,6 +76,21 @@ node node_modules/typescript/bin/tsc --noEmit
 npm run test:build-assets
 npm run build
 ```
+
+The native job runs separately from the unit/build job. From `apps/site`, after
+the same locked install:
+
+```sh
+npm run test:diagnostics-runtime
+npm run test:ashare-backoff-runtime
+npm run test:ashare-snapshots-runtime
+npm run test:tic-runtime
+npm run test:deribit-runtime
+```
+
+Do not replace the test transports with live fetches, add secrets, persist the
+fixture databases, or run these scripts against production. There are no
+automatic test retries; an uncertain or failed result must stay visible.
 
 The workflow does not change branch protection. A successful local run is not
 a successful GitHub Actions run; inspect the checks for the exact remote commit.
