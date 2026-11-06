@@ -98,6 +98,12 @@ HTTP 401/403/407/429/451, redirects, HTML challenges, and known JSON-RPC access 
 off and honor longer Retry-After. Denied/busy/uncertain leases are never reset or
 taken over. Busy or unconfirmed admission also suppresses last-good display; it is not treated as an ordinary source outage. Owned admission and cleanup remain registered with Workers waitUntil,
 including late D1 settlement after an HTTP response or cancellation.
+Before attempting a success write, the handler validates complete BTC+ETH coverage
+and the serialized cache limit using the same checks retained independently by
+the D1 gate. A deterministic preflight failure releases only its owned lease as
+a temporary failure, applies the shared cooldown and preserves the exact previous
+payload and observation clocks. Still-valid evidence remains stale; an actual
+uncertain D1 write remains suppressed and is never retried or cleaned up blindly.
 
 `0022_deribit_options_gate.sql` originally added this provider gate and cache.
 The BTC/ETH extension deliberately retains the same table and legacy

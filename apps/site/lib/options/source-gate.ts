@@ -1,6 +1,7 @@
 import {SourceGateError,type GateD1,type D1Result} from '../ashare/source-gate';
 import {REFRESH_MS,MAX_CACHE_BYTES,snapshotSchema,type OptionsSnapshot} from './model';
 import {strictJSON} from '../ashare/strict-json';
+import {serializeCombinedSnapshot} from './adapter';
 import type {OptionsGate,OptionsOutcome} from './handler';
 const NOW="(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 /** One Deribit provider gate for every supported option currency. The legacy btc_options ID is deliberately retained; adding currencies never resets its state. Denied/busy states never expire or reset. */
@@ -38,8 +39,7 @@ export class D1OptionsGate implements OptionsGate{
   if(!token||!['success','temporary_failure','denied'].includes(outcome.kind)||!Number.isSafeInteger(delay)||delay<0)throw new SourceGateError('source_gate_unavailable');
   let payload:string|null=null;
   if(outcome.kind==='success'){
-   const candidate=snapshotSchema.safeParse(outcome.snapshot);if(!candidate.success||candidate.data.coverage!=='deribit_btc_eth_options')throw new SourceGateError('source_gate_unavailable');
-   payload=JSON.stringify(candidate.data);if(payload.length>MAX_CACHE_BYTES)throw new SourceGateError('source_gate_unavailable');
+   try{payload=serializeCombinedSnapshot(outcome.snapshot);}catch{throw new SourceGateError('source_gate_unavailable');}
   }else if(outcome.snapshot)throw new SourceGateError('source_gate_unavailable');
   const result=await this.run(DERIBIT_SQL.finish,outcome.kind==='denied'?'blocked':'idle',delay,outcome.kind==='denied'?1:0,payload,token);
   if(result.meta?.changes===0)throw new SourceGateError('source_stale_lease');if(result.meta?.changes!==1)throw new SourceGateError('source_gate_unavailable');

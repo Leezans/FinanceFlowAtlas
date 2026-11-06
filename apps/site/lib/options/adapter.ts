@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {MAX_ROWS,METADATA_MAX_AGE_MS,OPTION_CURRENCIES,coverageForCurrencies,snapshotSchema,type OptionCurrency,type OptionsSnapshot,type OptionRow} from './model';
+import {MAX_ROWS,MAX_CACHE_BYTES,METADATA_MAX_AGE_MS,OPTION_CURRENCIES,coverageForCurrencies,snapshotSchema,type OptionCurrency,type OptionsSnapshot,type OptionRow} from './model';
 export const SUMMARY_URLS={
  BTC:'https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=option',
  ETH:'https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=ETH&kind=option',
@@ -76,4 +76,12 @@ export function combineSnapshots(parts:OptionsSnapshot[]):OptionsSnapshot {
   net_capital_flow:null,delay_policy:'source_delay_unconfirmed',rows:ordered.flatMap(part=>part.rows),
  });
  if(!parsed.success)return fail('invalid_combined_snapshot');return parsed.data;
+}
+/** Shared, side-effect-free commit preflight. Run before a release can reach D1. */
+export function serializeCombinedSnapshot(snapshot:unknown):string {
+ const candidate=snapshotSchema.safeParse(snapshot);if(!candidate.success)return fail('invalid_snapshot');
+ if(candidate.data.coverage!=='deribit_btc_eth_options')return fail('incomplete_option_coverage');
+ // Every validated string is ASCII, so serialized length is also its UTF-8 byte count.
+ const payload=JSON.stringify(candidate.data);if(payload.length>MAX_CACHE_BYTES)return fail('byte_budget');
+ return payload;
 }
