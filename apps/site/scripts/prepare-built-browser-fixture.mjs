@@ -20,7 +20,7 @@ const server=join(dist,'server');
 const modulePaths=(await readdir(server,{recursive:true})).filter(p=>/\.m?js$/.test(p));
 modulePaths.sort((a,b)=>a===config.main?-1:b===config.main?1:a.localeCompare(b));
 const mf=new Miniflare({modules:modulePaths.map(p=>({type:'ESModule',path:join(server,p)})),modulesRoot:server,compatibilityDate:config.compatibility_date,compatibilityFlags:config.compatibility_flags,d1Databases:{DB:'synthetic-browser-fixture-only'},fetchMock:mock});
-const routes=['/','/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/forex'];
+const routes=['/','/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/forex','/diagnostics'];
 const headers={'oai-authenticated-user-id':'synthetic-offline-qa','oai-authenticated-user-email':'synthetic-qa@example.invalid'};
 const bootstrap=String.raw`<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'; worker-src 'none'">
 <script data-offline-qa-bootstrap>

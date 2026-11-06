@@ -16,16 +16,18 @@ export const marketLinks = [
   {href: '/polymarket', label: '预测市场矩阵'},
   {href: '/futures', label: '期货持仓'},
   {href: '/forex', label: '外汇行情'},
+  {href: '/diagnostics', label: '来源状态'},
   {href: '/', label: '首页 / A 股'},
 ] as const;
 
 /** Plain links avoid prefetching gated source pages from a navigation surface. */
 export default function MarketNavigation() {
   const pathname = usePathname();
+  const currentPath = pathname === '/' ? '/' : pathname?.replace(/\/+$/, '');
   return <div className={s.bar}>
     <nav className={s.links} aria-label="市场导航">
       {marketLinks.map(link => <a key={link.href} href={link.href}
-        aria-current={pathname === link.href ? 'page' : undefined}
+        aria-current={currentPath === link.href ? 'page' : undefined}
         className={link.href === '/ashare' ? s.primary : undefined}>
         {link.label}
       </a>)}

@@ -128,3 +128,15 @@ only during isolated test setup, never in the diagnostic handler.
 These tests are not live-provider acceptance, production database inspection,
 private-login verification or scheduler deployment. The hosting authentication
 boundary must be verified separately through the normal authorized session.
+
+## User-visible source summary
+
+The shared navigation's **来源状态** link opens `/diagnostics`. The page performs one same-origin `GET /api/v1/diagnostics` on entry, or when **重新读取状态** is explicitly selected. It never polls, calls source `/status` or `/snapshot` routes, changes a gate, or acquires provider data. A 10-second deadline aborts the browser read; the API retains its own narrower SELECT deadlines. Leaving the page aborts the pending read. Rereads are mutually exclusive and discard earlier results before loading, so a failed refresh cannot present old metadata as current.
+
+All source/view names and labels are fixed; unknown schemas, duplicate views, invalid timestamps, HTML/login responses and oversized bodies fail closed. Valid diagnostic 503 responses remain displayable. No raw error, financial payload, source URL, lease identifier or permission credential is rendered. Existing owner-private hosting is unchanged.
+
+Status wording is deliberately limited: idle is **空闲，不代表可用**, a persisted stop stays **已停止**, and unavailable / absent metadata remain distinct. Cache expiry is compared only to that row's database observation time. An unexpired cache is still unvalidated; a missing expiry gives unknown freshness. The results are a read-time snapshot, not an auto-refreshing view.
+
+Acquisition, collection start, cache commit, cache expiry, check and coordination timestamps retain separate labels. Source observation time / financial reporting period is **未核验**, not substituted with acquisition time. No endpoint expansion or financial-payload reading was added to populate that field. The background installation state remains **未知**, even when job records exist. No change in this UI establishes real global data or unattended minute updates.
+
+Validation includes `tests/diagnostics-ui.test.tsx`, existing navigation coverage, `test:diagnostics-runtime`, and full build checks. For safe browser QA, run `node scripts/prepare-diagnostics-browser-fixture.mjs dist <absolute-output-directory>`, then use the supported static preview. This runs the unchanged built Worker in isolated local workerd and keeps its built assets unchanged; an early test-only bootstrap supplies visibly labeled synthetic mixed/expired/stopped/unknown, empty-503, authorization and malformed-HTML scenarios while blocking provider requests. Never deploy the fixture or treat it as live-data evidence.

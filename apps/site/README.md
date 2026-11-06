@@ -523,3 +523,5 @@ net flow. Apply appended migration 0021; do not reset existing source gates.
 no provider calls, database writes, initialization or gate repair. It distinguishes
 coordination state, recorded cache times and unverified scheduler installation.
 It does not certify valid live data. See [the contract and status-route audit](docs/READ-ONLY-DIAGNOSTICS.md).
+
+The shared **来源状态** navigation entry opens `/diagnostics`, a read-only metadata summary. It distinguishes stops, missing records, unknown freshness and recorded cache expiry, separates acquisition/check clocks from unverified source observation time, and never starts collection or promises an installed background schedule. It reads once on entry or explicit reread, with no polling. See `docs/READ-ONLY-DIAGNOSTICS.md` for boundaries and offline synthetic UI validation.
