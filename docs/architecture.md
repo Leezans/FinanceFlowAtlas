@@ -1,7 +1,8 @@
 # FinanceFlowAtlas architecture
 
-Reviewed 2026-11-05 against main `6715f086`, including CVM and the unified FX/crypto matrices.
-The global-country matrix migration below builds on that baseline.
+Financial display and country-entry contracts reviewed 2026-11-06 against main
+`c7437e6da6bdaebe9a1ed8b9c6ca963d48523844` (private Site v59 source).
+See [the cross-market audit](cross-market-audit-2026-11-06.md) for evidence and limits.
 This is a modular monolith. Adding another market must not require another copy
 of the renderer, or pretend that its financial measure equals another source's.
 
@@ -63,7 +64,7 @@ Use these responsibilities consistently:
 | Application service | `lib/*/handler.ts`, `lib/fx/service.ts` | Admission, refresh, cache publication, error transitions | Chart layout |
 | Platform adapter | `lib/*/host.ts`, `source-gate.ts` | Worker lifetime and atomic D1 operations | Financial interpretation |
 | Matrix projection | `components/futures/matrix.ts`, `components/tpex/matrix.ts` | Pure transformation from validated evidence to labeled display values | Fetching, React, source admission |
-| Presentation contract | `lib/matrix/model.ts` | Item/group types, scale classification, accessible labels, layout weights | Provider units, financial inference |
+| Presentation contract | `lib/matrix/model.ts`, `lib/matrix/layout.ts` | Item/group types, declared amount comparability, scale classification, accessible labels, monetary geometry | Provider units, financial inference |
 | Renderer | `components/matrix/MatrixHeatmap.tsx` | Layout, focus/hover, keyboard selection, readable density | Fetching, source conversion, data repair |
 | Page/controller | `components/*/*Workspace.tsx`, source page components | Scope, filters, selected item, lifecycle composition | A new parser, gate or copy of chart logic |
 
@@ -98,38 +99,51 @@ Shared display state is a separate concept from evidence state:
 - An uncertain acquisition outcome is not a temporary error that authorizes lease
   takeover. A generic “waiting for data” message must not hide this condition.
 
-`MatrixItem` deliberately contains display values, color values and positive
-layout weights only. Rich evidence remains in the source model, selected by stable
-IDs. The renderer never parses a formatted number or reconstructs hidden evidence.
+`MatrixItem` contains display values, independent color values and optional
+source-declared `amount: {value, currency, comparisonKey}` metadata. A signed
+amount retains its sign; the layout uses its absolute value. The legacy `weight`
+field does not determine area. Rich evidence remains in the source model, selected
+by stable IDs. The renderer never parses formatted text or derives money from a
+price, return, volume or color value.
 
 ## 5. One matrix language, appropriate geometry
 
-`MatrixHeatmap` is the common grouped-item renderer for futures, TPEx, CVM, FX,
-crypto and TIC country evidence. It supports:
+`MatrixHeatmap` is the common grouped-item renderer for A-share, futures, TPEx,
+CVM, FX, crypto, TIC, Japan MOF, annual equity context and Polymarket evidence.
+It supports:
 
-- Treemap for a small/hierarchical dataset with explicit area semantics.
-- Readable equal-area grid for dense industry/security data. All names remain
-  visible and keyboard accessible; scrolling replaces illegibly small labels.
+- Amount-weighted treemaps when all entries declare the same currency and
+  comparison key. Area is proportional to absolute monetary amounts without
+  minimum sizes, padding, signed cancellation or top-N truncation.
+- Readable information cards when comparable monetary amounts are absent.
+  Card width does not assert financial size. A legacy `layout` prop cannot
+  override the declared amount contract.
+- Optional wheel zoom, drag/pan, keyboard controls and complete numeric details
+  for monetary matrices. Zero and missing amounts receive no invented area and
+  remain distinguishable in the details.
 - Explicit color and area descriptions, a fixed scale when comparisons require
   one, and source-appropriate empty title/message/note.
 - A shared selection/readout model independent of D3. Readable grids do not run
   a discarded treemap layout.
 
-The existing ASEAN country × industry table is a genuine two-dimensional matrix.
-Do not flatten it into unrelated rectangles just to claim a single component.
-A-share still has a specialized industry treemap. Migrate its common mechanics
-only after preserving its source-specific drilldown. TIC now uses the common
-readable grid, preserving region/country navigation and treating a reported zero
-as a neutral equal-area tile, rather than dropping it from the primary view. A
-small family of renderers sharing a presentation contract is preferable to a
-universal widget with dozens of source-name conditionals.
+The ASEAN country × industry table preserves its two-dimensional coordinates.
+Selecting one receiving country also enables a same-year monetary treemap for
+its comparable specific industries, excluding overlapping/unspecified categories.
+A-share now uses the shared monetary renderer while retaining its source-specific
+industry-to-stock exploration and full numeric table. TIC uses the shared
+monetary renderer with region/country navigation. A small family of renderers
+sharing a presentation contract is preferable to a universal widget with dozens
+of source-name conditionals.
 
 Rules for any projection:
 
 1. Declare the selected measure, unit, color meaning and area meaning.
-2. Compute scale from the intended comparable universe, before search filtering.
-   Filtering must not silently recolor an unchanged value.
-3. Use equal areas unless a meaningful, validated positive weighting exists.
+2. Declare the color-scale universe. Full-source or fixed scales remain stable
+   through filtering; a current-visible-sample scale must explicitly say so.
+3. Declare comparable monetary amounts in their stated base currency unit before
+   assigning area. Normalize source multipliers such as USD millions, BRL cents
+   and 100 million JPY in the source adapter or projection, never in the renderer;
+   do not convert values already normalized by the adapter a second time.
 4. Retain original precision in details; round only the display deliberately.
 5. Resolve selection against the current snapshot. Never retain a stale object
    when a refresh changes or removes the selected item.
@@ -145,25 +159,36 @@ partial disclosed fund activity, not all Brazilian or foreign investment.
 
 ### Global entrypoint
 
-`/markets` leads with the existing TIC monthly US-equity net-transaction layer,
-not a fabricated worldwide market-flow total. `lib/tic/model.ts` owns its display
-contract; `lib/tic/matrix.ts` projects a single validated period to region →
-reported foreign residence; `TicMatrix` composes source controls with the common
-renderer. `TicLayer` remains responsible for the existing source lifecycle,
-country evidence, optional map and provenance. The projection does not fetch.
-Geographic views and total history are code-split and mounted only on demand.
+`/markets` selects a country's own market and defaults to China. Only the selected
+country workspace mounts. Current independent entries are China A-share order
+classification estimates, Taiwan TPEx institutional amounts, Japan MOF
+nonresident Japanese-security transactions and Brazil CVM disclosed fund trades.
+Each preserves its participant scope, observation period and currency. The Japan
+entry is explicitly a cross-border sample, not all Japanese domestic investors.
+The U.S. and other unconnected countries retain empty own-market matrices; no
+TIC counterparty, price, volume or simulated value fills that gap.
 
-TIC color magnitude uses the full source period before filtering. Equal country
-areas make zero observations visible and do not imply fund size. Palette choices
-swap rendering colors only, without changing values or signs. Missing countries
-get no invented tiles. Published issuer totals and their history stay separate
-from country records; history is loaded only when expanded below the matrix.
+TIC is available only in the separate U.S. cross-border supplement, mounted when
+opened. `lib/tic/model.ts` owns its contract; `lib/tic/matrix.ts` projects a single
+validated period to region → reported foreign residence. `TicLayer` owns its
+source lifecycle, country evidence, optional map and provenance. The security
+issuer remains the United States for every country row. The projection does not
+fetch; the country entrypoint does not combine these values into a global total.
+
+TIC color magnitude uses the full source period before filtering. Country area
+uses the absolute net transaction amount in USD, and region area sums country
+magnitudes without sign cancellation. Reported zero remains in details without
+area; missing countries get no invented tiles. Palette choices change colors,
+not values or signs. The published issuer total and its history stay separate
+from country rectangles; history is loaded only when expanded below the matrix.
 
 `GeographicNavigator` is a secondary, read-only 249-entry directory. Opening it
 never claims that 249 countries have financial observations. Direct country URLs,
-keyboard/map search and local-market links remain available. A-share, TPEx, CVM
-and ASEAN entry links keep their own units, periods, sources and acquisition gates.
-The global page neither fetches them speculatively nor adds their values to TIC.
+keyboard/map search and local-market links remain available. Country-specific
+and independent asset pages keep their own units, periods, sources and gates.
+The World Bank/WFE annual equity page is a separate market-size/liquidity context:
+capitalization and traded value are never net-flow substitutes, mixed-year area
+weights or a complete global total.
 
 ## 6. Cadence and persistence are source policies
 
@@ -173,11 +198,11 @@ five different things. Current code has materially different policies:
 
 | Source | Evidence | Acquisition/cache distinction |
 | --- | --- | --- |
-| A-share/Eastmoney | Provider-estimated participant-order net figures | 60-second evidence check; separate shared quiet/cooldown coordination; observations ephemeral |
+| A-share/Eastmoney | Provider-estimated participant-order net figures | Request-driven 60-second evidence checks; independent shared coordination and bounded owner-only D1 snapshots |
 | Sina | Provider industry quotes | Five-minute refresh; ephemeral evidence and independent coordination |
 | Treasury TIC | Monthly residence-based US equity transactions | Read-through report discovery/history, separately persisted validated reports |
 | ECB | Daily reference rates | One-hour success cooldown, seven-day acquired-cache expiry; shared validated D1 cache |
-| Kraken | Online USD spot catalog and ticker/rolling-24h metrics | One-minute ticker check, fifteen-minute catalog refresh and acquired-cache expiry; metadata-only D1 gate |
+| Kraken | Online USD spot catalog, rolling-24h metrics and selected trade windows | Visible-page minute checks, fifteen-minute catalog reuse/display expiry; bounded owner-only D1 evidence cache and independent gate |
 | CFTC | Weekly selected-contract positions | Hourly check, daily acquired-cache expiry plus separate report-age limits |
 | TPEx | Daily participant net share transactions | Hourly check, daily acquired-cache expiry plus separate report-age limits |
 | ASEANstats | Annual net inward FDI | Daily check, seven-day acquired-cache expiry; annual observation is not real time |
@@ -185,9 +210,11 @@ five different things. Current code has materially different policies:
 
 The implementation and each `docs/source-*.md` are authoritative for exact limits.
 The table is not a new scheduler or permission to acquire any source. Persist
-market observations only where the source's existing rights and design permit it;
-do not turn the metadata-only A-share/Kraken gates into payload caches by sharing
-an implementation. No observations or runtime DB state enter Git.
+market observations only where the source's existing rights and design permit it.
+A-share and Kraken now have separate, explicitly bounded snapshot stores alongside
+their admission gates. That does not authorize caching other providers or extending
+retention. Page checks are access-driven, not an installed unattended collector.
+No observations or runtime DB state enter Git.
 
 ## 7. Concrete debt and the safe reduction order
 
