@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {untilAborted,timerDelay,retryAfterDeadline} from '@/lib/browser-request';
+import {untilAborted,timerDelay,retryAfterDeadline,absoluteRetryDeadline} from '@/lib/browser-request';
 import {replySchema,REFRESH_MS,refreshInterval,snapshotView,visibleSnapshot,type PolymarketReply,type PolymarketView} from '@/lib/polymarket/model';
 type SnapshotError='network'|'invalid'|'permission'|'gate'|'cooldown'|null;
 const emptyReplies=():Record<PolymarketView,PolymarketReply|null>=>({hot:null,newest:null,interest:null});
@@ -32,8 +32,8 @@ export function useSnapshot(view:PolymarketView='hot'){
    catch(e){if(controller.signal.aborted||response.status===429||response.status>=500&&response.status<=599)throw e;if(current()){setReplies(previous=>({...previous,[requested]:null}));setError('invalid');}return;}
    if(!current())return;
    blocked.current=result.status.state==='denied'||result.status.error_code==='source_denied';setDenied(blocked.current);
-   sharedRetryAt.current=Math.max(sharedRetryAt.current,result.status.source_next_retry_at?Date.parse(result.status.source_next_retry_at):requested!=='interest'&&result.status.next_retry_at?Date.parse(result.status.next_retry_at):0);
-   retryAt.current[requested]=Math.max(retryAt.current[requested],result.status.next_retry_at?Date.parse(result.status.next_retry_at):0);
+   sharedRetryAt.current=Math.max(sharedRetryAt.current,absoluteRetryDeadline(result.status.source_next_retry_at)||(requested!=='interest'?absoluteRetryDeadline(result.status.next_retry_at):0));
+   retryAt.current[requested]=Math.max(retryAt.current[requested],absoluteRetryDeadline(result.status.next_retry_at));
    const gateUnknown=['source_busy','source_gate_unavailable','source_gate_outcome_unconfirmed','source_stale_lease','source_denied'].includes(result.status.error_code??'');
    if(blocked.current||gateUnknown){clearAll('gate');}
    else if(result.snapshot&&snapshotView(result.snapshot)!==requested){setReplies(previous=>({...previous,[requested]:null}));setError('invalid');}

@@ -13,3 +13,8 @@ export function retryAfterDeadline(value:string|null,now=Date.now()):number{
  if(/^\d+$/.test(text))return now+Number(text)*1000;
  const date=Date.parse(text);return Number.isFinite(date)?Math.max(now,date):0;
 }
+/** A syntactically accepted datetime may still have an impossible UTC offset.
+ * Never let NaN poison a cooldown and turn its timeout into an immediate loop. */
+export function absoluteRetryDeadline(value:string|null|undefined):number{
+ const parsed=value?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:0;
+}

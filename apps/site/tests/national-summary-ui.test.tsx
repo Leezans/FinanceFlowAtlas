@@ -5,8 +5,10 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import TaiwanMoney from '../components/markets/TaiwanMoney';
 import {summaryFixture,SUMMARY_TEST_NOW} from './national-summary-fixture';
 vi.mock('../components/tpex/TpexInstitutional',()=>({default:()=> <section aria-label="独立行业股数测试">share-count only</section>}));
-const response=(body:unknown,status=200)=>({status,redirected:false,type:'basic',json:async()=>body});
-beforeEach(()=>{vi.spyOn(Date,'now').mockReturnValue(SUMMARY_TEST_NOW);});
+const response=(body:unknown,status=200)=>Response.json(body,{status});
+// Respect the fixture's source cooldown before exercising its next response.
+const nextCheck=()=>{vi.mocked(Date.now).mockReturnValue(SUMMARY_TEST_NOW+3600000+1);fireEvent(document,new Event('visibilitychange'));};
+beforeEach(()=>{vi.spyOn(Date,'now').mockReturnValue(SUMMARY_TEST_NOW);Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 describe('Taiwan owns its monetary evidence',()=>{
  it('renders actual date/TWD and proportional participants without fake industry amount allocation',async()=>{
@@ -30,24 +32,24 @@ describe('Taiwan owns its monetary evidence',()=>{
  it('clears earlier money on permission denial',async()=>{
   const fetcher=vi.fn().mockResolvedValueOnce(response(summaryFixture())).mockResolvedValueOnce(response({},403));vi.stubGlobal('fetch',fetcher);
   const {container}=render(<TaiwanMoney/>);await screen.findByText('已取得每日法人交易报告');
-  fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await screen.findByText('来源访问已停止，金额保持空白');
+  nextCheck();await screen.findByText('来源访问已停止，金额保持空白');
   expect(container.querySelector('[data-id]')).toBeNull();expect(screen.queryByText('+100 TWD',{selector:'strong'})).toBeNull();
  });
  it('retains a still-valid report on network failure but leaves original timestamp and marks stale',async()=>{
   const fetcher=vi.fn().mockResolvedValueOnce(response(summaryFixture())).mockRejectedValueOnce(new Error('offline'));vi.stubGlobal('fetch',fetcher);
-  render(<TaiwanMoney/>);await screen.findByText('已取得每日法人交易报告');fireEvent.click(screen.getByRole('button',{name:'检查报告'}));
+  render(<TaiwanMoney/>);await screen.findByText('已取得每日法人交易报告');nextCheck();
   await screen.findByText('保留最近已核验报告 · 注意时效');expect(screen.getByText('+100 TWD',{selector:'strong'})).toBeTruthy();expect(screen.getAllByText('2026-11-05 10:00:00.000 UTC').length).toBeGreaterThan(0);
  });
  it('clears money on a malformed successful response instead of retaining it as stale',async()=>{
   const fetcher=vi.fn().mockResolvedValueOnce(response(summaryFixture())).mockResolvedValueOnce(response({snapshot:{unit:'shares'}}));vi.stubGlobal('fetch',fetcher);
-  const {container}=render(<TaiwanMoney/>);await screen.findByText('已取得每日法人交易报告');fireEvent.click(screen.getByRole('button',{name:'检查报告'}));
+  const {container}=render(<TaiwanMoney/>);await screen.findByText('已取得每日法人交易报告');nextCheck();
   await screen.findByText('响应未通过校验，已清空金额。');expect(container.querySelector('[data-id]')).toBeNull();expect(screen.queryByText('+100 TWD',{selector:'strong'})).toBeNull();
  });
  it('keeps selection across a revised report and never duplicates in-flight refresh clicks',async()=>{
   let finish:(value:unknown)=>void=()=>{};const updated=summaryFixture();updated.snapshot!.participants[0]={id:'foreign',buy:400,sell:100,net:300};updated.snapshot!.participants[3]={id:'total',buy:550,sell:350,net:200};
   const fetcher=vi.fn().mockResolvedValueOnce(response(summaryFixture())).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));vi.stubGlobal('fetch',fetcher);
   render(<TaiwanMoney/>);await screen.findByText('已取得每日法人交易报告');fireEvent.click(screen.getAllByRole('button',{name:/台湾上柜市场.*外资及陆资/})[0]);
-  fireEvent.click(screen.getByRole('button',{name:'检查报告'}));fireEvent(document,new Event('visibilitychange'));expect(fetcher).toHaveBeenCalledTimes(2);
+  nextCheck();fireEvent(document,new Event('visibilitychange'));expect(fetcher).toHaveBeenCalledTimes(2);
   finish(response(updated));await waitFor(()=>expect(screen.getByRole('region',{name:'所选法人金额证据'}).textContent).toContain('+300 TWD'));
  });
  it('does not paint expired daily reports as current money',async()=>{

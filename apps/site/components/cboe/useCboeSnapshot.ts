@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {untilAborted,timerDelay,retryAfterDeadline} from '@/lib/browser-request';
+import {untilAborted,timerDelay,retryAfterDeadline,absoluteRetryDeadline} from '@/lib/browser-request';
 import {REFRESH_MS,replySchema,visibleSnapshot,type CboeReply} from '@/lib/cboe/service-model';
 const endpoint='/api/v1/europe/cboe/snapshot';
 /** Browser checks only: source ownership, denial and acquisition stay server-side. */
@@ -28,7 +28,7 @@ export function useCboeSnapshot(){
    if(!parsed.success||![200,503].includes(response.status))throw new Error('invalid_response');
    if(current()){
     stopped.current=parsed.data.status.state==='denied';
-    retryAt.current=Math.max(retryAt.current,parsed.data.status.next_retry_at?Date.parse(parsed.data.status.next_retry_at):0);
+    retryAt.current=Math.max(retryAt.current,absoluteRetryDeadline(parsed.data.status.next_retry_at));
     setReply(parsed.data);
    }
   }catch{

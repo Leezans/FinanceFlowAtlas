@@ -4,8 +4,10 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import JapanMoney from '../components/markets/JapanMoney';
 import {japanFixture,JAPAN_TEST_NOW} from './japan-mof-ui-fixture';
-const response=(body:unknown,status=200)=>({status,redirected:false,type:'basic',json:async()=>body});
-beforeEach(()=>{vi.spyOn(Date,'now').mockReturnValue(JAPAN_TEST_NOW);});
+const response=(body:unknown,status=200)=>Response.json(body,{status});
+// Respect the fixture's source cooldown before exercising its next response.
+const nextCheck=()=>{vi.mocked(Date.now).mockReturnValue(JAPAN_TEST_NOW+21600000+1);fireEvent(document,new Event('visibilitychange'));};
+beforeEach(()=>{vi.spyOn(Date,'now').mockReturnValue(JAPAN_TEST_NOW);Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 describe('Japan own-issuer weekly cross-border evidence',()=>{
   it('shows period, update and acquisition separately, preserves sample scope and scales signed amounts',async()=>{
@@ -24,20 +26,20 @@ describe('Japan own-issuer weekly cross-border evidence',()=>{
   });
   it('clears displayed evidence and disables retries on permission denial',async()=>{
     const fetcher=vi.fn().mockResolvedValueOnce(response(japanFixture())).mockResolvedValueOnce(response({},403));vi.stubGlobal('fetch',fetcher);
-    const {container}=render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');fireEvent.click(screen.getByRole('button',{name:'检查周报'}));
+    const {container}=render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');nextCheck();
     await screen.findByText('来源访问已停止，金额保持空白');expect(container.querySelector('[data-id]')).toBeNull();
     expect((screen.getByRole('button',{name:'检查周报'}) as HTMLButtonElement).disabled).toBe(true);
     fireEvent(document,new Event('visibilitychange'));expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('keeps original acquisition time and warns on temporary network failure',async()=>{
     vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(response(japanFixture())).mockRejectedValueOnce(new Error('offline')));
-    render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');fireEvent.click(screen.getByRole('button',{name:'检查周报'}));
+    render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');nextCheck();
     await screen.findByText('保留最近已核验周报 · 注意时效');expect(screen.getByText('+5 亿 JPY',{selector:'strong'})).toBeTruthy();
     expect(screen.getAllByText('2026-11-06 09:00:00.000 UTC')).toHaveLength(2);
   });
   it('does not retain invalid successful data',async()=>{
     vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(response(japanFixture())).mockResolvedValueOnce(response({snapshot:{unit:'shares'}})));
-    const {container}=render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');fireEvent.click(screen.getByRole('button',{name:'检查周报'}));
+    const {container}=render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');nextCheck();
     await screen.findByText('响应未通过校验，已清空金额。');expect(container.querySelector('[data-id]')).toBeNull();
   });
   it('hides source evidence after cache expiry instead of repainting old periods as current',async()=>{
@@ -50,6 +52,6 @@ describe('Japan own-issuer weekly cross-border evidence',()=>{
     const revised=japanFixture();revised.snapshot!.assets[0]={id:'equity_funds',acquisitions:30,dispositions:10,net:20};revised.snapshot!.total_net=15;
     vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(response(japanFixture())).mockResolvedValueOnce(response(revised)));
     render(<JapanMoney/>);await screen.findByText('已取得日本证券跨境交易周报');fireEvent.click(screen.getAllByRole('button',{name:/日本证券.*股票及投资基金份额/})[0]);
-    fireEvent.click(screen.getByRole('button',{name:'检查周报'}));await waitFor(()=>expect(screen.getByRole('region',{name:'所选日本证券类别证据'}).textContent).toContain('+30 亿 JPY'));
+    nextCheck();await waitFor(()=>expect(screen.getByRole('region',{name:'所选日本证券类别证据'}).textContent).toContain('+30 亿 JPY'));
   });
 });

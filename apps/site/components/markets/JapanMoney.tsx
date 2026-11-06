@@ -9,20 +9,22 @@ import s from './markets.module.css';
 const parse=(value:unknown)=>replySchema.parse(value);
 const stamp=(value:string|null|undefined)=>value?value.replace('T',' ').replace('Z',' UTC'):'未取得';
 export default function JapanMoney(){
-  const {reply,loading,failure,now,refresh}=useReport('/api/v1/japan/mof/snapshot',parse,REFRESH_MS);
+  const {reply,loading,failure,now,refresh,nextDeadline,coolingDown}=useReport('/api/v1/japan/mof/snapshot',parse,REFRESH_MS);
   const [assetId,setAssetId]=useState<JapanAsset|null>(null);
   const snapshot=visibleSnapshot(reply,now),denied=reply?.status.state==='denied'||failure==='permission';
   const stale=!!snapshot&&(failure==='network'||reply?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||reportAge(snapshot,now)>STALE_REPORT_DAYS);
+  const nextCheck=nextDeadline>0?(Number.isFinite(nextDeadline)&&nextDeadline<=8.64e15?stamp(new Date(nextDeadline).toISOString()):'来源要求暂停，恢复时间超出可显示范围'):'未取得';
   const selected=snapshot?.assets.find(asset=>asset.id===assetId);
   return <section aria-label="日本证券非居民净买卖金额">
     <div className={s.ownStatus} role="status"><div><strong>{denied?'来源访问已停止，金额保持空白':loading&&!snapshot?'正在核验日本财务省周报':snapshot?stale?'保留最近已核验周报 · 注意时效':'已取得日本证券跨境交易周报':'暂无可核验的日本证券周报'}</strong>
-      <p>{denied?'停止自动获取，不切换来源地址绕过限制。':failure==='invalid'?'响应未通过校验，已清空金额。':failure==='network'?'连接失败；仅保留仍有效的已核验周报，原获取时间不变。':'每 6 小时按需检查。这里是非居民买卖日本证券的周度统计，不是实时资金流。'}</p>
-    </div><button onClick={()=>void refresh()} disabled={loading||denied}>{loading?'正在检查…':'检查周报'}</button></div>
+      <p>{denied?'停止自动获取，不切换来源地址绕过限制。':failure==='invalid'?'响应未通过校验，已清空金额。':failure==='network'?'连接失败；仅保留仍有效的已核验周报，原获取时间不变。':'页面可见时按来源许可检查，正常间隔 6 小时；更长暂停会保留。这里是非居民买卖日本证券的周度统计，不是实时资金流。'}</p>
+    </div><button onClick={()=>void refresh()} disabled={loading||denied||coolingDown}>{loading?'正在检查…':'检查周报'}</button></div>
     <div className={s.ownTimes}>
       <span>交易统计期间 <b>{snapshot?`${snapshot.report_start} 至 ${snapshot.report_end}`:'未取得'}</b></span>
       <span>文件更新日期 <b>{snapshot?.updated_date??'未取得'}</b></span>
       <span>来源实际发布时间 <b>文件未提供精确时间</b></span>
       <span>最近成功获取 <b>{stamp(snapshot?.fetched_at)}</b></span>
+      <span>下次可检查 <b>{denied?'已停止':nextCheck}</b></span>
       <span>最近尝试 <b>{stamp(reply?.status.last_attempt_at)}</b></span>
     </div>
     {snapshot&&<div className={s.ownNet}><span>报告证券合计 · 非居民{snapshot.total_net>0?'净取得':snapshot.total_net<0?'净处置':'零净额'}</span><strong>{japanMoney(snapshot.total_net)}</strong><span>仅指定报告机构样本，不是日本全国资金流总计</span></div>}
