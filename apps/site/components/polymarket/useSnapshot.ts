@@ -1,5 +1,6 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {untilAborted,timerDelay,retryAfterDeadline} from './browser-request';
 import {replySchema,REFRESH_MS,refreshInterval,snapshotView,visibleSnapshot,type PolymarketReply,type PolymarketView} from '@/lib/polymarket/model';
 type SnapshotError='network'|'invalid'|'permission'|'gate'|'cooldown'|null;
 const emptyReplies=():Record<PolymarketView,PolymarketReply|null>=>({hot:null,newest:null,interest:null});
@@ -14,19 +15,21 @@ export function useSnapshot(view:PolymarketView='hot'){
   const due=()=>Math.max(sharedRetryAt.current,retryAt.current[selected.current]);
   if(active.current||blocked.current||!mounted.current||document.visibilityState!=='visible')return;
   if(poll.current)clearTimeout(poll.current);poll.current=null;
-  if(Date.now()<due()){poll.current=setTimeout(()=>void refreshRef.current(),due()-Date.now());return;}
+  if(Date.now()<due()){poll.current=setTimeout(()=>void refreshRef.current(),timerDelay(due()));return;}
   const requested=selected.current,controller=new AbortController();active.current=controller;setLoading(true);
   const current=()=>mounted.current&&active.current===controller;
   const clearAll=(error:SnapshotError)=>{setReplies(emptyReplies());setGlobalError(error);};
   const setError=(error:SnapshotError)=>setErrors(previous=>({...previous,[requested]:error}));
   const timeout=setTimeout(()=>controller.abort(),20_000);
   try{
-   const response=await fetch(`/api/v1/polymarket/snapshot?view=${requested}`,{method:'GET',credentials:'same-origin',cache:'no-store',signal:controller.signal});
+   const response=await untilAborted(fetch(`/api/v1/polymarket/snapshot?view=${requested}`,{method:'GET',credentials:'same-origin',cache:'no-store',redirect:'manual',signal:controller.signal}),controller.signal);
    if(!current())return;
-   if(response.status===401||response.status===403){blocked.current=true;setDenied(true);clearAll('permission');return;}
+   // Capture response-level pauses before the body can stall or fail validation.
+   sharedRetryAt.current=Math.max(sharedRetryAt.current,retryAfterDeadline(response.headers.get('retry-after')));
+   if([401,403,407,451].includes(response.status)||response.type==='opaqueredirect'||response.redirected||response.status>=300&&response.status<400){blocked.current=true;setDenied(true);clearAll('permission');void response.body?.cancel().catch(()=>{});return;}
    let result:PolymarketReply;
-   try{result=replySchema.parse(await response.json());if(response.redirected||(response.status!==200&&response.status!==503))throw new Error('invalid');}
-   catch(e){if(response.status>=500&&response.status<=599)throw e;if(current()){setReplies(previous=>({...previous,[requested]:null}));setError('invalid');}return;}
+   try{result=replySchema.parse(await untilAborted(response.json(),controller.signal));if(response.redirected||(response.status!==200&&response.status!==503))throw new Error('invalid');}
+   catch(e){if(controller.signal.aborted||response.status===429||response.status>=500&&response.status<=599)throw e;if(current()){setReplies(previous=>({...previous,[requested]:null}));setError('invalid');}return;}
    if(!current())return;
    blocked.current=result.status.state==='denied'||result.status.error_code==='source_denied';setDenied(blocked.current);
    sharedRetryAt.current=Math.max(sharedRetryAt.current,result.status.source_next_retry_at?Date.parse(result.status.source_next_retry_at):requested!=='interest'&&result.status.next_retry_at?Date.parse(result.status.next_retry_at):0);
@@ -38,7 +41,7 @@ export function useSnapshot(view:PolymarketView='hot'){
    else if(response.status>=500&&result.status.state==='unavailable'){setError('network');}
    else{setReplies(previous=>({...previous,[requested]:result}));setError(null);setGlobalError(null);}
   }catch{if(current())setError('network');}
-  finally{clearTimeout(timeout);if(current()){active.current=null;sharedRetryAt.current=Math.max(sharedRetryAt.current,Date.now()+REFRESH_MS);setRetryDeadline(sharedRetryAt.current);setViewDeadlines({...retryAt.current});setNow(Date.now());setLoading(false);if(!blocked.current&&document.visibilityState==='visible')poll.current=setTimeout(()=>void refreshRef.current(),due()-Date.now());}}
+  finally{clearTimeout(timeout);if(current()){active.current=null;sharedRetryAt.current=Math.max(sharedRetryAt.current,Date.now()+REFRESH_MS);setRetryDeadline(sharedRetryAt.current);setViewDeadlines({...retryAt.current});setNow(Date.now());setLoading(false);if(!blocked.current&&document.visibilityState==='visible')poll.current=setTimeout(()=>void refreshRef.current(),timerDelay(due()));}}
  },[]);
  useEffect(()=>{
   mounted.current=true;refreshRef.current=refresh;
