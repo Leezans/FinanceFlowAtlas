@@ -40,3 +40,8 @@ No comprehensive real-time global flows, executable FX/futures quotes, automatic
 The optional hosted `/futures` page adds four selected US CFTC futures markets.
 It displays lagged positions and contract changes, never real-time money flows.
 See [official source scope and validation](docs/source-cftc-futures.md).
+
+An optional [CVM daily fund-share preaggregator](docs/source-cvm-daily-fund-shares.md)
+can process already-acquired local archives in Python. It is not a running
+collector, scheduled service or hosted Site integration. Fund subscriptions and
+redemptions are distinct from the hosted Brazil page's monthly stock transactions.
