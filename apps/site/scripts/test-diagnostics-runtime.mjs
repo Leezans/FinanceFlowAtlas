@@ -67,6 +67,16 @@ try {
   await db.prepare("UPDATE deribit_options_gate SET payload=NULL WHERE id='btc_options'").run();
   console.log('PASS legacy BTC and combined BTC/ETH recorded cache clocks, unknown schemas withheld, zero writes/source calls');
 
+  for(const schema of ['cftc-legacy-futures/1','cftc-legacy-futures/2','cftc-legacy-futures/unknown']){
+    await db.prepare("UPDATE cftc_source_gate SET payload=? WHERE id='legacy_futures'").bind(JSON.stringify({schema,fetched_at:stamp,acquisition_started_at:older,rows:[{secret:'SECRET_CFTC_ROW'}]})).run();
+    const baseline=await dump(),body=await(await mf.dispatchFetch(url)).json(),record=body.sources.find(row=>row.source==='cftc');
+    assert.equal(record.cache.recorded_acquisition_at,schema.endsWith('/unknown')?null:stamp);
+    assert.equal(record.cache.recorded_collection_start_at,schema.endsWith('/unknown')?null:older);
+    assert.equal(await dump(),baseline);assert.equal(outbound,0);assert.ok(!JSON.stringify(body).includes('SECRET_CFTC_ROW'));
+  }
+  await db.prepare("UPDATE cftc_source_gate SET payload=NULL WHERE id='legacy_futures'").run();
+  console.log('PASS CFTC four/52-market recorded cache clocks, unknown schemas withheld, zero writes/source calls');
+
   // Two report projections share one provider gate; legacy cache proves options only.
   const optionsMeta={schema:'taifex-options-institutions/1',fetched_at:stamp,acquisition_started_at:older,rows:[{secret:'SECRET_TAIFEX_ROW'}]};
   const futuresMeta={schema:'taifex-futures-institutions/1',fetched_at:later,acquisition_started_at:stamp,rows:[{secret:'SECRET_FUTURES_ROW'}]};

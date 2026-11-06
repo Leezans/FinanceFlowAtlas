@@ -1,7 +1,7 @@
 import {strictJSON} from '../ashare/strict-json';
 import {CFTC_URL,CftcError,parseCftc} from './adapter';
-import {REFRESH_MS,MAX_CACHE_AGE_MS,MAX_REPORT_AGE_DAYS,STALE_REPORT_DAYS,reportAge,type CftcSnapshot,type CftcReply} from './model';
-const MAX_BYTES=65_536,DEADLINE_MS=15_000;
+import {REFRESH_MS,MAX_SOURCE_BYTES,MAX_CACHE_AGE_MS,MAX_REPORT_AGE_DAYS,STALE_REPORT_DAYS,reportAge,type CftcSnapshot,type CftcReply} from './model';
+const MAX_BYTES=MAX_SOURCE_BYTES,DEADLINE_MS=15_000;
 export type CftcOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:CftcSnapshot};
 export type CftcGateState={state:'idle'|'busy'|'blocked';retryAt:number;snapshot:CftcSnapshot|null};
 export interface CftcGate {inspect():Promise<CftcGateState>;acquire(signal?:AbortSignal):Promise<{token:string}>;release(token:string,outcome:CftcOutcome):Promise<void>}

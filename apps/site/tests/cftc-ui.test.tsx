@@ -3,14 +3,14 @@ import React from 'react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen,within} from '@testing-library/react';
 import FuturesPositioning from '../components/futures/FuturesPositioning';
-import {MAX_CACHE_AGE_MS,REFRESH_MS} from '../lib/futures/model';
-import {reply,NOW} from './cftc-fixture';
+import {CONTRACTS,MAX_CACHE_AGE_MS,REFRESH_MS} from '../lib/futures/model';
+import {reply,legacyReply,NOW} from './cftc-fixture';
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(NOW);});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
 async function start(){render(<FuturesPositioning/>);await act(()=>vi.advanceTimersByTimeAsync(1));}
 describe('CFTC visual evidence',()=>{
- it('renders four contracts, exact observation dates, signed contract change and unknown release time',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json(reply())));await start();for(const name of ['黄金','WTI 原油','玉米','欧元期货'])expect(screen.getByRole('button',{name:new RegExp(name)})).toBeTruthy();expect(screen.getByRole('heading',{name:'精选美国期货品类矩阵'})).toBeTruthy();expect(screen.getByRole('button',{name:/黄金.*10.0% OI/}).getAttribute('data-color')).toBe('positive-1');expect(screen.getByText('10.0% OI')).toBeTruthy();expect(screen.getAllByText('较前一期（7 天）净持仓变化')).toHaveLength(1);expect(screen.getByText('接口未提供')).toBeTruthy();expect(screen.getByText(/这是有发布滞后的定期持仓报告/)).toBeTruthy();expect(screen.queryByRole('table')).toBeNull();});
- it('switches category using the same report, without new source requests',async()=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();fireEvent.click(screen.getByRole('button',{name:'商业交易者'}));expect(screen.getByRole('button',{name:'商业交易者'}).getAttribute('aria-pressed')).toBe('true');expect(screen.getByRole('button',{name:/黄金.*-10.0% OI/})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'非报告持仓'}));expect(screen.getAllByRole('button',{name:/0.0% OI/})).toHaveLength(4);expect(fetcher).toHaveBeenCalledTimes(1);});
+ it('renders 52 contracts, exact observation dates, signed contract change and unknown release time',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json(reply())));await start();for(const name of ['黄金','WTI 原油','玉米','欧元期货'])expect(screen.getByRole('button',{name:new RegExp(name)})).toBeTruthy();expect(screen.getByRole('heading',{name:'精选美国期货品类矩阵'})).toBeTruthy();expect(screen.getByRole('button',{name:/黄金.*10.0% OI/}).getAttribute('data-color')).toBe('positive-1');expect(screen.getByText('10.0% OI')).toBeTruthy();expect(screen.getAllByText('较前一期（7 天）净持仓变化')).toHaveLength(1);expect(screen.getByText('接口未提供')).toBeTruthy();expect(screen.getByText(/这是有发布滞后的定期持仓报告/)).toBeTruthy();expect(screen.queryByRole('table')).toBeNull();});
+ it('switches category using the same report, without new source requests',async()=>{const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();fireEvent.click(screen.getByRole('button',{name:'商业交易者'}));expect(screen.getByRole('button',{name:'商业交易者'}).getAttribute('aria-pressed')).toBe('true');expect(screen.getByRole('button',{name:/黄金.*-10.0% OI/})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'非报告持仓'}));expect(screen.getAllByRole('button',{name:/0.0% OI/})).toHaveLength(CONTRACTS.length);expect(fetcher).toHaveBeenCalledTimes(1);});
  it('selects an instrument without changing units or fetching another report',async()=>{const f=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',f);await start();fireEvent.keyDown(screen.getByRole('button',{name:/欧元期货/}),{key:'Enter'});expect(screen.getByRole('heading',{name:'欧元期货'})).toBeTruthy();expect(screen.getByText('每张 125,000 EUR')).toBeTruthy();expect(screen.getByText('EURO FX - CHICAGO MERCANTILE EXCHANGE')).toBeTruthy();expect(screen.queryByRole('heading',{name:'黄金'})).toBeNull();fireEvent.click(screen.getByRole('button',{name:'商业交易者'}));expect(screen.getByRole('heading',{name:'欧元期货'})).toBeTruthy();expect(within(screen.getByRole('region',{name:'选中期货品种详情'})).getByText('-16.0% OI')).toBeTruthy();expect(f).toHaveBeenCalledTimes(1);});
  it('keeps missing data empty, not zero or sample tiles',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>Response.json({snapshot:null,status:{...reply().status,state:'unavailable',error_code:'upstream_http'}},{status:503})));await start();expect(screen.getByText('数据缺失时，不填入示例。')).toBeTruthy();expect(screen.queryByRole('group',{name:'精选美国期货品类矩阵区块'})).toBeNull();});
  it('does not call a two-day report interval a weekly change',async()=>{const r=reply();r.snapshot!.rows.forEach(row=>row.previous.date='2026-10-25');vi.stubGlobal('fetch',vi.fn(async()=>Response.json(r)));await start();expect(screen.getAllByText('较前一期净持仓变化')).toHaveLength(1);expect(screen.getAllByText(/间隔 2 天/)).toHaveLength(1);expect(screen.queryByText('较前一期（7 天）净持仓变化')).toBeNull();});
@@ -20,4 +20,22 @@ describe('CFTC visual evidence',()=>{
  it('coalesces clicks and stops on durable source denial',async()=>{let resolve:(r:Response)=>void=()=>{};const f=vi.fn(()=>new Promise<Response>(r=>resolve=r));vi.stubGlobal('fetch',f);await start();fireEvent.click(screen.getByRole('button',{name:'正在检查…'}));expect(f).toHaveBeenCalledTimes(1);await act(async()=>resolve(Response.json({snapshot:null,status:{...reply().status,state:'denied',error_code:'source_denied'}},{status:503})));expect(screen.getByText('来源访问已停止')).toBeTruthy();expect((screen.getByRole('button',{name:'检查报告'}) as HTMLButtonElement).disabled).toBe(true);await act(()=>vi.advanceTimersByTimeAsync(2*REFRESH_MS));fireEvent(document,new Event('visibilitychange'));expect(f).toHaveBeenCalledTimes(1);});
  it('clears malformed successful responses instead of retaining apparently valid tiles',async()=>{const f=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',f);await start();f.mockImplementation(async()=>Response.json({...reply(),snapshot:{...reply().snapshot,rows:[]}}));fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(screen.queryByRole('group',{name:'精选美国期货品类矩阵区块'})).toBeNull();expect(screen.getByText('响应未通过完整校验，已清空浏览器证据。')).toBeTruthy();});
  it('aborts on unmount and ignores interrupted responses',async()=>{const f=vi.fn(()=>new Promise<Response>(()=>{}));vi.stubGlobal('fetch',f);const view=render(<FuturesPositioning/>);await act(()=>vi.advanceTimersByTimeAsync(1));view.unmount();expect((f.mock.calls as unknown as [string,RequestInit][])[0][1].signal?.aborted).toBe(true);});
+});
+
+describe('expanded and legacy coverage is visible',()=>{
+ it('shows the verified 52-market eight-group scope and lets a newly added market be inspected',async()=>{
+  const f=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',f);await start();
+  expect(screen.getByText(/已验证 52 \/ 52 个市场/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:/CME Ether Cash Settled.*OI/}));
+  expect(screen.getByRole('heading',{name:'CME Ether Cash Settled'})).toBeTruthy();expect(screen.getByText('来源单位：(50 Index Points)')).toBeTruthy();
+  expect(screen.queryByText(/50 ETH/)).toBeNull();expect(f).toHaveBeenCalledTimes(1);
+ });
+ it('labels retained legacy evidence as four markets, never as an already completed expansion',async()=>{
+  const f=vi.fn(async()=>Response.json(legacyReply()));vi.stubGlobal('fetch',f);await start();
+  expect(screen.getByText(/当前保留旧版 4 市场报告/)).toBeTruthy();expect(screen.queryByText(/已验证 52 \/ 52 个市场/)).toBeNull();
+  expect(screen.queryByRole('button',{name:/CME Ether Cash Settled.*OI/})).toBeNull();
+  f.mockImplementation(async()=>Response.json(reply()));fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await act(()=>vi.advanceTimersByTimeAsync(1));
+  expect(screen.getByText(/已验证 52 \/ 52 个市场/)).toBeTruthy();expect(screen.queryByText(/当前保留旧版 4 市场报告/)).toBeNull();
+  expect(screen.getByRole('heading',{name:'黄金'})).toBeTruthy();
+ });
 });

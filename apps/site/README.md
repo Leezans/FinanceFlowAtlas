@@ -216,15 +216,38 @@ migration is required for this change.
 
 ## Selected CFTC futures positioning
 
-`/futures` shows official public CFTC Legacy Futures Only positions for gold,
-WTI physical, corn and Euro FX futures. Counts and changes are contracts, not
-money flows. The diverging view uses a category's net position / the current
-market's OI, with exact current/prior report dates, source release time unknown,
-and explicit freshness limits. The no-account API is separate from the other
-sources and preserves the owner-only host. Apply the appended
-`0005_cftc_futures_gate.sql` after preceding migrations. Run
-`npm run test:cftc-runtime` for offline native workerd/D1 checks. See
-[scope, verified source and operational limits](../../docs/source-cftc-futures.md).
+`/futures` now targets 52 reviewed US CFTC-reported futures markets in eight
+navigation groups: metals, energy, agriculture, livestock, currencies, rates,
+equity/volatility indices and crypto futures. These are all-expiry market
+positions from official public Legacy Futures Only reports, not delivery-month
+quotes, global market coverage or real-time money flows. Counts and changes
+are contracts, never dollar amounts or cross-market sums. Equal-area matrix
+color is a trader category's net contracts divided by that market's OI.
+
+Every new snapshot requires all 52 reviewed identities and units, exact long
+and short OI balances, and the same current and previous report dates across
+all markets. Missing/changed/unbalanced data rejects the entire new acquisition.
+Only an age-valid last-good report can remain, explicitly stale. A version-1
+four-market cache remains readable with its original clocks and four-market
+coverage, visibly labeled until a full version-2 report succeeds. No cache is
+relabelled or filled with zero. Consolidated index aggregates are not selected.
+The source's Ether unit text remains `(50 Index Points)`, not an invented ETH unit.
+
+One fixed unauthenticated query selects the reviewed 52 codes and required
+fields, at most 208 records, with a 256 KiB decoded source-body limit and the
+unchanged 15-second deadline. Normalized cached snapshots retain the 64 KiB
+limit. The same durable gate, one-hour cooldown, denial stop, 24-hour cache
+expiry and 10/35-day report-age thresholds remain. No existing gate is reset;
+no SQL migration, source fallback, credentials or extra permissions are added.
+The page checks hourly while visible; this is not an autonomous background
+collector and does not make weekly reports real-time. Report dates and unknown
+actual source-release time stay distinct from acquisition clocks.
+
+Run `npm run test:cftc-runtime` for native offline workerd/D1 checks, including
+legacy-cache recovery, full-schema acquisition, failed expansions, byte budgets,
+shared cooldown and persistent denial, with all existing unrelated tables
+preserved. Fixtures are synthetic; saved official research rows are not bundled.
+See [scope and operational limits](../../docs/source-cftc-futures.md).
 
 ## TPEx institutional industry matrix
 

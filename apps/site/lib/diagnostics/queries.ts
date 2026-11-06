@@ -60,7 +60,7 @@ export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
   common('aseanstats', 'asean_source_gate', 'annual_sector_fdi', 'asean-fdi/1'),
   common('brazil-cvm', 'cvm_source_gate', 'monthly_fund_equity', 'cvm-fund-equity/1'),
   common('worldbank-wfe', 'worldbank_equity_source_gate', 'annual_equity', 'worldbank-equity/1'),
-  common('cftc', 'cftc_source_gate', 'legacy_futures', 'cftc-legacy-futures/1'),
+  common('cftc', 'cftc_source_gate', 'legacy_futures', ['cftc-legacy-futures/1','cftc-legacy-futures/2']),
   common('tpex-shares', 'tpex_source_gate', 'institutional_shares', 'tpex-institutional/1'),
   common('japan-mof', 'japan_mof_source_gate', 'weekly_liabilities', 'japan-mof-weekly/1'),
   {source: 'tpex-money', view: 'institutional_summary', sql: `SELECT s.status AS state, ${DB_NOW} AS now_ms,
