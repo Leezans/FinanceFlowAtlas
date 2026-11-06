@@ -56,7 +56,7 @@ describe('visual market entry',()=>{
   const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);const {container}=render(<MarketLanding/>);
   expect(fetcher).not.toHaveBeenCalled();
   expect(container.querySelectorAll('svg:not([aria-hidden=true])')).toHaveLength(0);
-  expect(screen.getByText(/主力净额是订单分类估算，非市场真实新增资金/)).toBeTruthy();
+  expect(screen.getByText(/主力净额仅是东方财富大单与超大单的订单分类估算，不是所有交易资金净流入/)).toBeTruthy();
   expect(screen.getByText(/不混合单位、时点或口径/)).toBeTruthy();
  });
  it('preserves the homepage TIC component and its direct anchor',()=>{

@@ -56,6 +56,6 @@ export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
   <EvidenceHeatmap state={state} onIndustrySelect={(next,row)=>{setIndustry(row.f14);setScope(next)}}/>
   <SourceRecovery state={state} scope={scope} loading={loading} retryNotBefore={batchPauseUntil} onRetry={()=>retry.current()}/>
   <MarketTiming state={state} loading={loading}/>
-  <p style={{fontSize:11,color:'#92aabd'}}>来源：东方财富公开接口。主力净额是供应商订单分类指标，不是市场真实新增资金。数据时点与延迟未由来源提供。</p>
+  <p style={{fontSize:11,color:'#92aabd'}}>来源：东方财富公开接口。主力净额仅是大单与超大单的分类估算，不是所有交易资金净流入或市场新增资金。行情日期、观测时点与延迟尚未核实。</p>
  </section>
 }
