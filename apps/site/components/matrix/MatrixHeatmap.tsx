@@ -82,7 +82,8 @@ export default function MatrixHeatmap({ groups, title, description, colorMeaning
               {({ scale, reveal }) => <>
                 {rectangles.leaves.map(rectangle => {
                   const { entry, x, y, width: w, height: h } = rectangle;
-                  return <g key={rectangle.id} className={s.tile} data-color={color(entry.item)} data-id={entry.item.id} data-share={rectangle.share} data-selected={entry.item.id === selectedItemId || undefined} tabIndex={0} role={onSelect ? 'button' : 'img'} aria-label={describe(entry)} {...events(entry, true)} onFocus={() => { setHovered(null); setFocused({id:entry.id,geometry:true}); reveal(rectangle); }} onClick={onSelect ? () => onSelect(entry.item, entry.group) : undefined} onKeyDown={onSelect ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(entry.item, entry.group); } } : undefined}>
+                  // Pointer focus must not move a tile underneath a click or drag.
+                  return <g key={rectangle.id} className={s.tile} data-color={color(entry.item)} data-id={entry.item.id} data-share={rectangle.share} data-selected={entry.item.id === selectedItemId || undefined} tabIndex={0} role={onSelect ? 'button' : 'img'} aria-label={describe(entry)} {...events(entry, true)} onFocus={event => { setHovered(null); setFocused({id:entry.id,geometry:true}); if (event.currentTarget.matches(':focus-visible')) reveal(rectangle); }} onClick={onSelect ? () => onSelect(entry.item, entry.group) : undefined} onKeyDown={onSelect ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(entry.item, entry.group); } } : undefined}>
                     <title>{describe(entry)}</title><rect x={x} y={y} width={w} height={h} vectorEffect="non-scaling-stroke" />
                     <TileText rectangle={rectangle} scale={scale} />
                   </g>;

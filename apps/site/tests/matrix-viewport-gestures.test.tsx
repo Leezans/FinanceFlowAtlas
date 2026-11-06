@@ -6,3 +6,22 @@ it('upper zoom bound lets wheel propagate; reset works',()=>{const{container}=re
 it('drag does not select and next ordinary click does',()=>{class PointerEvent extends MouseEvent{pointerId:number;pointerType:string;constructor(t:string,p:PointerEventInit){super(t,p);this.pointerId=p.pointerId??0;this.pointerType=p.pointerType??'mouse'}};vi.stubGlobal('PointerEvent',PointerEvent);const select=vi.fn();const{container}=render(<MatrixHeatmap {...props} onSelect={select}/>);fireEvent.click(screen.getByRole('button',{name:'放大矩阵'}));const v=container.querySelector('[data-zoom]')!,tile=container.querySelector('svg [data-id="0"]')!;fireEvent.pointerDown(tile,{pointerId:1,pointerType:'mouse',button:0,clientX:200,clientY:100});fireEvent.pointerMove(v,{pointerId:1,pointerType:'mouse',clientX:300,clientY:200});fireEvent.pointerUp(v,{pointerId:1,pointerType:'mouse'});fireEvent.click(tile);expect(select).toHaveBeenCalledTimes(0);fireEvent.pointerDown(tile,{pointerId:2,pointerType:'mouse',button:0,clientX:200,clientY:100});fireEvent.pointerUp(tile,{pointerId:2,pointerType:'mouse'});fireEvent.click(tile);expect(select).toHaveBeenCalledTimes(1);vi.unstubAllGlobals()});
 it('pointer leaving before capture cannot restart a stale drag',()=>{class PointerEvent extends MouseEvent{pointerId:number;pointerType:string;constructor(t:string,p:PointerEventInit){super(t,p);this.pointerId=p.pointerId??0;this.pointerType=p.pointerType??'mouse'}};vi.stubGlobal('PointerEvent',PointerEvent);const{container}=render(<MatrixHeatmap {...props}/>);fireEvent.click(screen.getByRole('button',{name:'放大矩阵'}));const v=container.querySelector('[data-zoom]')!,g=container.querySelector('svg>g')!;const before=g.getAttribute('transform');fireEvent.pointerDown(v,{pointerId:1,pointerType:'mouse',button:0,clientX:200,clientY:100});fireEvent.pointerLeave(v,{pointerId:1,pointerType:'mouse'});fireEvent.pointerMove(v,{pointerId:1,pointerType:'mouse',clientX:300,clientY:200});expect(g.getAttribute('transform')).toBe(before);vi.unstubAllGlobals()});
 it('two synthetic touch pointers zoom and pointer cancel ends gesture',()=>{class PointerEvent extends MouseEvent{pointerId:number;pointerType:string;constructor(t:string,p:PointerEventInit){super(t,p);this.pointerId=p.pointerId??0;this.pointerType=p.pointerType??'mouse'}};vi.stubGlobal('PointerEvent',PointerEvent);const{container}=render(<MatrixHeatmap {...props}/>);fireEvent.click(screen.getByRole('button',{name:'开启滚轮缩放'}));const v=container.querySelector('[data-zoom]')!;fireEvent.pointerDown(v,{pointerId:1,pointerType:'touch',clientX:100,clientY:100});fireEvent.pointerDown(v,{pointerId:2,pointerType:'touch',clientX:200,clientY:100});fireEvent.pointerMove(v,{pointerId:2,pointerType:'touch',clientX:300,clientY:100});expect(v.getAttribute('data-zoom')).toBe('2');fireEvent.pointerCancel(v,{pointerId:1,pointerType:'touch'});fireEvent.pointerCancel(v,{pointerId:2,pointerType:'touch'});fireEvent.pointerMove(v,{pointerId:2,pointerType:'touch',clientX:400,clientY:100});expect(v.getAttribute('data-zoom')).toBe('2');vi.unstubAllGlobals()});
+
+it('pointer focus does not move the viewport before the user selects or starts a drag',()=>{
+ const {container}=render(<MatrixHeatmap {...props}/>);
+ fireEvent.click(screen.getByRole('button',{name:'放大矩阵'}));
+ const tile=container.querySelector('svg [data-id="2"]')!, group=container.querySelector('svg>g')!;
+ const before=group.getAttribute('transform');
+ vi.spyOn(tile,'matches').mockReturnValue(false);
+ fireEvent.focus(tile);
+ expect(group.getAttribute('transform')).toBe(before);
+});
+it('keyboard focus still brings an offscreen tile into the viewport',()=>{
+ const {container}=render(<MatrixHeatmap {...props}/>);
+ fireEvent.click(screen.getByRole('button',{name:'放大矩阵'}));
+ const tile=container.querySelector('svg [data-id="2"]')!, group=container.querySelector('svg>g')!;
+ const before=group.getAttribute('transform');
+ vi.spyOn(tile,'matches').mockImplementation(selector=>selector===':focus-visible');
+ fireEvent.focus(tile);
+ expect(group.getAttribute('transform')).not.toBe(before);
+});

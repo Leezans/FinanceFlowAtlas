@@ -13,8 +13,13 @@ export function zoomAt(current: MatrixTransform, nextScale: number, anchor: { x:
 export function revealRectangle(current: MatrixTransform, rect: { x: number; y: number; width: number; height: number }, width: number, height: number) {
   const x = rect.x * current.scale + current.x, y = rect.y * current.scale + current.y;
   const w = rect.width * current.scale, h = rect.height * current.scale;
+  // Keep an oversized focused tile steady while it already covers the viewport.
+  // Otherwise reveal the nearest edge, rather than jumping between both edges.
+  const offset = (position: number, size: number, extent: number) => size >= extent
+    ? position > 0 ? -position : position + size < extent ? extent - position - size : 0
+    : position < 0 ? -position : position + size > extent ? extent - position - size : 0;
   return clampTransform({ ...current,
-    x: current.x + (x < 0 ? -x : x + w > width ? width - x - w : 0),
-    y: current.y + (y < 0 ? -y : y + h > height ? height - y - h : 0),
+    x: current.x + offset(x, w, width),
+    y: current.y + offset(y, h, height),
   }, width, height);
 }

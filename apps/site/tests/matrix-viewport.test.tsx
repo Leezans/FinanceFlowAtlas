@@ -51,6 +51,17 @@ describe('viewport geometry',()=>{
   expect(zoomAt(INITIAL_TRANSFORM,2,{x:200,y:100},1000,500)).toEqual({scale:2,x:-200,y:-100});
   expect(clampTransform({scale:100,x:2,y:-1e9},100,100)).toEqual({scale:32,x:0,y:-3100});
  });
+ it('keeps an oversized focused tile stationary when it already covers the viewport',()=>{
+  const current={scale:1.5,x:-241,y:-130};
+  expect(revealRectangle(current,{x:0,y:0,width:900,height:520},964,520)).toEqual(current);
+ });
+ it('reveals oversized offscreen tiles using the nearest edge, without alternating between edges',()=>{
+  const left=revealRectangle({scale:2,x:-800,y:-500},{x:0,y:0,width:600,height:300},1000,500);
+  expect(left).toEqual({scale:2,x:-200,y:-100});
+  expect(revealRectangle(left,{x:0,y:0,width:600,height:300},1000,500)).toEqual(left);
+  const right=revealRectangle({scale:2,x:0,y:0},{x:400,y:200,width:600,height:300},1000,500);
+  expect(right).toEqual({scale:2,x:-800,y:-400});
+ });
  it('reveals focused offscreen tiles at the current scale',()=>{
   const t=revealRectangle({scale:2,x:0,y:0},{x:800,y:400,width:50,height:30},1000,500);expect(t.x).toBe(-700);expect(t.y).toBe(-360);
  });
