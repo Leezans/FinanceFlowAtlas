@@ -1,6 +1,6 @@
 'use client';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {cacheSummary, diagnosticsPresentationSchema, diagnosticViews, formatDiagnosticTime, stateLabels, type DiagnosticReport, type DiagnosticSource} from '@/lib/diagnostics/presentation';
+import {cacheSummary, failureCategoryLabels, diagnosticsPresentationSchema, diagnosticViews, formatDiagnosticTime, stateLabels, type DiagnosticReport, type DiagnosticSource} from '@/lib/diagnostics/presentation';
 import s from './diagnostics.module.css';
 
 const endpoint = '/api/v1/diagnostics';
@@ -30,6 +30,14 @@ function SourceCard({row, label}: {row: DiagnosticSource; label: typeof diagnost
       <div><dt>采集完成记录</dt><dd><Time value={row.cache.recorded_acquisition_at}/></dd></div>
       <div><dt>源数据时点</dt><dd>未核验</dd></div>
     </dl>
+    {row.source === 'eastmoney' && <>
+      <dl className={s.times}>
+        <div><dt>保留的最近失败时间</dt><dd><Time value={row.retained_failure?.recorded_at ?? null}/></dd></div>
+        <div><dt>保留的失败类别</dt><dd>{failureCategoryLabels[row.retained_failure?.category ?? 'unknown']}</dd></div>
+        <div><dt>持久失败连续计数</dt><dd>{row.retained_failure?.durable_streak_count == null ? '未知' : row.retained_failure.durable_streak_count === 5 ? '5（已达计数上限）' : row.retained_failure.durable_streak_count}</dd></div>
+      </dl>
+      <p className={s.scope}>此记录来自 A 股共用门禁，涵盖各采集范围；连续失败计数上限为 5，不是历史失败总数。空闲或冷却结束不代表来源已恢复；计数归零也不证明数据可用。其他来源的保留失败记录未知。</p>
+    </>}
     <details className={s.details}><summary>查看时间与状态依据</summary><dl className={s.times}>
       <div><dt>数据库读取时点</dt><dd><Time value={row.database_observed_at}/></dd></div>
       <div><dt>采集开始记录</dt><dd><Time value={row.cache.recorded_collection_start_at}/></dd></div>

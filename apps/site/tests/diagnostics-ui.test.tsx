@@ -39,6 +39,18 @@ describe('diagnostics presentation boundary', () => {
     body = report(); body.sources[0].source = 'SECRET_INTERNAL_IDENTIFIER';
     expect(diagnosticsPresentationSchema.safeParse(body).success).toBe(false);
   });
+  it.each([
+    {category: 'SECRET_URL'}, {recorded_at: 'SECRET_EXCEPTION'}, {recorded_at: later},
+    {recorded_at: '2026-11-06T17:00:00+08:00'}, {durable_streak_count: 6}, {durable_streak_count: 0},
+    {count_semantics: 'lifetime_total'},
+  ])('rejects unsafe or misleading retained failure metadata %#', patch => {
+    const body = report(); body.sources[0].retained_failure = {category: 'deadline', recorded_at: earlier, durable_streak_count: 1, count_semantics: 'durable_streak_capped_at_5', ...patch} as NonNullable<DiagnosticReport['sources'][number]['retained_failure']>;
+    expect(diagnosticsPresentationSchema.safeParse(body).success).toBe(false);
+  });
+  it('rejects retained failure claims for other sources', () => {
+    const body = report(); body.sources[1].retained_failure = {category: 'deadline', recorded_at: earlier, durable_streak_count: 1, count_semantics: 'durable_streak_capped_at_5'};
+    expect(diagnosticsPresentationSchema.safeParse(body).success).toBe(false);
+  });
   it('compares expiry against each database read time, never the viewer clock or acquisition date', () => {
     const row = report().sources[0];
     expect(cacheSummary(row).kind).toBe('unknown');
@@ -52,6 +64,22 @@ describe('diagnostics presentation boundary', () => {
 });
 
 describe('read-only source status page', () => {
+  it('shows retained failure evidence during idle without claiming recovery or a lifetime count', async () => {
+    const body = report(); body.sources[0].retained_failure = {category: 'deadline', recorded_at: earlier, durable_streak_count: 5, count_semantics: 'durable_streak_capped_at_5'};
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(body)));
+    render(<Diagnostics/>); await screen.findByRole('article', {name: 'A 股 · Eastmoney'});
+    const card = getCard('A 股 · Eastmoney');
+    expect(card.getByText('采集时限已到')).toBeTruthy();
+    expect(card.getByText('5（已达计数上限）')).toBeTruthy();
+    expect(card.getByText(/不是历史失败总数/)).toBeTruthy();
+    expect(card.getByText(/空闲或冷却结束不代表来源已恢复/)).toBeTruthy();
+    expect(getCard('加密 / 外汇 · Kraken').queryByText('保留的失败类别')).toBeNull();
+  });
+  it('accepts older v1 responses and shows unknown retained failure instead of zero', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(report())));
+    render(<Diagnostics/>); await screen.findByRole('article', {name: 'A 股 · Eastmoney'});
+    expect(getCard('A 股 · Eastmoney').getAllByText('未知')).toHaveLength(2);
+  });
   it('reads only the diagnostics endpoint once, keeps acquisition distinct from source time and never claims working data', async () => {
     const body = report(); body.sources[0].cache.recorded_expiry_at = earlier;
     body.sources[1].coordination = 'stopped'; body.sources[1].cache.recorded_acquisition_at = null;

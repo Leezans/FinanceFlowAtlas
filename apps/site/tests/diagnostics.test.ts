@@ -36,6 +36,35 @@ describe('strictly read-only source diagnostics', () => {
     expect(body.sources[0].cache).toMatchObject({validation: 'not_performed', recorded_acquisition_at: acquired,
       recorded_collection_start_at: '2026-11-06T05:58:00.000Z', recorded_commit_at: '2026-11-06T05:59:59.500Z'});
   });
+  it('selects retained failure metadata only for A-share', () => {
+    expect(DIAGNOSTIC_QUERIES[0].sql).toContain('g.failure_code, g.last_failure_ms, g.failure_count');
+    expect(DIAGNOSTIC_QUERIES.slice(1).every(query => !/failure_code|last_failure_ms|failure_count/.test(query.sql))).toBe(true);
+  });
+  it.each(['idle', 'blocked', 'busy', 'uncertain'])('retains bounded failure evidence independently of coordination %s', async state => {
+    const t = setup({...base(), state, failure_code: 'deadline', last_failure_ms: now - 1000, failure_count: 5});
+    const body = await readBody(await t.handler(request()));
+    expect(body.sources[0].retained_failure).toEqual({category: 'deadline', recorded_at: '2026-11-06T05:59:59.000Z', durable_streak_count: 5, count_semantics: 'durable_streak_capped_at_5'});
+    expect(body.sources.slice(1).every(row => row.retained_failure.category === 'unknown' && row.retained_failure.recorded_at === null && row.retained_failure.durable_streak_count === null && row.retained_failure.count_semantics === 'not_available')).toBe(true);
+    expect(t.fetcher).not.toHaveBeenCalled();
+  });
+  it.each([['deadline', 'deadline'], ['aborted', 'aborted'], ['transport_or_encoding_failure', 'transport'], ['invalid_json', 'validation'], ['snapshot_store_unavailable', 'storage'], ['source_denied', 'access_stopped'], ['source_outcome_unconfirmed', 'outcome_unconfirmed'], ['runtime_lifetime_unverified', 'runtime'], ['collection_failed', 'collection_failed'], ['https://SECRET_USER:SECRET_TOKEN@host.invalid/SECRET_BODY', 'unknown']])('projects failure code %s to a fixed category', async (failure_code, category) => {
+    const t = setup({...base(), failure_code, last_failure_ms: now - 1000, failure_count: 1});
+    const body = await readBody(await t.handler(request()));
+    expect(body.sources[0].retained_failure.category).toBe(category);
+    expect(JSON.stringify(body)).not.toContain('SECRET');
+  });
+  it.each([undefined, null, 'SECRET_URL', {}, true, -1, 1.5, 6, Infinity, NaN])('keeps invalid streak count %# unknown', async failure_count => {
+    const t = setup({...base(), failure_count, failure_code: 'deadline', last_failure_ms: now - 1000});
+    expect((await readBody(await t.handler(request()))).sources[0].retained_failure).toMatchObject({category: 'unknown', recorded_at: null, durable_streak_count: null});
+  });
+  it.each([0, 'SECRET_EXCEPTION_BODY', '2026-11-06T05:59:59.000Z', -1, now + 1, Infinity, Number.MAX_SAFE_INTEGER, {}])('suppresses invalid retained failure timestamp %#', async last_failure_ms => {
+    const t = setup({...base(), last_failure_ms, failure_count: 1, failure_code: 'deadline'});
+    expect((await readBody(await t.handler(request()))).sources[0].retained_failure.recorded_at).toBeNull();
+  });
+  it('keeps a cleared streak distinct from a retained failure and does not infer recovery', async () => {
+    const t = setup({...base(), failure_count: 0, failure_code: 'deadline', last_failure_ms: now - 1000});
+    expect((await readBody(await t.handler(request()))).sources[0].retained_failure).toMatchObject({category: 'unknown', recorded_at: null, durable_streak_count: 0});
+  });
   it.each(['?source=eastmoney', '?sql=DELETE%20FROM%20x', '?token=secret'])('rejects arbitrary query %s without touching storage', async suffix => {
     const t = setup(); expect((await t.handler(request(suffix))).status).toBe(400); expect(t.prepare).not.toHaveBeenCalled();
   });

@@ -21,6 +21,32 @@ function recordedTime(value: unknown, now: number): string | null {
   // Date.parse alone would normalize impossible dates such as February 30.
   return pastTime(Date.parse(value as string), now);
 }
+// Deliberately independent of source handlers/stores: no acquisition imports.
+function failureCategory(value: unknown) {
+  if (typeof value !== 'string') return 'unknown' as const;
+  if (value === 'deadline') return 'deadline' as const;
+  if (['aborted', 'source_aborted'].includes(value)) return 'aborted' as const;
+  if (['upstream_http', 'not_json', 'unsupported_content_encoding', 'transport_or_encoding_failure'].includes(value)) return 'transport' as const;
+  if (['byte_budget', 'invalid_schema', 'invalid_json', 'row_budget', 'unstable_total', 'incomplete_page', 'duplicate_id', 'incomplete_snapshot', 'invalid_row', 'missing_fields', 'invalid_id', 'snapshot_invalid', 'invalid_name', 'invalid_numeric', 'negative_price', 'invalid_return', 'missing_snapshot', 'stage_invalid', 'acquisition_expired', 'unstable_order'].includes(value)) return 'validation' as const;
+  if (['source_gate_required', 'source_gate_unavailable', 'source_stale_lease', 'snapshot_store_required', 'snapshot_store_unavailable', 'stage_store_unavailable'].includes(value)) return 'storage' as const;
+  if (['source_access_denied', 'persistent_source_denial', 'source_denied', 'source_denial_latched', 'html_challenge', 'non_json_challenge', 'redirect_denied', 'automatic_redirect_denied', 'provider_error_or_challenge', 'disabled'].includes(value)) return 'access_stopped' as const;
+  if (['source_outcome_unconfirmed', 'source_gate_release_unconfirmed', 'invalid_source_lease'].includes(value)) return 'outcome_unconfirmed' as const;
+  if (['runtime_routing_unverified', 'runtime_lifetime_unverified'].includes(value)) return 'runtime' as const;
+  if (value === 'collection_failed') return 'collection_failed' as const;
+  return 'unknown' as const;
+}
+function retainedFailure(definition: DiagnosticQuery, row: Row | undefined, now: number | undefined) {
+  const supported = definition.source === 'eastmoney';
+  const count = supported && row && typeof row.failure_count === 'number' && Number.isInteger(row.failure_count)
+    && row.failure_count >= 0 && row.failure_count <= 5 ? row.failure_count : null;
+  // Zero is a cleared streak, not proof of recovery. Invalid counts stay unknown.
+  return {
+    category: count !== null && count > 0 ? failureCategory(row?.failure_code) : 'unknown' as const,
+    recorded_at: count !== null && count > 0 && row && now ? pastTime(row.last_failure_ms, now) : null,
+    durable_streak_count: count,
+    count_semantics: supported ? 'durable_streak_capped_at_5' as const : 'not_available' as const,
+  };
+}
 function state(raw: unknown, retry: unknown, now: number): State {
   if (raw === 'blocked' || raw === 'denied') return 'stopped';
   if (raw === 'uncertain') return 'outcome_unconfirmed';
@@ -66,6 +92,7 @@ function project(definition: DiagnosticQuery, result: ReadResult) {
     source: definition.source, view: definition.view,
     metadata: result.kind === 'row' ? 'read' : result.kind === 'missing' ? 'not_initialized' : 'unavailable',
     coordination, provider_coordination: providerCoordination,
+    retained_failure: retainedFailure(definition, row, now),
     database_observed_at: now ? new Date(now).toISOString() : null,
     coordination_updated_at: row && now ? pastTime(row.updated_ms, now) : null,
     last_check_recorded_at: row && now ? pastTime(row.checked_ms, now) : null,
