@@ -17,9 +17,9 @@ function common(source: string, table: string, key: string, schema: string): Dia
 }
 const polyTime = (view: string, field: string) => `CASE WHEN json_valid(payload) THEN CASE
   WHEN ${json('payload', '$.schema')} IN (${view === 'interest' ? "'polymarket-discovery/2'" : "'polymarket-discovery/1','polymarket-discovery/2'"})
-    AND ${json('payload', `$.${view}.schema`)} IN (${view === 'newest' ? "'polymarket-gamma/1','polymarket-gamma/2'" : view === 'hot' ? "'polymarket-gamma/hot/1'" : "'polymarket-open-interest/1'"})
+    AND ${json('payload', `$.${view}.schema`)} IN (${view === 'newest' ? "'polymarket-gamma/1','polymarket-gamma/2'" : view === 'hot' ? "'polymarket-gamma/hot/1'" : "'polymarket-open-interest/1','polymarket-open-interest/2'"})
     THEN ${json('payload', `$.${view}.${field}`)}
-  WHEN ${json('payload', '$.schema')} IN (${view === 'newest' ? "'polymarket-gamma/1','polymarket-gamma/2'" : view === 'hot' ? "'polymarket-gamma/hot/1'" : "'polymarket-open-interest/1'"})
+  WHEN ${json('payload', '$.schema')} IN (${view === 'newest' ? "'polymarket-gamma/1','polymarket-gamma/2'" : view === 'hot' ? "'polymarket-gamma/hot/1'" : "'polymarket-open-interest/1','polymarket-open-interest/2'"})
     THEN ${json('payload', `$.${field}`)} END END`;
 const cboeTime = (field: string) => `CASE WHEN json_valid(payload) THEN CASE
   WHEN ${json('payload', '$.schema')}='cboe-cache/1' AND ${json('payload', '$.snapshot.schema')}='cboe-delayed/1' THEN ${json('payload', `$.snapshot.${field}`)}

@@ -1,8 +1,8 @@
 import {acquireOpenInterest} from './interest';
 import {PolymarketError,parsePolymarket,parseHotPolymarket} from './adapter';
 import {fetchPolymarket,fetchHotPolymarket} from './transport';
-import {REFRESH_MS,MAX_CACHE_BYTES,refreshInterval,maximumCacheAge,selectSnapshot,updateStoredCache,latestCacheTime,type PolymarketStoredCache,type PolymarketView,type PolymarketReply} from './model';
-export const DEADLINE_MS=12_000;
+import {REFRESH_MS,MAX_CACHE_BYTES,refreshInterval,maximumCacheAge,selectSnapshot,updateStoredCache,latestCacheTime,snapshotCacheTime,INTEREST_COLLECTION_BUDGET_MS,type PolymarketStoredCache,type PolymarketView,type PolymarketReply} from './model';
+export const DEADLINE_MS=INTEREST_COLLECTION_BUDGET_MS;
 export type PolymarketOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;interestRetryAfterMs?:number;snapshot?:PolymarketStoredCache;errorCode?:string};
 export type PolymarketGateState={state:'idle'|'busy'|'blocked';retryAt:number;sharedRetryAt?:number;snapshot:PolymarketStoredCache|null;errorCode:string|null;checkedAt:number};
 export interface PolymarketGate {
@@ -82,9 +82,9 @@ export function createPolymarketHandler(options:{gate:PolymarketGate;fetcher?:ty
  }
  function reply(view:PolymarketView):PolymarketReply{
   const {error,lastAttempt}=states[view];
-  const selected=selectSnapshot(snapshot,view),at=now(),age=selected?at-Date.parse(selected.fetched_at):null;
+  const selected=selectSnapshot(snapshot,view),at=now(),age=selected?at-snapshotCacheTime(selected):null;
   const permissionUnknown=['source_busy','source_gate_unavailable','source_gate_outcome_unconfirmed','source_stale_lease'].includes(error??'');
-  const valid=!permissionUnknown&&age!==null&&age>=0&&age<=maximumCacheAge(view);
+  const valid=!permissionUnknown&&age!==null&&age>=0&&at>=Date.parse(selected!.fetched_at)&&age<=maximumCacheAge(view);
   return {snapshot:!denied&&valid?selected:null,status:{state:denied?'denied':!valid?'unavailable':error||age!>refreshInterval(view)?'stale':'available',error_code:error,last_attempt_at:lastAttempt===null?null:new Date(lastAttempt).toISOString(),fetched_at:selected?.fetched_at??null,cache_age_ms:age,refresh_ms:refreshInterval(view),max_cache_age_ms:maximumCacheAge(view),source_next_retry_at:denied||sourceRetryAt===0||sourceRetryAt>8.64e15?null:new Date(sourceRetryAt).toISOString(),next_retry_at:denied||retryAts[view]===0||retryAts[view]>8.64e15?null:new Date(retryAts[view]).toISOString()}};
  }
  return async(request:Request):Promise<Response>=>{
