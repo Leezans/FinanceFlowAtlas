@@ -104,10 +104,14 @@ export function selectSnapshot(cache:PolymarketStoredCache|null,view:PolymarketV
  return snapshotView(cache)===view?cache:null;
 }
 export function updateStoredCache(cache:PolymarketStoredCache|null,snapshot:PolymarketSnapshot):PolymarketStoredCache{
- const view=snapshotView(snapshot);
- const interest=view==='interest'?snapshot:selectSnapshot(cache,'interest');
- if(interest)return interestCacheSchema.parse({schema:'polymarket-discovery/2',interest,hot:view==='hot'?snapshot:selectSnapshot(cache,'hot'),newest:view==='newest'?snapshot:selectSnapshot(cache,'newest')});
- const opposite=selectSnapshot(cache,view==='hot'?'newest':'hot');
+ const view=snapshotView(snapshot),at=Date.parse(snapshot.fetched_at);
+ // Reclaim only evidence already beyond its own display lifetime, as part of
+ // this successful replacement. Expired companion windows must not pin the
+ // shared byte budget forever. A temporary acquisition failure still leaves stored bytes intact.
+ const retained=(mode:PolymarketView)=>{const prior=selectSnapshot(cache,mode);return prior&&at-Date.parse(prior.fetched_at)>maximumCacheAge(mode)?null:prior;};
+ const interest=view==='interest'?snapshot:retained('interest');
+ if(interest)return interestCacheSchema.parse({schema:'polymarket-discovery/2',interest,hot:view==='hot'?snapshot:retained('hot'),newest:view==='newest'?snapshot:retained('newest')});
+ const opposite=retained(view==='hot'?'newest':'hot');
  if(!opposite)return snapshot;
  return discoveryCacheSchema.parse({schema:'polymarket-discovery/1',newest:view==='newest'?snapshot:opposite,hot:view==='hot'?snapshot:opposite});
 }

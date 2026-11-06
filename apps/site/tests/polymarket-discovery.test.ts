@@ -94,6 +94,35 @@ describe('independent hot and newest source windows',()=>{
    const result=await body(await t.handler()(request()));expect(result.snapshot).toBeNull();expect(result.status.error_code).toBe('snapshot_byte_budget');expect(t.sql.prepare('SELECT status,lease_token,payload FROM polymarket_source_gate').get()).toMatchObject({status:'idle',lease_token:null,payload:raw});
   }finally{t.sql.close();}
  });
+ it('reclaims expired companion bytes when a new bounded mode publishes',async()=>{
+  const t=setup();try{
+   const at=new Date().toISOString(),expired=new Date(Date.now()-MAX_CACHE_AGE_MS-1000).toISOString(),tags=(n:number)=>Array.from({length:n},(_,i)=>({slug:`tag-${i}`,label:'x'.repeat(190)}));
+   const newest=parsePolymarket(Array.from({length:500},(_,i)=>market(String(1000-i),{question:'q'.repeat(900),tags:tags(8),updatedAt:null})),expired,expired,{pageSizes:[100,100,100,100,100],stopReason:'page_limit',hasMore:true});
+   const hotRows=Array.from({length:100},(_,i)=>market(String(i+1),{question:'q'.repeat(900),tags:tags(24),updatedAt:null})),hot=parseHotPolymarket(hotRows,at,at);
+   const bytes=(v:unknown)=>new TextEncoder().encode(JSON.stringify(v)).byteLength;
+   expect(bytes(newest)).toBeLessThan(MAX_CACHE_BYTES);expect(bytes(hot)).toBeLessThan(MAX_CACHE_BYTES);expect(bytes(newest)+bytes(hot)).toBeGreaterThan(MAX_CACHE_BYTES);
+   t.sql.prepare('UPDATE polymarket_source_gate SET payload=?,not_before_ms=0').run(JSON.stringify(newest));t.fetcher.mockImplementation(async()=>Response.json(hotRows));
+   const response=await t.handler()(request()),result=await body(response);
+   expect(response.status).toBe(200);expect(result.snapshot?.schema).toBe('polymarket-gamma/hot/1');expect(result.status.state).toBe('available');
+   const row=t.sql.prepare('SELECT status,lease_token,payload FROM polymarket_source_gate').get()!;
+   expect(row.status).toBe('idle');expect(row.lease_token).toBeNull();
+   const stored=storedCacheSchema.parse(JSON.parse(String(row.payload)));
+   expect(selectSnapshot(stored,'newest')).toBeNull();expect(selectSnapshot(stored,'hot')).toEqual(result.snapshot);
+   const cold=await body(await t.handler()(request()));expect(cold.snapshot).toEqual(result.snapshot);expect(t.fetcher).toHaveBeenCalledTimes(1);
+  }finally{t.sql.close();}
+ });
+ it('does not reclaim expired stored windows on a failed acquisition or read',async()=>{
+  const t=setup();try{
+   const expired=new Date(Date.now()-MAX_CACHE_AGE_MS-1000).toISOString();
+   const prior=parsePolymarket(currentRows(),expired,expired),raw=JSON.stringify(prior);
+   t.sql.prepare('UPDATE polymarket_source_gate SET payload=?,not_before_ms=0').run(raw);
+   await t.handler()(new Request('https://test.invalid/api/v1/polymarket/status?view=newest'));
+   expect(t.sql.prepare('SELECT payload FROM polymarket_source_gate').get()?.payload).toBe(raw);expect(t.fetcher).not.toHaveBeenCalled();
+   t.fetcher.mockImplementation(async()=>new Response(null,{status:503}));
+   const result=await body(await t.handler()(request()));expect(result.snapshot).toBeNull();expect(result.status.error_code).toBe('upstream_http');
+   expect(t.sql.prepare('SELECT status,lease_token,payload FROM polymarket_source_gate').get()).toMatchObject({status:'idle',lease_token:null,payload:raw});
+  }finally{t.sql.close();}
+ });
  it('corruption in either bundled mode suppresses all rows before source acquisition',async()=>{
   const t=setup();try{
    for(const mode of ['hot','newest']){const cache={schema:'polymarket-discovery/1',newest:snapshot(),hot:parseHotPolymarket(fixture(),ISO,ISO),[mode]:{schema:'bad'}};t.sql.prepare('UPDATE polymarket_source_gate SET payload=?').run(JSON.stringify(cache));const result=await body(await t.handler()(request()));expect(result.snapshot).toBeNull();expect(result.status.error_code).toBe('source_gate_unavailable');}expect(t.fetcher).not.toHaveBeenCalled();

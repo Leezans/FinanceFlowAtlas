@@ -27,8 +27,8 @@ const {outputFiles}=await build({stdin:{contents:`
   return polymarketHandler(request);
  }};`,resolveDir:root,sourcefile:'polymarket-offline-worker.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
 const migration=(await readFile(new URL('../drizzle/0015_polymarket_market_cache.sql',import.meta.url),'utf8'))+'\n--> statement-breakpoint\n'+(await readFile(new URL('../drizzle/0021_polymarket_interest_cooldown.sql',import.meta.url),'utf8'));
-const {outputFiles:modelFiles}=await build({stdin:{contents:"export {MAX_CACHE_AGE_MS} from './lib/polymarket/model';export {fixture,market,snapshot} from './tests/polymarket-fixture';",resolveDir:root,sourcefile:'polymarket-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
-const {MAX_CACHE_AGE_MS,fixture,market,snapshot}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
+const {outputFiles:modelFiles}=await build({stdin:{contents:"export {parsePolymarket} from './lib/polymarket/adapter';export {MAX_CACHE_AGE_MS} from './lib/polymarket/model';export {fixture,market,snapshot} from './tests/polymarket-fixture';",resolveDir:root,sourcefile:'polymarket-runtime-model.ts'},bundle:true,format:'esm',platform:'node',write:false});
+const {parsePolymarket,MAX_CACHE_AGE_MS,fixture,market,snapshot}=await import('data:text/javascript;base64,'+Buffer.from(modelFiles[0].text).toString('base64'));
 const url='https://test.invalid/api/v1/polymarket/snapshot';
 async function scenario(mode,fn){
  let calls=0;const mock=createFetchMock();mock.disableNetConnect();
@@ -44,7 +44,7 @@ async function scenario(mode,fn){
   if(mode==='temporary')return {statusCode:503,data:'{}',responseOptions:{headers:{'content-type':'application/json','retry-after':'3600'}}};
   const paged=mode.startsWith('paged');
   const tags=Array.from({length:20},(_,i)=>({slug:`tag-${String(i).padStart(2,'0')}`,label:'x'.repeat(190)}));
-  const data=paged?Array.from({length:100},(_,i)=>market(String(1000-(calls-1)*100-i),mode==='paged_oversize'?{tags}:{})):fixture();for(const market of data)if(market.updatedAt)market.updatedAt=new Date(Date.now()-60_000).toISOString();
+  const data=mode==='hot_large'?Array.from({length:100},(_,i)=>market(String(i+1),{question:'q'.repeat(900),tags:Array.from({length:24},(_,j)=>({slug:`tag-${j}`,label:'x'.repeat(190)})),updatedAt:null})):paged?Array.from({length:100},(_,i)=>market(String(1000-(calls-1)*100-i),mode==='paged_oversize'?{tags}:{})):fixture();for(const market of data)if(market.updatedAt)market.updatedAt=new Date(Date.now()-60_000).toISOString();
   const raw=Buffer.from(JSON.stringify(hot?data:{markets:data,...(paged?{next_cursor:`cursor-${calls}`}:{})})),encoded=mode==='gzip'?gzipSync(raw):mode==='br'?brotliCompressSync(raw):raw;
   return {statusCode:200,data:encoded,responseOptions:{headers:{'content-type':'application/json','content-length':String(encoded.length),...(['gzip','br'].includes(mode)?{'content-encoding':mode}:{})}}};
  }).persist();
@@ -147,5 +147,19 @@ await scenario('plain',async(mf,db,calls,setMode)=>{
  await (await (await mf.getWorker('cold')).fetch(url+'?view=hot')).json();await db.prepare('UPDATE polymarket_source_gate SET not_before_ms=0').run();setMode('hot_denied');
  const denied=await (await (await mf.getWorker('virgin')).fetch(url+'?view=hot')).json();assert.equal(denied.status.state,'denied');assert.equal((await db.prepare('SELECT payload FROM polymarket_source_gate').first()).payload,null);
  const warm=await (await mf.dispatchFetch(url+'?view=newest')).json();assert.equal(warm.snapshot,null);assert.equal(warm.status.state,'denied');assert.equal(calls(),3);console.log('PASS hot denial removes both modes and suppresses warm newest without any fallback');
+});
+await scenario('hot_large',async(mf,db,calls)=>{
+ const expired=new Date(Date.now()-MAX_CACHE_AGE_MS-1000).toISOString();
+ const newest=parsePolymarket(Array.from({length:500},(_,i)=>market(String(1000-i),{question:'q'.repeat(900),tags:Array.from({length:8},(_,j)=>({slug:`tag-${j}`,label:'x'.repeat(190)})),updatedAt:null})),expired,expired,{pageSizes:[100,100,100,100,100],stopReason:'page_limit',hasMore:true});
+ const raw=JSON.stringify(newest);assert.ok(Buffer.byteLength(raw)<2_000_000);
+ await db.prepare('UPDATE polymarket_source_gate SET payload=?,not_before_ms=0').bind(raw).run();
+ const response=await mf.dispatchFetch(url+'?view=hot'),result=await response.json();
+ assert.equal(response.status,200,JSON.stringify(result.status));assert.equal(result.snapshot.rows.length,100);
+ assert.ok(Buffer.byteLength(raw)+Buffer.byteLength(JSON.stringify(result.snapshot))>2_000_000,'the old expired companion would block this individually valid publication');
+ const row=await db.prepare('SELECT status,lease_token,payload FROM polymarket_source_gate').first();
+ assert.equal(row.status,'idle');assert.equal(row.lease_token,null);assert.deepEqual(JSON.parse(row.payload),result.snapshot);
+ const cold=await (await (await mf.getWorker('cold')).fetch(url+'?view=hot')).json();assert.deepEqual(cold.snapshot,result.snapshot);
+ const newestCold=await (await (await mf.getWorker('virgin')).fetch(url+'?view=newest')).json();assert.equal(newestCold.snapshot,null);assert.equal(newestCold.status.error_code,'source_cooldown');assert.equal(calls(),1);
+ console.log('PASS expired companion releases cache byte budget only in one atomic successful publication; cold workers retain the exact new window and shared cooldown');
 });
 console.log('PASS no real provider network calls or captured observations');

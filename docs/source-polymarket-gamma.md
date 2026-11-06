@@ -126,6 +126,17 @@ only a validated age-valid snapshot and use exponential cooldown, at least
 30 seconds and at least any valid upstream Retry-After. Error state is persisted
 so cold workers do not present a failed check as a fresh success.
 
+Each successful replacement reclaims companion snapshots only after their own
+maximum display ages: five minutes for hot/newest and ten minutes for open
+interest. This happens inside the same atomic publication, not on a read or a
+failed acquisition. Otherwise expired data can permanently occupy the shared
+2 MB payload limit and reject a new, individually valid window. Retained windows
+keep their original timestamps, and currently usable evidence is not evicted to
+make an oversized bundle fit. Oversized candidates and temporary acquisition
+failures before publication retain the prior stored payload unchanged. Denial
+still clears all evidence. An uncertain publication is never retried and may
+have already committed the new payload.
+
 The entire request lifetime is registered before asynchronous inspection. Owned
 D1 writes are retained through settlement even after a response timeout or request
 cancellation. Late admission performs exact-owner cancellation cleanup without a
