@@ -42,7 +42,7 @@ describe('server-relative next A-share check',()=>{
   vi.useFakeTimers();let finish!:(response:Response)=>void;
   const mock=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(evidence),{headers:{'x-ashare-refresh-after':'1'}})).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));vi.stubGlobal('fetch',mock);
   const view=render(<Page/>);await advance(1200);expect(mock).toHaveBeenCalledTimes(2);
-  await advance(180000);expect(mock).toHaveBeenCalledTimes(2);
+  await advance(30000);expect(mock).toHaveBeenCalledTimes(2);
   await act(async()=>finish(new Response(JSON.stringify(evidence),{headers:{'x-ashare-refresh-after':'1'}})));
   view.unmount();await advance(60000);expect(mock).toHaveBeenCalledTimes(2);
  });

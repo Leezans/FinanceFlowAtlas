@@ -4,6 +4,8 @@ export type Recovery={code:string;mode:'retry'|'stopped';retryAt:number|null;htt
 export type EvidenceState={snapshot:ValidEvidence|null;etag:string|null;status:'ready'|'stale'|'blocked'|'error'|'empty';message:string;recovery?:Recovery;retainedAfterFailure?:boolean;retainedDuringCollection?:boolean;nextCheckAt?:number};
 export type WireReply={status:number;etag?:string;payload?:unknown;errorCode?:string;recoveryMode?:string;retryAfter?:string;refreshAfter?:string};
 export type Transport=(request:{ifNoneMatch?:string;scope:Scope})=>Promise<WireReply>;
+/** Browser-to-application timeout only; never a claim about the provider outcome. */
+export class BrowserTimeoutError extends Error {constructor(readonly retryNotBefore?:number){super('browser_timeout');this.name='BrowserTimeoutError';}}
 export const emptyState=():EvidenceState=>({snapshot:null,etag:null,status:'empty',message:'尚未接入来源'});
 /** Retry-After can be seconds or an HTTP date. Never shorten a valid cooldown. */
 export function retryAt(value:string|undefined,now:number):number {
@@ -66,7 +68,7 @@ export function createEvidenceClient(transport:Transport,now=()=>Date.now()) {
    if(key!==currentScope){currentScope=key;state=emptyState();}
    const prior=state;
    try{const reply=await transport({scope,...(prior.etag?{ifNoneMatch:prior.etag}:{})});if(id===generation)state=consumeReply(prior,reply,scope,now());}
-   catch{if(id===generation)state=failure(prior,scope,{code:'browser_network',mode:'retry',retryAt:now()+60_000,httpStatus:null});}
+   catch(error){if(id===generation)state=failure(prior,scope,{code:error instanceof BrowserTimeoutError?'browser_timeout':'browser_network',mode:'retry',retryAt:Math.max(now()+60_000,error instanceof BrowserTimeoutError?error.retryNotBefore??0:0),httpStatus:null});}
    return state;
   },
  };

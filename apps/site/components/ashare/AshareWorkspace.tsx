@@ -3,22 +3,13 @@ import React,{useEffect,useState,useRef} from 'react';
 import EvidenceHeatmap from '@/components/ashare/EvidenceHeatmap';
 import SourceRecovery from '@/components/ashare/SourceRecovery';
 import MarketTiming from '@/components/ashare/MarketTiming';
-import {createEvidenceClient,emptyState,type EvidenceState} from '@/components/ashare/client';
+import {emptyState,type EvidenceState} from '@/components/ashare/client';
+import {createEvidenceSession} from '@/components/ashare/session';
 import type {Scope} from '@/components/ashare/model';
 const ROOT:Scope={kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'};
-function createSession(){
- let abort:AbortController|null=null;
- const client=createEvidenceClient(async({scope:requested,ifNoneMatch})=>{
-  abort?.abort();const controller=new AbortController();abort=controller;
-  const key=requested.kind==='industry_rank'?'level1':requested.fs.slice(2);
-  const response=await fetch(`/api/v1/ashare/snapshot?scope=${encodeURIComponent(key)}`,{signal:controller.signal,cache:'no-store',headers:ifNoneMatch?{'If-None-Match':ifNoneMatch}:{}});
-  return {refreshAfter:response.headers.get('x-ashare-refresh-after')||undefined,errorCode:response.headers.get('x-ashare-error-code')||undefined,recoveryMode:response.headers.get('x-ashare-recovery')||undefined,retryAfter:response.headers.get('retry-after')||undefined,status:response.status,etag:response.headers.get('etag')||undefined,payload:response.status===304?undefined:await response.json().catch(()=>undefined)};
- });
- return {client,cancel:()=>abort?.abort()};
-}
 export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
  const [scope,setScope]=useState<Scope>(ROOT),[industry,setIndustry]=useState(''),[state,setState]=useState<EvidenceState>(emptyState),[loading,setLoading]=useState(false);
- const [{client,cancel}]=useState(createSession);
+ const [{client,cancel}]=useState(createEvidenceSession);
  const retry=useRef<()=>void>(()=>{});
  useEffect(()=>{
   let live=true,busy=false,timer:ReturnType<typeof setTimeout>|undefined;

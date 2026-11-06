@@ -62,3 +62,26 @@ synthetic native-runtime result, not a live latency guarantee. Live source
 response time, rate limits, temporary failures and browser suspension can still
 delay completion. A large staged traversal need not be an atomic market snapshot
 or finish inside one minute.
+
+## Browser connection and response-body limits
+
+The browser waits at most 35 seconds for one application snapshot request,
+including its response body. The server's 20-second acquisition budget, shared
+source gate, and durable cooldown are unchanged. A request or body that never
+settles previously left the browser's in-flight flag set forever, disabling
+all later automatic refreshes. The browser now aborts that request, shows an
+application-timeout diagnostic and keeps only the selected scope's previously
+validated evidence with its original ETag and acquisition time.
+
+A browser timeout cannot establish whether the provider failed, succeeded, or
+remains busy. The next ordinary application check waits at least 60 seconds
+after timeout and honors any longer Retry-After already received in the response
+headers. The authoritative server gate still decides whether collection is
+permitted; no source lock, denial record or cooldown is changed by this fix.
+
+Known 401/403 responses and stopped recovery headers clear evidence immediately,
+without waiting for a response body. Navigation/unmount abort the old wait and
+cancel its timeout; late headers/bodies cannot publish old-scope evidence.
+Healthy responses and 304s still use their server-relative cache-check hint.
+Regression tests use synthetic fetch and body stalls with no provider networking;
+they do not establish live source availability.
