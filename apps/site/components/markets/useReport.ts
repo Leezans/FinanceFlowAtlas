@@ -4,7 +4,7 @@ import {untilAborted,timerDelay,retryAfterDeadline,absoluteRetryDeadline} from '
 const BROWSER_RETRY_MS=60_000;
 /** Browser lifecycle shared by independently validated official report views.
  * Browser recovery checks never reset or shorten the server's source gate. */
-export function useReport<T extends {status:{state:string;next_retry_at?:string|null}}>(url:string, parse:(value:unknown)=>T, refreshMs:number) {
+export function useReport<T extends {status:{state:string;next_retry_at?:string|null}}>(url:string, parse:(value:unknown)=>T, refreshMs:number,timeoutMs=30_000) {
   const [reply,setReply]=useState<T|null>(null),[loading,setLoading]=useState(false),[failure,setFailure]=useState<'network'|'permission'|'invalid'|null>(null),[now,setNow]=useState(0),[nextDeadline,setNextDeadline]=useState(0);
   const controller=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false),retryAt=useRef(0);
   const poll=useRef<ReturnType<typeof setTimeout>|null>(null),refreshRef=useRef<()=>Promise<void>>(async()=>{});
@@ -13,7 +13,7 @@ export function useReport<T extends {status:{state:string;next_retry_at?:string|
     if(poll.current)clearTimeout(poll.current);poll.current=null;
     if(Date.now()<retryAt.current){poll.current=setTimeout(()=>void refreshRef.current(),timerDelay(retryAt.current));return;}
     const active=new AbortController();controller.current=active;setLoading(true);
-    const timer=setTimeout(()=>active.abort(),30_000);
+    const timer=setTimeout(()=>active.abort(),timeoutMs);
     const current=()=>mounted.current&&controller.current===active;
     let delay=BROWSER_RETRY_MS;
     try {
@@ -42,7 +42,7 @@ export function useReport<T extends {status:{state:string;next_retry_at?:string|
         if(!blocked.current&&document.visibilityState==='visible')poll.current=setTimeout(()=>void refreshRef.current(),timerDelay(retryAt.current));
       }
     }
-  },[url,parse,refreshMs]);
+  },[url,parse,refreshMs,timeoutMs]);
   useEffect(()=>{
     mounted.current=true;refreshRef.current=refresh;
     const start=setTimeout(()=>{setNow(Date.now());void refresh();},0);

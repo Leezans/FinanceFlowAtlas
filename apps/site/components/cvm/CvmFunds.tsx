@@ -1,33 +1,16 @@
 'use client';
-import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {REFRESH_MS,STALE_REPORT_DAYS,replySchema,visibleSnapshot,reportAge,type CvmReply} from '@/lib/cvm/model';
+import React,{useState} from 'react';
+import {useReport} from '@/components/markets/useReport';
+import {REFRESH_MS,STALE_REPORT_DAYS,replySchema,visibleSnapshot,reportAge} from '@/lib/cvm/model';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {industries,industryLabel,money,signedMoney,cvmMatrixGroups} from './matrix';
 import s from './cvm.module.css';
+const parse=(value:unknown)=>replySchema.parse(value);
 const stamp=(t:string|null)=>t?t.replace('T',' ').replace('Z',' UTC'):'未提供';
 export default function CvmFunds({embedded=false}:{embedded?:boolean}={}){
- const [data,setData]=useState<CvmReply|null>(null),[loading,setLoading]=useState(false),[failure,setFailure]=useState<'network'|'permission'|'invalid'|null>(null),[now,setNow]=useState(0),[industry,setIndustry]=useState<string|null>(null),[selectedCode,setSelectedCode]=useState<string|null>(null);
- const active=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false);
- const refresh=useCallback(async()=>{
-  if(active.current||blocked.current)return;
-  const controller=new AbortController();active.current=controller;setLoading(true);
-  const timeout=setTimeout(()=>controller.abort(),65_000);
-  try{
-   const response=await fetch('/api/v1/brazil/cvm/snapshot',{credentials:'same-origin',cache:'no-store',redirect:'manual',signal:controller.signal});
-   if([401,403].includes(response.status)||response.type==='opaqueredirect'||response.redirected||response.status>=300&&response.status<400){if(mounted.current&&active.current===controller){blocked.current=true;setData(null);setFailure('permission');}return;}
-   let result:CvmReply;
-   try{result=replySchema.parse(await response.json());if(![200,503].includes(response.status))throw new Error('invalid_response');}
-   catch(error){if(response.status>=500&&response.status<=599)throw error;if(mounted.current&&active.current===controller){setData(null);setFailure('invalid');}return;}
-   if(mounted.current&&active.current===controller){blocked.current=result.status.state==='denied';setData(result);setFailure(null);setNow(Date.now());}
-  }catch{if(mounted.current&&active.current===controller){setFailure('network');setNow(Date.now());}}
-  finally{clearTimeout(timeout);if(active.current===controller){active.current=null;if(mounted.current)setLoading(false);}}
- },[]);
- useEffect(()=>{
-  mounted.current=true;const start=setTimeout(()=>{setNow(Date.now());void refresh();},0);
-  const tick=setInterval(()=>setNow(Date.now()),30_000),poll=setInterval(()=>{if(document.visibilityState==='visible')void refresh();},REFRESH_MS);
-  const visible=()=>{setNow(Date.now());if(document.visibilityState==='visible')void refresh();};document.addEventListener('visibilitychange',visible);
-  return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);clearInterval(poll);document.removeEventListener('visibilitychange',visible);active.current?.abort();active.current=null;};
- },[refresh]);
+ const {reply:data,loading,failure,now,refresh,nextDeadline,coolingDown}=useReport('/api/v1/brazil/cvm/snapshot',parse,REFRESH_MS,65_000);
+ const [industry,setIndustry]=useState<string|null>(null),[selectedCode,setSelectedCode]=useState<string|null>(null);
+ const nextCheck=nextDeadline>0?(Number.isFinite(nextDeadline)&&nextDeadline<=8.64e15?stamp(new Date(nextDeadline).toISOString()):'来源要求暂停，恢复时间超出可显示范围'):'未提供';
  const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
  const stale=!!snapshot&&(failure==='network'||data?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||days!>STALE_REPORT_DAYS);
  const groups=snapshot?industries(snapshot):[],group=groups.find(g=>g.industry===industry)??null;
@@ -37,8 +20,8 @@ export default function CvmFunds({embedded=false}:{embedded?:boolean}={}){
  return <div className={`${s.surface} ${embedded?s.embedded:''}`}><Container className={s.root}>
   {!embedded&&<header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/taiwan">台股法人矩阵 ↗</a></header>}
   <section className={s.intro}><p className={s.eyebrow}>BRAZIL / CVM OPEN DATA</p>{embedded?<h3>巴西基金 · 股票行业矩阵</h3>:<h1>巴西基金 · 股票行业矩阵</h1>}<p className={s.subtitle}>行业 → 证券下钻 · 月度实际买卖金额 · ODbL 开放数据，无需账户</p><p className={s.notice}>这里只汇总 CVM 公开披露的投资基金股票交易，金额为巴西雷亚尔（BRL）。不是全部机构、外资或全市场资金流；未披露和保密交易不分摊至行业。不用持仓差或股价推算流量。</p></section>
-  <section className={s.status} aria-live="polite"><div><strong>{failure==='permission'?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在读取 CVM 官方月报':snapshot?stale?'保留已校验月报 · 请注意陈旧状态':'已取得可校验的月度交易报告':'暂无可验证的基金股票月报'}</strong><p>{failure==='permission'?'已清空证据并停止检查。':failure==='invalid'?'响应未通过校验，已清空证据。':denied?'来源拒绝访问后停止请求，不切换路径。':failure==='network'?'连接失败，只保留仍在展示期限内的已校验报告。':'每日检查一次；选择当前月前两个月，避开刚开始申报的月份。仍可能存在保密、迟报与修订。首次获取可能需要一分钟。'}</p>{data?.status.error_code&&<small>{data.status.error_code}</small>}</div><button onClick={()=>void refresh()} disabled={loading||denied||failure==='permission'}>{loading?'正在检查…':'检查月报'}</button></section>
-  <div className={s.times}><span>交易观测月<b>{snapshot?.period??'暂无报告'}</b></span><span>分类快照获取日<b>{snapshot?.classification_date??'暂无分类'}</b></span><span>来源实际发布时间<b>未提供，不以获取时间代替</b></span><span>最近成功获取<b>{stamp(snapshot?.fetched_at??data?.status.fetched_at??null)}</b></span></div>
+  <section className={s.status} aria-live="polite"><div><strong>{failure==='permission'?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在读取 CVM 官方月报':snapshot?stale?'保留已校验月报 · 请注意陈旧状态':'已取得可校验的月度交易报告':'暂无可验证的基金股票月报'}</strong><p>{failure==='permission'?'已清空证据并停止检查。':failure==='invalid'?'响应未通过校验，已清空证据。':denied?'来源拒绝访问后停止请求，不切换路径。':failure==='network'?'连接失败，只保留仍在展示期限内的已校验报告。':'页面可见时按来源许可检查，正常间隔一天；更长暂停会保留。选择当前月前两个月，避开刚开始申报的月份。仍可能存在保密、迟报与修订。首次获取可能需要一分钟。'}</p>{data?.status.error_code&&<small>{data.status.error_code}</small>}</div><button onClick={()=>void refresh()} disabled={loading||denied||failure==='permission'||coolingDown}>{loading?'正在检查…':'检查月报'}</button></section>
+  <div className={s.times}><span>交易观测月<b>{snapshot?.period??'暂无报告'}</b></span><span>分类快照获取日<b>{snapshot?.classification_date??'暂无分类'}</b></span><span>来源实际发布时间<b>未提供，不以获取时间代替</b></span><span>最近成功获取<b>{stamp(snapshot?.fetched_at??data?.status.fetched_at??null)}</b></span><span>下次可检查<b>{denied||failure==='permission'?'已停止':nextCheck}</b></span></div>
   {snapshot&&<>
    <div className={s.coverage}><span><b>{known} / {snapshot.rows.length}</b> 只证券有有效公开交易记录</span><span><b>{groups.length}</b> 个官方行业</span><span><b>{snapshot.counts.public_funds}</b> 个公开报告基金 / 类别</span><span><b>{snapshot.counts.confidential_rows}</b> 条股票保密汇总，未分配</span></div>
    <p className={s.coverageNote}>未匹配交易记录 {snapshot.counts.unmatched_rows} 条；歧义 {snapshot.counts.ambiguous_rows} 条；金额缺失 {snapshot.counts.null_amount_rows} 条；重复 {snapshot.counts.duplicate_rows} 条。缺失不视为零。公开披露的覆盖范围随月份和保密期限变化。</p>
