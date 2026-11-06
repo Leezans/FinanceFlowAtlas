@@ -1,5 +1,5 @@
 import {strictJSON} from '../ashare/strict-json';
-import {SUMMARY_URLS,INSTRUMENTS_URLS,OptionsError,resultRows,parseMetadata,reusableMetadata,parseSummary,combineSnapshots} from './adapter';
+import {SUMMARY_URLS,INSTRUMENTS_URLS,OptionsError,resultRows,parseMetadata,reusableMetadata,parseSummary,combineSnapshots,serializeCombinedSnapshot} from './adapter';
 import {REFRESH_MS,MAX_CACHE_AGE_MS,MAX_BYTES,type OptionsSnapshot,type OptionsReply} from './model';
 const DEADLINE_MS=15_000;
 export type OptionsOutcome={kind:'success'|'temporary_failure'|'denied';retryAfterMs?:number;snapshot?:OptionsSnapshot};
@@ -75,6 +75,9 @@ export function createOptionsHandler(options:{gate:OptionsGate;fetcher?:typeof f
     parts.push(parseSummary(rows,metadata,new Date(started).toISOString(),new Date(now()).toISOString(),metadataFetched,currency));
    }
    const candidate=combineSnapshots(parts);
+   // Deterministic rejection still owns a cleanable lease. Only an attempted
+   // release may have an unknown D1 outcome and must never be retried.
+   serializeCombinedSnapshot(candidate);
    releasing=true;await settleGate(track(options.gate.release(token,{kind:'success',snapshot:candidate})),deadline.signal);token=undefined;
    snapshot=candidate;error=null;failures=0;retryAt=now()+REFRESH_MS;
   }catch(caught){
