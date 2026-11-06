@@ -61,16 +61,16 @@ describe('foreign-resident US equity historical chart', () => {
   render(<TicHistory/>); await screen.findByText(/HTTP 503/);
   expect(screen.queryByRole('img')).toBeNull(); expect(screen.queryByRole('table')).toBeNull();
  });
- it('aborts superseded requests and ignores responses after unmount', async () => {
+ it('serializes repeated clicks and aborts the active request on unmount', async () => {
   const pending: {resolve: (value: unknown) => void; signal: AbortSignal}[] = [];
   vi.stubGlobal('fetch', vi.fn((_url, init: RequestInit) => new Promise(resolve => pending.push({resolve, signal: init.signal as AbortSignal}))));
   const mounted = render(<TicHistory/>);
   await waitFor(() => expect(pending).toHaveLength(1));
   fireEvent.click(screen.getByRole('button', {name: '刷新美国历史数据'}));
-  expect(pending[0].signal.aborted).toBe(true);
-  pending[1].resolve(response(fixture)); await screen.findByRole('img');
-  pending[0].resolve(response({}, 503)); await waitFor(() => expect(screen.queryByText(/HTTP 503/)).toBeNull());
-  mounted.unmount(); expect(pending[1].signal.aborted).toBe(true);
+  expect(pending).toHaveLength(1);
+  expect(pending[0].signal.aborted).toBe(false);
+  mounted.unmount(); expect(pending[0].signal.aborted).toBe(true);
+  pending[0].resolve(response(fixture));
  });
  it('clears delayed startup and polling on immediate unmount', () => {
   vi.useFakeTimers(); const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);

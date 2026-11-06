@@ -29,3 +29,14 @@ describe('independent US history endpoint', () => {
   expect(response.status).toBe(503); expect(await response.text()).not.toContain('private');
  });
 });
+
+describe('TIC historical source stop headers',()=>{
+ it('preserves long retry metadata on 503',async()=>{
+  const deadline=new Date(Date.now()+3600_000).toISOString();fake.read.mockResolvedValue({snapshot:null,status:{state:'unavailable',source_status:'cooldown',next_retry_at:deadline}});
+  const response=await serveTicHistory(new Request('https://example.test/history'));expect(response.status).toBe(503);expect(response.headers.get('X-Next-Retry-At')).toBe(deadline);expect(Number(response.headers.get('Retry-After'))).toBeGreaterThanOrEqual(3599);
+ });
+ it('preserves denied metadata when reusing a cached historical ETag',async()=>{
+  const snapshot=await normalizeHistory(sample(['Grand Total\t99996\t2026-08\t12']));fake.read.mockResolvedValue({snapshot,status:{state:'stale',source_status:'denied',next_retry_at:null}});
+  const first=await serveTicHistory(new Request('https://example.test/history'));const second=await serveTicHistory(new Request('https://example.test/history',{headers:{'If-None-Match':first.headers.get('ETag')!}}));expect(second.status).toBe(304);expect(second.headers.get('X-Source-Status')).toBe('denied');
+ });
+});

@@ -28,7 +28,7 @@ describe('actual SQLite repository migration and publication', () => {
  it.each([LATEST_CACHE_KEY, HISTORY_CACHE_KEY])('seeds %s once, retains it on upstream failure, and immediately attempts discovery', async key => {
   const snapshot = key === LATEST_CACHE_KEY ? await normalize(valid(), '2026-08', new Date(now).toISOString()) : await normalizeHistory(valid(), new Date(now).toISOString());
   await db.insert(ticCache).values({id: legacyCacheKey(key)!, payload: JSON.stringify(snapshot), version: snapshot.version,
-   lastAttemptMs: now, lastSuccessMs: now, leaseUntilMs: now + 30000, leaseToken: 'legacy-owner'});
+   lastAttemptMs: now, lastSuccessMs: now, leaseUntilMs: 0, leaseToken: null});
   const repo = repository(key);
   await Promise.all([repo.ensure(), repo.ensure()]);
   expect((await repo.load())?.lastAttemptMs).toBeNull();
@@ -44,7 +44,7 @@ describe('actual SQLite repository migration and publication', () => {
   const claimed = await Promise.all([repo.claim(now, 'owner-a'), repo.claim(now, 'owner-b')]);
   expect(claimed.filter(Boolean)).toHaveLength(1);
   const snapshot = await normalize(valid(), undefined, new Date(now).toISOString());
-  await repo.success('not-owner', snapshot, now); expect((await repo.load())?.payload).toBeNull();
+  await expect(repo.success('not-owner', snapshot, now)).rejects.toThrow('not confirmed'); expect((await repo.load())?.payload).toBeNull();
   const owner = claimed[0] ? 'owner-a' : 'owner-b';
   await repo.success(owner, snapshot, now);
   expect((await repo.load())?.version).toBe(snapshot.version);

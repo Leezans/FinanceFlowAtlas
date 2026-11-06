@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach, describe, it, expect, vi} from 'vitest';
-import {render, screen, waitFor, fireEvent, cleanup, within} from '@testing-library/react';
+import {render, screen, waitFor, fireEvent, cleanup} from '@testing-library/react';
 import TicLayer from '../components/atlas/TicLayer';
 import {ticFixture} from './ticTestFixture';
 afterEach(() => {cleanup(); vi.unstubAllGlobals();});
@@ -50,17 +50,16 @@ describe('shared global country matrix', () => {
   fireEvent.click(screen.getByRole('tab', {name: '矩阵热力图'}));
   expect(tiles(container)).toHaveLength(1);
  });
- it('clears tiles and inspected evidence after failure, then recovers without fabricating missing values', async () => {
+ it('retains verified tiles and evidence on transient failure without fabricating missing values', async () => {
   let failed = false;
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/status') ? {ok: true, json: async () => ({state: 'available'})} : failed ? {ok: false, status: 503} : {ok: true, status: 200, headers: new Headers(), json: async () => ticFixture}));
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/status') ? {ok: true, status:200, headers:new Headers(), json: async () => ({state: 'available'})} : failed ? {ok: false, status: 503, headers:new Headers()} : {ok: true, status: 200, headers: new Headers(), json: async () => ticFixture}));
   const {container} = render(<TicLayer/>);
   await waitFor(() => expect(tiles(container)).toHaveLength(3));
   fireEvent.mouseEnter(container.querySelector('[data-id=GBR]')!);
   failed = true; fireEvent.click(screen.getByRole('button', {name: 'Refresh TIC data'}));
   await screen.findByText('TIC 数据暂不可用。');
-  expect(tiles(container)).toHaveLength(0);
-  expect(screen.getByText('TIC 矩阵暂无已验证数据')).toBeTruthy();
-  expect(within(screen.getByRole('region', {name: '美国股权跨境净交易矩阵'})).queryByText(/United Kingdom/)).toBeNull();
+  expect(tiles(container)).toHaveLength(3);
+  expect(screen.queryByText('TIC 矩阵暂无已验证数据')).toBeNull();
   failed = false; fireEvent.click(screen.getByRole('button', {name: 'Refresh TIC data'}));
   await waitFor(() => expect(tiles(container)).toHaveLength(3));
  });

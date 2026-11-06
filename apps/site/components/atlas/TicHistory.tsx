@@ -1,55 +1,18 @@
 "use client";
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React from 'react';
 import {historySchema, type TicHistory as History} from '../../lib/tic/history';
 import {signedMillions} from '@/lib/tic/model';
-import {timestamp, POLL_MS} from './model';
+import {timestamp} from './model';
+import {useTicResource} from './useTicResource';
+const parseHistory=(value:unknown):History=>historySchema.parse(value);
 
 export default function TicHistory() {
- const [data, setData] = useState<History | null>(null);
- const [error, setError] = useState('');
- const [stale, setStale] = useState(false);
- const [loading, setLoading] = useState(true);
- const state = useRef<{id: number; controller: AbortController | null; data: History | null; etag: string | null}>({id: 0, controller: null, data: null, etag: null});
- const refresh = useCallback(async () => {
-  const current = state.current;
-  current.controller?.abort();
-  const controller = new AbortController(); current.controller = controller;
-  const id = ++current.id;
-  let timedOut = false;
-  const timeout = setTimeout(() => {timedOut = true; controller.abort();}, 20000);
-  try {
-   const response = await fetch('/api/v1/flows/tic/history', {signal: controller.signal, cache: 'no-store',
-    headers: current.etag && current.data ? {'If-None-Match': current.etag} : {}});
-   let next: History;
-   if (response.status === 304) {
-    if (!current.data) throw new Error('没有可复用的历史快照。');
-    next = current.data;
-   } else {
-    if (!response.ok) throw new Error(`历史来源暂不可用（HTTP ${response.status}）。`);
-    next = historySchema.parse(await response.json());
-   }
-   if (id !== current.id || controller.signal.aborted) return;
-   current.data = next;
-   if (response.status !== 304) current.etag = response.headers.get('ETag');
-   setData(next); setError(''); setStale(response.headers.get('X-Data-Status') === 'stale');
-  } catch (e) {
-   if (id === current.id && (!controller.signal.aborted || timedOut)) {
-    current.data = null; current.etag = null; setData(null); setStale(false);
-    setError(timedOut ? '历史来源请求超时。' : e instanceof Error && e.message.startsWith('历史来源') ? e.message : '历史快照未通过核验，未显示数值。');
-   }
-  } finally {clearTimeout(timeout); if (id === current.id) setLoading(false);}
- }, []);
- useEffect(() => {
-  const initial = setTimeout(() => void refresh(), 0);
-  const timer = setInterval(() => void refresh(), POLL_MS);
-  const current = state.current;
-  return () => {clearTimeout(initial); clearInterval(timer); current.id++; current.controller?.abort();};
- }, [refresh]);
+ const {data,error,stale,loading,stopped,refresh}=useTicResource('/api/v1/flows/tic/history',parseHistory);
  const maximum = Math.max(1, ...data?.observations.map(r => Math.abs(r.net_foreign_purchases_usd ?? 0)) || []);
  return <section className="tic-history" aria-label="美国股权境外净交易历史">
   <div className="history-heading"><div><span className="eyebrow">美国 · US ISSUER OVERVIEW</span>
    <h3>境外居民净买卖美国股权</h3><p>{data ? `${data.start_period} 至 ${data.end_period}` : '等待来源核验最近 12 个月'} · 含基金份额 · 月度，非实时</p></div>
-   <button onClick={() => void refresh()} aria-label="刷新美国历史数据">刷新历史 ↻</button></div>
+   <button disabled={loading||stopped} onClick={() => void refresh()} aria-label="刷新美国历史数据">刷新历史 ↻</button></div>
   <p className="history-scope">原表 Grand Total，独立于国家矩阵筛选。不是美国全市场资金流，也不代表个股资金流。</p>
   {stale && <p className="notice warning" role="status">历史来源检查失败或逾期，显示最后核验快照。</p>}
   {error && <p className="notice warning" role="status">{error} 缺失不按零处理。</p>}

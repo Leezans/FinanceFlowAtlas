@@ -1,3 +1,4 @@
+import {memoryGate} from './tic-memory-gate';
 import {describe, it, expect} from 'vitest';
 import {getCachedSource, DAY_MS, type CacheRepository, type CacheRow} from '../lib/tic/cache';
 import {normalizeHistory, historySchema, trailingMonths, type TicHistory} from '../lib/tic/history';
@@ -6,6 +7,7 @@ import {sample} from './tic-fixture';
 function memory(): CacheRepository<TicHistory> {
  let row: CacheRow = {payload: null, version: null, lastAttemptMs: null, lastSuccessMs: null, error: null, leaseUntilMs: 0, leaseToken: null};
  return {
+  sourceGate:memoryGate(),
   async ensure() {}, async load() {return {...row};},
   async claim(now, token) {if (row.leaseUntilMs > now) return false; row = {...row, lastAttemptMs: now, leaseToken: token, leaseUntilMs: now + 30000}; return true;},
   async success(token, snapshot, now) {if (row.leaseToken === token) row = {...row, payload: JSON.stringify(snapshot), version: snapshot.version, lastSuccessMs: now, error: null, leaseUntilMs: 0, leaseToken: null};},

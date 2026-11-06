@@ -39,3 +39,38 @@ Validated A-share evidence is retained privately in primary D1 `ashare_snapshot_
 The first-level industry query is based on Eastmoney's own published level metadata. An independent limited Python execution verified 31 first-level industries and one complete 523-stock/6-page scope. This is not a claim that every industry was sampled. The deployed JS path still requires actual runtime verification. Provider order-classified main-net values are labeled as estimates, not actual market money creation. Source observation time/trading date/latency remain unknown; acquisition time is separate.
 
 The frontend checks every minute; acquisition is on demand with bounded cache/coordination, not a permanent background process. Every page is validated before publication. Source permission denial/challenges stop acquisition persistently; last-good values are explicitly stale. No custom fetcher, `isolatedForTests`, credential or proxy override is configured in the production host adapter.
+
+## TIC shared source refusal and browser lifecycle
+
+Both independent TIC cache keys now share the reserved metadata row
+`tic-treasury-source-gate-v1` in the existing `tic_snapshot_cache` table. No new
+schema migration is required. The row contains coordination metadata only.
+Initial insertion preserves existing refusal or unknown in-flight/HTTP retry
+metadata; it never overwrites an existing gate. A source claim is atomic and
+shared across workers. Busy, denied and uncertain states never expire, and
+there is no automatic reset endpoint. A failed or unconfirmed coordination or
+publication write stops acquisition rather than trying another cache key.
+
+HTTP 401/403/407/429/451, redirects and explicit access challenges stop Treasury
+acquisition persistently. A temporary HTTP failure waits at least five minutes
+and respects longer Retry-After seconds or absolute HTTP dates using the D1
+clock. HTTP dates are not converted using a possibly skewed worker clock.
+Unrepresentable deadlines, timeouts and rejected fetch/body operations retain
+an uncertain stop. A late response cannot publish or open a new source attempt.
+A validated cached snapshot remains readable with stale status and explicit
+source-status metadata; it does not imply restored source permission.
+
+Browser current/history views share one lifecycle implementation. Polling runs
+only while visible; a status response arriving while hidden cannot start a
+snapshot request until visibility returns. Fetch/body waits are bounded,
+requests do not overlap, and automatic/manual refresh obey the same server
+pause. Application refusal, redirects and unknown outcomes stop that lifecycle.
+Closing the view cancels future checks. This is request-driven, not a scheduler.
+
+Verification uses synthetic fixtures only: `npm test` includes SQLite and
+browser lifecycle regressions; `npm run test:tic-runtime` bundles the checked-in
+routes in native workerd with two workers sharing isolated D1. Its strict
+outbound service returns synthetic responses only and rejects any unexpected
+URL. It checks denial, one-hour cooldown, current/history cross-worker cache
+reuse, ETags, and stale cache retention. No production gate, real source,
+credentials or authenticated live-data recovery is exercised by these tests.
