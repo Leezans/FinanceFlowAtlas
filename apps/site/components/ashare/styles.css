@@ -16,3 +16,6 @@
 .evidence-heatmap .flow-legend p{font-size:10px;margin:2px 0 0}
 /* The homepage also imports atlas styles, whose generic header has fixed height. */
 .evidence-heatmap header{height:auto;min-height:0}
+
+/* Always-visible metric scope, including the empty/blocked matrix state. */
+.ashare-metric-scope{background:#12232e;border:1px solid #395664;border-radius:7px;color:#d9e7ec;padding:12px 16px;margin-bottom:12px;font:12px/1.65 system-ui,sans-serif;overflow-wrap:anywhere}.ashare-metric-scope p{margin:5px 0;color:#bad0dc}.ashare-metric-scope a{color:#98d5e7;text-underline-offset:3px}.ashare-metric-scope a:focus-visible{outline:2px solid #badcea;outline-offset:3px}

@@ -12,6 +12,6 @@ export default function MarketLanding({onOpenTic}:{onOpenTic?:()=>void}={}){
    <a href="/forex" aria-label="打开外汇行情：Kraken 法币现货与 ECB 每日参考">外汇行情</a>
    <a href="#tic-view" onClick={onOpenTic}>继续看美国 TIC</a>
   </nav>
-  <p className={s.disclosure}>主力净额是订单分类估算，非市场真实新增资金。各来源独立展示，不混合单位、时点或口径。</p>
+  <p className={s.disclosure}>主力净额仅是东方财富大单与超大单的订单分类估算，不是所有交易资金净流入，也非市场真实新增资金。各来源独立展示，不混合单位、时点或口径。</p>
  </section>;
 }
