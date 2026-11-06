@@ -76,6 +76,11 @@ or overriding stopped state. Closing the page stops its future checks. The Site
 has no verified native cron configuration in this release. See
 [refresh scheduling and its limits](docs/ASHARE-REFRESH-SCHEDULING.md).
 
+An optional [independently deployed scheduler](scheduler/README.md) now reuses the
+same acquisition handler and primary D1 gate. It is disabled by default, has no
+installed trigger, and requires a separately authorized same-D1 deployment.
+Shipping this component does not turn on unattended collection in the Site.
+
 ### A-share exploration
 
 The time panel separates the scheduled ordinary auction session (published 2026

@@ -47,3 +47,6 @@ yarn-error.log*
 
 # A local shared dependency symlink is also generated state.
 /node_modules
+
+# Optional scheduler deployment configuration stays local.
+/scheduler/wrangler.local.*

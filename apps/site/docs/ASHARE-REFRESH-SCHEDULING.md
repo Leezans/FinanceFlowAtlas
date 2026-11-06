@@ -177,3 +177,14 @@ across independent workers. All source responses are synthetic and external
 networking is disabled. This is not a deployed unattended scheduler or proof of
 live market-data availability. A future job still needs supported scheduling,
 authorized service access, durable job ownership, fairness and no-visitor tests.
+
+
+## Optional independently deployed Worker
+
+The repository now includes a default-disabled [scheduled Worker adapter](../scheduler/README.md).
+It reuses this finite driver and the existing handler/gates in native Workers,
+with separate durable job ownership, minute idempotency, bounded scope fairness
+and read-only gap checks. It has no installed trigger, account binding or public
+endpoint. The current Site remains request-driven. Enabling a separate same-D1
+deployment and verifying real no-visitor executions remain operator steps, not
+accomplishments of this source change. No Node/VPS cookie-based caller is provided.
