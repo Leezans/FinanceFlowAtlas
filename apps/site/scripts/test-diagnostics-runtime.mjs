@@ -48,11 +48,11 @@ try {
   }
   let before = await dump();
   const first = await mf.dispatchFetch(url), firstBody = await first.json();
-  assert.equal(first.status, 200); assert.equal(firstBody.sources.length, 16);
+  assert.equal(first.status, 200); assert.equal(firstBody.sources.length, 17);
   assert.equal(firstBody.sources.find(value => value.source === 'treasury-tic').metadata, 'not_initialized');
   assert.equal(firstBody.external_scheduler.metadata, 'unavailable');
   assert.equal(await dump(), before); assert.equal(outbound, 0);
-  console.log('PASS real migration schema and 16 fixed source/view SELECTs; absent TIC gate is not created');
+  console.log('PASS real migration schema and 17 fixed source/view SELECTs; absent TIC gate is not created');
 
   // Dates and values below are deliberately synthetic; no market observations.
   const at = Date.now() - 60_000, stamp = new Date(at).toISOString(), older = new Date(at - 60_000).toISOString();

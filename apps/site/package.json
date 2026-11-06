@@ -35,7 +35,8 @@
     "test:tic-runtime": "node scripts/test-tic-runtime.mjs",
     "test:ashare-scheduler-runtime": "node scripts/test-ashare-scheduler-runtime.mjs",
     "scheduler:status": "node scripts/check-ashare-scheduler.mjs",
-    "test:diagnostics-runtime": "node scripts/test-diagnostics-runtime.mjs"
+    "test:diagnostics-runtime": "node scripts/test-diagnostics-runtime.mjs",
+    "test:deribit-runtime": "node scripts/test-deribit-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

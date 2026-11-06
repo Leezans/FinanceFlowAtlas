@@ -18,6 +18,7 @@ export const diagnosticViews = [
   {source: 'polymarket', view: 'interest', name: 'Polymarket · 未平仓量', scope: '未平仓量独立快照与冷却状态'},
   {source: 'treasury-tic', view: 'latest', name: '美国 · TIC 最新期', scope: '月度跨境证券净交易，非交易所日内资金'},
   {source: 'treasury-tic', view: 'history', name: '美国 · TIC 历史', scope: '最近 12 期独立缓存，非实时数据'},
+  {source: 'deribit-options', view: 'default', name: '期权 · Deribit', scope: 'BTC 单交易所期权快照，来源24小时成交额；非资金净流入'},
 ] as const;
 const instant = z.string().max(40).datetime({offset: true}).refine(value => Number.isFinite(Date.parse(value))).nullable();
 const state = z.enum(['idle', 'cooldown', 'busy_or_unconfirmed', 'stopped', 'outcome_unconfirmed', 'unknown']);

@@ -32,7 +32,7 @@ describe('strictly read-only source diagnostics', () => {
       external_scheduler: {installation: 'unknown'}, inactive_sources: [{source: 'sina', implementation: 'disabled'}, {source: 'imf', implementation: 'not_integrated_in_hosted_app'}]});
     expect(t.prepare).toHaveBeenCalledTimes(DIAGNOSTIC_QUERIES.length + 1);
     expect(t.fetcher).not.toHaveBeenCalled();
-    expect(body.sources).toHaveLength(16);
+    expect(body.sources).toHaveLength(17);
     expect(body.sources[0].cache).toMatchObject({validation: 'not_performed', recorded_acquisition_at: acquired,
       recorded_collection_start_at: '2026-11-06T05:58:00.000Z', recorded_commit_at: '2026-11-06T05:59:59.500Z'});
   });
