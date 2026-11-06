@@ -131,6 +131,21 @@ source time separately, and never includes production sample prices. A readable,
 scrollable equal-area matrix and local pair search expose all validated pairs,
 with explicit coverage/omissions instead of unreadably tiny top-N tiles.
 
+Collection is access-driven, not an unattended minute service. A hidden initial
+mount does not fetch. Every check rechecks page visibility, including a timer
+already queued before the visibility event. Hiding a page does not abort an
+already admitted request; it prevents a successor from being scheduled. Becoming
+visible resumes normal permission-checked access, never a source-gate reset.
+Closing the page stops future browser checks. Both crypto and fiat FX consumers
+disclose these limits and the unchanged 15-minute display expiry.
+
+An idle gate with an expired cached record can legitimately produce status
+`unavailable` with null `error_code` and `fetched_at`. Status reads do not acquire
+the provider, and expired rows are intentionally omitted. This alone is not
+evidence of refusal or source failure, nor does it establish current source
+availability. A fresh normal acquisition requires an authorized snapshot request;
+an authentication stop must not be bypassed with alternate credentials or routes.
+
 Before deployment, apply existing migrations and append
 `apps/site/drizzle/0017_kraken_shared_snapshots.sql` through the supported workflow.
 It creates cache tables only and does not reset any existing source gate. Missing storage fails closed without contacting

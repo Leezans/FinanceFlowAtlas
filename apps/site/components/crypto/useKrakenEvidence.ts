@@ -13,7 +13,10 @@ export function useKrakenEvidence(initialPairs:readonly string[]=TRADE_PAIRS){
  const poll=useRef<ReturnType<typeof setTimeout>|null>(null),refresher=useRef<()=>Promise<void>>(async()=>{});
  const active=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false);
  const refresh=useCallback(async()=>{
-  if(active.current||blocked.current)return;
+  // Check at invocation too: initial mounting and an already queued timer can
+  // happen while hidden, before a visibilitychange event cancels the timer.
+  // This does not cancel admitted work or alter shared source admission.
+  if(active.current||blocked.current||document.visibilityState!=='visible')return;
   if(poll.current)clearTimeout(poll.current);poll.current=null;
   const requested={pairs:[...scope.current.pairs],timeframe:scope.current.timeframe,version:scope.current.version};
   const current=()=>mounted.current&&active.current===controller&&scope.current.version===requested.version;

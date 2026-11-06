@@ -2,6 +2,7 @@
 import React,{useState} from 'react';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {useKrakenEvidence} from '@/components/crypto/useKrakenEvidence';
+import KrakenRefreshNotice from '@/components/crypto/KrakenRefreshNotice';
 import {visibleTradeSnapshot} from '@/components/crypto/trade-matrix';
 import {FX_VENUE_PAIRS,projectFxVenue} from '@/lib/fx/venue';
 import {KRAKEN_DOCS,KRAKEN_PAIRS_DOCS} from '@/lib/crypto/kraken';
@@ -18,8 +19,9 @@ export default function KrakenFxSpot(){
  const maximum=Math.max(0,...(venue?.rows.map(row=>Math.abs(row.price_vwap_deviation_pct??0))??[]));
  return <main className={s.root}>
   <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><nav aria-label="资产导航"><a href="/markets">全球市场</a><a href="/crypto">加密货币</a></nav></header>
-  <section className={s.intro}><p className={s.eyebrow}>FOREX / KRAKEN SPOT</p><h1>外汇，查看日内交易所行情。</h1><p>澳元、欧元、英镑兑美元 · Kraken 单一交易所法币现货</p><p className={s.notice}>每 60 秒检查来源更新，不等待日终或年底。当前仅覆盖这 3 组 USD 报价，不代表全球银行间外汇市场；汇率和成交量不是资金净流入。</p></section>
+  <section className={s.intro}><p className={s.eyebrow}>FOREX / KRAKEN SPOT</p><h1>外汇，查看日内交易所行情。</h1><p>澳元、欧元、英镑兑美元 · Kraken 单一交易所法币现货</p><p className={s.notice}>页面打开且可见时约每 60 秒检查来源更新，不等待日终或年底。当前仅覆盖这 3 组 USD 报价，不代表全球银行间外汇市场；汇率和成交量不是资金净流入。</p></section>
   <section className={s.status} aria-live="polite" aria-label="外汇行情获取状态"><div><strong>{permissionLost?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取外汇行情':snapshot?stale?'上次有效快照 · 已陈旧':'已获取交易所快照':'暂无可验证交易所行情'}</strong><p>{permissionLost?'已清空浏览器行情并停止检查。':invalidResponse?'响应未通过校验，已清空行情。':denied?'来源拒绝后停止检查，不更换路径或重置共享限制。':networkError?'本次连接失败，只保留未超过 15 分钟的有效快照。':data?.status.error_code?'本次检查未成功，缺失数据不填零。':'与加密货币页面共用 Kraken 来源门控、冷却和请求预算；页面检查不保证每次重新访问来源。'}</p>{data?.status.error_code&&<code>{data.status.error_code}</code>}</div><button onClick={()=>void refresh()} disabled={loading||denied||permissionLost}>{loading?'正在检查…':'检查更新'}</button></section>
+  <KrakenRefreshNotice/>
   <div className={s.times}><span>最近成功获取 <b>{timestamp(venue?.fetched_at??data?.status.fetched_at??null)}</b></span><span>快照年龄 <b>{age===null?'无可展示快照':`${Math.floor(age/1000)} 秒`}</b></span><span>汇率观测时间 / 来源延迟 <b>接口未提供 · 未知</b></span></div>
   <section className={s.matrixSection} aria-label="交易所外汇矩阵工作区"><div className={s.metricControls} aria-label="外汇矩阵指标">{fxVenueMetrics.map(item=><button key={item.id} aria-pressed={metric===item.id} onClick={()=>setMetric(item.id)}>{item.label}</button>)}</div>
    <MatrixHeatmap groups={fxVenueGroups(venue,metric)} title="Kraken 法币现货矩阵" description="每个区块是一组直接交易的法币汇率，不通过加密货币或其他汇率拼接。" areaMeaning="汇率面值和基础币数量不可比较：3 组等面积，不代表资金规模" colorMeaning={metric==='rate'?'最近价相对滚动 24h 成交均价的偏离，不是日涨跌或资金流':'中性色：当前指标不代表方向或资金流'} colorMode={metric==='rate'?'signed':'neutral'} colorMaxAbs={maximum} layout="readable-grid" emptyTitle={loading?'正在读取交易所行情':'交易所外汇行情暂不可用'} emptyMessage="仅显示通过验证且未过期的 Kraken 法币现货报价；不会以 ECB 每日参考值、模拟数据或零值填补。" emptyNote="本页不保证零延迟或全市场覆盖。"/>

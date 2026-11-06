@@ -3,6 +3,7 @@ import React from 'react';
 import {KRAKEN_DOCS,KRAKEN_PAIRS_DOCS} from '@/lib/crypto/kraken';
 import s from './crypto.module.css';
 import KrakenMatrix from './KrakenMatrix';
+import KrakenRefreshNotice from './KrakenRefreshNotice';
 import KrakenTradeMatrix from './KrakenTradeMatrix';
 import KrakenPairSelector from './KrakenPairSelector';
 import {visibleTradeSnapshot} from './trade-matrix';
@@ -15,7 +16,8 @@ export default function KrakenSpot(){
  return <main className={s.root}>
   <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><nav aria-label="资产导航"><a href="/ashare">A 股优先入口</a><a href="/markets">全球市场</a></nav></header>
   <section className={s.intro}><p className={s.eyebrow}>CRYPTO / KRAKEN SPOT</p><h1>虚拟货币，先看清数据。</h1><p>Kraken · USD 报价现货交易对矩阵</p><p className={s.notice}>价格和成交量是交易活动，不是资金净流入。这里不是全球虚拟货币市场总量，也不接入账户或交易功能。</p></section>
-  <section className={s.status} aria-live="polite" aria-label="行情获取状态"><div><strong>{permissionLost?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取公开行情':snapshot?stale?'上次有效快照 · 已陈旧':'已获取来源快照':'暂无可验证行情'}</strong><p>{permissionLost?'已清空浏览器行情并停止检查；请恢复登录或合法展示权限。':invalidResponse?'响应数据未通过校验，已清空浏览器行情。':denied?'来源拒绝访问后不会自动重试，也不更换访问路径。':networkError?'本次连接失败；只保留未超过 15 分钟的上次有效快照。':data?.status.error_code?'本次来源检查未成功；不填入零值或模拟数据。':'行情每 60 秒检查一次，交易对目录最多每 15 分钟检查。获取时间不等于成交时间或实时保证。'}</p>{data?.status.error_code&&<code>{data.status.error_code}</code>}</div><button onClick={()=>void refresh()} disabled={loading||denied||permissionLost}>{loading?'正在检查…':'检查更新'}</button></section>
+  <section className={s.status} aria-live="polite" aria-label="行情获取状态"><div><strong>{permissionLost?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取公开行情':snapshot?stale?'上次有效快照 · 已陈旧':'已获取来源快照':'暂无可验证行情'}</strong><p>{permissionLost?'已清空浏览器行情并停止检查；请恢复登录或合法展示权限。':invalidResponse?'响应数据未通过校验，已清空浏览器行情。':denied?'来源拒绝访问后不会自动重试，也不更换访问路径。':networkError?'本次连接失败；只保留未超过 15 分钟的上次有效快照。':data?.status.error_code?'本次来源检查未成功；不填入零值或模拟数据。':'页面可见时约每 60 秒检查，交易对目录按需每 15 分钟复核。获取时间不等于成交时间或实时保证。'}</p>{data?.status.error_code&&<code>{data.status.error_code}</code>}</div><button onClick={()=>void refresh()} disabled={loading||denied||permissionLost}>{loading?'正在检查…':'检查更新'}</button></section>
+  <KrakenRefreshNotice/>
   <div className={s.times}><span>最近成功获取 <b>{timestamp(snapshot?.fetched_at??data?.status.fetched_at??null)}</b></span><span>快照年龄 <b>{age===null?'无可展示快照':`${Math.floor(age/1000)} 秒`}</b></span><span>行情汇总成交时间 <b>接口未提供 · 延迟未知</b></span></div>
   {snapshot&&<p className={s.matrixNote}>目录获取时间：{timestamp(snapshot.catalog_fetched_at)} · 目录中 {snapshot.universe_pair_count} 组在线 USD 现货交易对，已核验 {snapshot.rows.length} 组。只代表此交易所与此报价币种，不代表全市场覆盖。</p>}
   <KrakenMatrix snapshot={snapshot}/>
