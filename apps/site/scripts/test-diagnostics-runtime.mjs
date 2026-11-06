@@ -48,11 +48,11 @@ try {
   }
   let before = await dump();
   const first = await mf.dispatchFetch(url), firstBody = await first.json();
-  assert.equal(first.status, 200); assert.equal(firstBody.sources.length, 18);
+  assert.equal(first.status, 200); assert.equal(firstBody.sources.length, 19);
   assert.equal(firstBody.sources.find(value => value.source === 'treasury-tic').metadata, 'not_initialized');
   assert.equal(firstBody.external_scheduler.metadata, 'unavailable');
   assert.equal(await dump(), before); assert.equal(outbound, 0);
-  console.log('PASS real migration schema and 18 fixed source/view SELECTs; absent TIC gate is not created');
+  console.log('PASS real migration schema and 19 fixed source/view SELECTs; absent TIC gate is not created');
 
   // Dates and values below are deliberately synthetic; no market observations.
   const at = Date.now() - 60_000, stamp = new Date(at).toISOString(), older = new Date(at - 60_000).toISOString();
@@ -67,16 +67,28 @@ try {
   await db.prepare("UPDATE deribit_options_gate SET payload=NULL WHERE id='btc_options'").run();
   console.log('PASS legacy BTC and combined BTC/ETH recorded cache clocks, unknown schemas withheld, zero writes/source calls');
 
-  // The independent TAIFEX gate is read only, including persistent denial.
-  for(const state of ['idle','busy','blocked']){
-    await db.prepare("UPDATE taifex_options_gate SET status=?,lease_token=?,payload=? WHERE id='daily_institutions'").bind(state,state==='busy'?'synthetic-owned':null,JSON.stringify({schema:'taifex-options-institutions/1',fetched_at:stamp,acquisition_started_at:older,rows:[{secret:'SECRET_TAIFEX_ROW'}]})).run();
-    const baseline=await dump(),body=await(await mf.dispatchFetch(url)).json(),record=body.sources.find(row=>row.source==='taifex-options');
-    assert.equal(record.cache.recorded_acquisition_at,state==='idle'?stamp:null);
-    assert.equal(record.cache.recorded_collection_start_at,state==='idle'?older:null);
-    assert.equal(await dump(),baseline);assert.equal(outbound,0);assert.ok(!JSON.stringify(body).includes('SECRET_TAIFEX_ROW'));
+  // Two report projections share one provider gate; legacy cache proves options only.
+  const optionsMeta={schema:'taifex-options-institutions/1',fetched_at:stamp,acquisition_started_at:older,rows:[{secret:'SECRET_TAIFEX_ROW'}]};
+  const futuresMeta={schema:'taifex-futures-institutions/1',fetched_at:later,acquisition_started_at:stamp,rows:[{secret:'SECRET_FUTURES_ROW'}]};
+  for(const [payload,optionsTime,futuresTime,present] of [
+    [optionsMeta,stamp,null,[true,false]],
+    [{schema:'taifex-institutions/2',options:optionsMeta,futures:futuresMeta,fetched_at:later},stamp,later,[true,true]],
+    [{schema:'taifex-institutions/2',options:optionsMeta},null,null,[null,null]],
+    [{schema:'taifex-institutions/unknown',options:optionsMeta,futures:futuresMeta},null,null,[null,null]],
+  ]){
+    for(const state of ['idle','busy','blocked']){
+      await db.prepare("UPDATE taifex_options_gate SET status=?,lease_token=?,payload=? WHERE id='daily_institutions'").bind(state,state==='busy'?'synthetic-owned':null,JSON.stringify(payload)).run();
+      const baseline=await dump(),body=await(await mf.dispatchFetch(url)).json();
+      for(const [i,id,expectedTime] of [[0,'taifex-options',optionsTime],[1,'taifex-futures',futuresTime]]){
+        const record=body.sources.find(row=>row.source===id);
+        assert.equal(record.cache.recorded_acquisition_at,state==='idle'?expectedTime:null);
+        assert.equal(record.cache.record_present,state==='idle'?present[i]:null);
+      }
+      assert.equal(await dump(),baseline);assert.equal(outbound,0);assert.ok(!JSON.stringify(body).includes('SECRET_'));
+    }
   }
   await db.prepare("UPDATE taifex_options_gate SET status='idle',lease_token=NULL,payload=NULL WHERE id='daily_institutions'").run();
-  console.log('PASS TAIFEX recorded acquisition clocks, busy/denied suppression and no collection or changes');
+  console.log('PASS TAIFEX legacy/bundle distinct report clocks, missing futures, busy/denied suppression and no writes/source calls');
 
   await db.prepare("UPDATE cboe_delayed_source_gate SET payload=? WHERE id='bxe_equities'").bind(JSON.stringify({schema: 'cboe-cache/1', snapshot: {schema: 'cboe-delayed/1', fetchedAt: stamp, acquisitionStartedAt: older, secret: 'SECRET_FINANCIAL_ROW'}, latestEmptyCheck: {schema: 'cboe-delayed/1', fetchedAt: later, acquisitionStartedAt: stamp}})).run();
   await db.prepare("UPDATE polymarket_source_gate SET payload=? WHERE id='active_markets'").bind(JSON.stringify({schema: 'polymarket-discovery/2', newest: {schema: 'polymarket-gamma/2', fetched_at: stamp, acquisition_started_at: older}, hot: {schema: 'polymarket-gamma/hot/1', fetched_at: older, acquisition_started_at: older}, interest: {schema: 'polymarket-open-interest/1', fetched_at: later, acquisition_started_at: stamp}})).run();

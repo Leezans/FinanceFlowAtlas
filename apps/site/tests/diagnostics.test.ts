@@ -22,6 +22,7 @@ function setup(row: Record<string, unknown> = base()) {
 }
 afterEach(() => {vi.useRealTimers(); vi.unstubAllGlobals();});
 describe('strictly read-only source diagnostics', () => {
+  it('projects separate TAIFEX report clocks through the same provider record',()=>{const options=DIAGNOSTIC_QUERIES.find(q=>q.source==='taifex-options')!,futures=DIAGNOSTIC_QUERIES.find(q=>q.source==='taifex-futures')!;for(const q of [options,futures]){expect(q.sql).toContain("FROM taifex_options_gate WHERE id='daily_institutions'");expect(q.sql).toContain("'taifex-institutions/2'");expect(q.sql).not.toContain("'$.rows'");}expect(options.sql).toContain("'$.options.fetched_at'");expect(futures.sql).toContain("'$.futures.fetched_at'");expect(futures.sql).not.toContain("THEN json_extract(payload,'$.fetched_at')");});
   it('reads TAIFEX report acquisition clocks only without selecting report values',()=>{const q=DIAGNOSTIC_QUERIES.find(q=>q.source==='taifex-options')!;expect(q.sql).toContain("'taifex-options-institutions/1'");expect(q.sql).toContain("'$.fetched_at'");expect(q.sql).toContain("'$.acquisition_started_at'");expect(q.sql).not.toContain("'$.rows'");});
   it('recognizes both recorded Deribit cache schema versions without selecting financial rows',()=>{const q=DIAGNOSTIC_QUERIES.find(q=>q.source==='deribit-options')!;expect(q.sql).toContain("IN ('deribit-btc-options/1','deribit-options/2')");expect(q.sql).toContain("'$.fetched_at'");expect(q.sql).toContain("'$.acquisition_started_at'");expect(q.sql).not.toContain("'$.rows'");});
   it('uses only fixed bounded SELECTs, zero network, and private responses', async () => {
@@ -34,7 +35,7 @@ describe('strictly read-only source diagnostics', () => {
       external_scheduler: {installation: 'unknown'}, inactive_sources: [{source: 'sina', implementation: 'disabled'}, {source: 'imf', implementation: 'not_integrated_in_hosted_app'}]});
     expect(t.prepare).toHaveBeenCalledTimes(DIAGNOSTIC_QUERIES.length + 1);
     expect(t.fetcher).not.toHaveBeenCalled();
-    expect(body.sources).toHaveLength(18);
+    expect(body.sources).toHaveLength(19);
     expect(body.sources[0].cache).toMatchObject({validation: 'not_performed', recorded_acquisition_at: acquired,
       recorded_collection_start_at: '2026-11-06T05:58:00.000Z', recorded_commit_at: '2026-11-06T05:59:59.500Z'});
   });

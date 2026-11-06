@@ -26,6 +26,20 @@ const cboeTime = (field: string) => `CASE WHEN json_valid(payload) THEN CASE
   WHEN ${json('payload', '$.schema')}='cboe-cache/1' AND ${json('payload', '$.snapshot.schema')}='cboe-delayed/1' THEN ${json('payload', `$.snapshot.${field}`)}
   WHEN ${json('payload', '$.schema')}='cboe-delayed/1' THEN ${json('payload', `$.${field}`)} END END`;
 
+// Both reports share one admission record, but their recorded clocks are separate.
+// Require recognized nested report identities; a legacy options cache is not futures evidence.
+const taifexBundle = "json_extract(payload,'$.schema')='taifex-institutions/2' AND json_extract(payload,'$.options.schema')='taifex-options-institutions/1' AND json_extract(payload,'$.futures.schema')='taifex-futures-institutions/1'";
+const taifexTime=(view:'options'|'futures',field:string)=>`CASE WHEN json_valid(payload) THEN CASE
+  ${view==='options'?`WHEN json_extract(payload,'$.schema')='taifex-options-institutions/1' THEN json_extract(payload,'$.${field}')`:''}
+  WHEN ${taifexBundle} THEN json_extract(payload,'$.${view}.${field}') END END`;
+const taifexPresent=(view:'options'|'futures')=>`CASE WHEN payload IS NULL THEN 0 WHEN json_valid(payload) THEN CASE
+  WHEN json_extract(payload,'$.schema')='taifex-options-institutions/1' THEN ${view==='options'?1:0}
+  WHEN ${taifexBundle} THEN 1 END END`;
+const taifexView=(view:'options'|'futures'):DiagnosticQuery=>({source:`taifex-${view}`,view:'default',sql:`SELECT status AS state, ${DB_NOW} AS now_ms, updated_ms, not_before_ms AS retry_ms,
+  NULL AS checked_ms, ${taifexPresent(view)} AS cache_present,
+  ${taifexTime(view,'fetched_at')} AS acquired_at, ${taifexTime(view,'acquisition_started_at')} AS started_at
+  FROM taifex_options_gate WHERE id='daily_institutions' LIMIT 1`});
+
 export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
   {source: 'eastmoney', view: 'level1_only', sql: `SELECT g.status AS state, ${DB_NOW} AS now_ms, g.updated_ms,
     g.not_before_ms AS retry_ms, g.finished_ms AS checked_ms, (s.payload IS NOT NULL) AS cache_present,
@@ -75,7 +89,8 @@ export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
     FROM tic_snapshot_cache g LEFT JOIN tic_snapshot_cache s ON s.id='${view === 'latest' ? 'tic-equity-latest-v2' : 'tic-equity-history-latest-12-v2'}'
     WHERE g.id='tic-treasury-source-gate-v1' LIMIT 1`})),
   common('deribit-options', 'deribit_options_gate', 'btc_options', ['deribit-btc-options/1','deribit-options/2']),
-  common('taifex-options', 'taifex_options_gate', 'daily_institutions', 'taifex-options-institutions/1'),
+  taifexView('options'),
+  taifexView('futures'),
 ];
 
 // This optional table is evidence of observed work, never proof of cron installation.

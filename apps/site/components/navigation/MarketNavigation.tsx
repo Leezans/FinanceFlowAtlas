@@ -15,6 +15,7 @@ export const marketLinks = [
   {href: '/crypto', label: '加密现货'},
   {href: '/polymarket', label: '预测市场矩阵'},
   {href: '/futures', label: '期货持仓'},
+  {href: '/futures/taiwan', label: '台湾期货日报'},
   {href: '/options', label: '加密期权成交'},
   {href: '/options/taiwan', label: '台湾期权日报'},
   {href: '/forex', label: '外汇行情'},

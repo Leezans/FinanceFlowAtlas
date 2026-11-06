@@ -10,6 +10,7 @@ export default function MarketLanding({onOpenTic}:{onOpenTic?:()=>void}={}){
    <a href="/crypto" aria-label="打开加密现货：Kraken BTC 和 ETH">加密现货</a>
    <a href="/options" aria-label="打开BTC / ETH 期权成交矩阵：Deribit单交易所">加密期权成交</a>
    <a href="/options/taiwan" aria-label="打开台湾期权日度金额矩阵：TAIFEX三类法人">台湾期权日报</a>
+   <a href="/futures/taiwan" aria-label="打开台湾期货日度名义金额矩阵：TAIFEX三类法人">台湾期货日报</a>
    <a href="/futures" aria-label="打开期货持仓：美国 CFTC 精选市场">期货持仓</a>
    <a href="/forex" aria-label="打开外汇行情：Kraken 法币现货与 ECB 每日参考">外汇行情</a>
    <a href="#tic-view" onClick={onOpenTic}>继续看美国 TIC</a>
