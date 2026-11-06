@@ -27,8 +27,25 @@ const source = z.object({
   database_observed_at: instant, coordination_updated_at: instant, last_check_recorded_at: instant,
   check_time_semantics: z.enum(['attempt_started', 'attempt_finished_not_necessarily_successful', 'not_persisted_separately']),
   next_attempt_not_before: instant,
+  // Optional for older diagnostics/1 responses; absent metadata remains unknown.
+  retained_failure: z.object({
+    category: z.enum(['deadline', 'aborted', 'transport', 'validation', 'storage', 'access_stopped', 'outcome_unconfirmed', 'runtime', 'collection_failed', 'unknown']),
+    recorded_at: instant.refine(value => value === null || (Number.isFinite(Date.parse(value)) && Date.parse(value) > 0 && new Date(value).toISOString() === value)),
+    durable_streak_count: z.number().int().min(0).max(5).nullable(),
+    count_semantics: z.enum(['durable_streak_capped_at_5', 'not_available']),
+  }).optional(),
   cache: z.object({validation: z.literal('not_performed'), record_present: z.boolean().nullable(), recorded_acquisition_at: instant,
     recorded_collection_start_at: instant, recorded_commit_at: instant, recorded_expiry_at: instant}),
+}).superRefine((row, context) => {
+  const failure = row.retained_failure;
+  if (!failure) return;
+  const supported = row.source === 'eastmoney';
+  if (failure.count_semantics !== (supported ? 'durable_streak_capped_at_5' : 'not_available')
+    || (!supported && (failure.category !== 'unknown' || failure.recorded_at !== null || failure.durable_streak_count !== null))
+    || ((failure.durable_streak_count === null || failure.durable_streak_count === 0) && (failure.category !== 'unknown' || failure.recorded_at !== null))
+    || (failure.recorded_at !== null && (!row.database_observed_at || Date.parse(failure.recorded_at) > Date.parse(row.database_observed_at)))) {
+    context.addIssue({code: z.ZodIssueCode.custom, message: 'Invalid retained failure metadata'});
+  }
 });
 export const diagnosticsPresentationSchema = z.object({
   schema: z.literal('financeflow-diagnostics/1'), mode: z.literal('read_only_metadata'),
@@ -48,6 +65,11 @@ export type DiagnosticSource = DiagnosticReport['sources'][number];
 export const stateLabels: Record<DiagnosticSource['coordination'], string> = {
   idle: '空闲，不代表可用', cooldown: '冷却中', busy_or_unconfirmed: '忙碌或结果待确认',
   stopped: '已停止', outcome_unconfirmed: '结果未确认', unknown: '未知',
+};
+export const failureCategoryLabels: Record<NonNullable<DiagnosticSource['retained_failure']>['category'], string> = {
+  deadline: '采集时限已到', aborted: '采集已中断', transport: '来源传输或解码失败', validation: '完整性校验失败',
+  storage: '协调或快照存储问题', access_stopped: '访问限制或安全校验停止', outcome_unconfirmed: '采集结果未确认',
+  runtime: '运行环境未通过校验', collection_failed: '采集失败（未细分）', unknown: '未知',
 };
 export function cacheSummary(row: DiagnosticSource): {kind: 'unknown' | 'missing' | 'expired' | 'unvalidated'; label: string} {
   if (row.metadata !== 'read' || !['idle', 'cooldown'].includes(row.coordination) || row.cache.record_present === null) {

@@ -1,6 +1,7 @@
 /** Fixed SELECTs only. These identifiers and JSON paths never come from a request.
  * Do not import source handlers, stores or gates here: some initialize rows or
- * perform read-through acquisition. No payload, lease or raw error is selected.
+ * perform read-through acquisition. No payload, lease or raw error is selected. The retained failure code is
+ * a bounded machine code projected to a fixed category by the handler.
  */
 export const DB_NOW = "(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 export type DiagnosticQuery = {source: string; view: string; sql: string};
@@ -28,7 +29,7 @@ const cboeTime = (field: string) => `CASE WHEN json_valid(payload) THEN CASE
 export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
   {source: 'eastmoney', view: 'level1_only', sql: `SELECT g.status AS state, ${DB_NOW} AS now_ms, g.updated_ms,
     g.not_before_ms AS retry_ms, g.finished_ms AS checked_ms, (s.payload IS NOT NULL) AS cache_present,
-    s.committed_ms, s.expires_ms,
+    s.committed_ms, s.expires_ms, g.failure_code, g.last_failure_ms, g.failure_count,
     CASE WHEN s.format_version=1 AND json_valid(s.payload) THEN json_extract(s.payload,'$.fetched_at') END AS acquired_at,
     CASE WHEN s.format_version=1 AND json_valid(s.payload) THEN json_extract(s.payload,'$.collection_started_at') END AS started_at
     FROM ashare_source_gate g LEFT JOIN ashare_snapshot_cache s ON s.scope_key='level1'

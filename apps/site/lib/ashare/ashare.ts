@@ -1,4 +1,5 @@
 import {strictJSON} from './strict-json';
+import {createAcquisitionDiagnostics,logAcquisitionDiagnostics,type AcquisitionDiagnostics} from './acquisition-diagnostics';
 import {safeSourceCode} from './recovery';
 import {type SourceGateCode,type SourceGate,type SourceOutcome,type SourceLease} from './source-gate';
 export type {SourceGate,SourceOutcome} from './source-gate';
@@ -74,20 +75,21 @@ function redirect(current:string,location:string,query:URLSearchParams):string {
   if(target.search){const pairs=[...target.searchParams];if(pairs.length!==[...query].length||pairs.some(([k,v])=>query.get(k)!==v)||new Set(pairs.map(([k])=>k)).size!==pairs.length)throw new Error('redirect_params_changed');}
   return `${DELAY}${PATH}?${query}`;
 }
-async function body(response:Response,budget:number,signal:AbortSignal):Promise<Uint8Array>{
+async function body(response:Response,budget:number,signal:AbortSignal,trace:AcquisitionDiagnostics):Promise<Uint8Array>{
   // Workers native fetch decodes gzip/Brotli as the body is read. The source
   // header may remain; rejecting it discards otherwise valid decoded JSON.
   // Accept only a single supported coding, never decode the stream twice, and
   // enforce MAX_BYTES against the decoded stream below (not Content-Length).
   const encoding=response.headers.get('content-encoding')?.trim().toLowerCase();
-  if(encoding&&!['identity','gzip','br'].includes(encoding)){await boundedDisposal(()=>response.body?.cancel());throw new Error('unsupported_content_encoding');}
+  if(encoding&&!['identity','gzip','br'].includes(encoding)){trace.failure();trace.enter('body_cleanup');await boundedDisposal(()=>response.body?.cancel());throw new Error('unsupported_content_encoding');}
   const length=response.headers.get('content-length');
-  if(length!==null&&(!/^[0-9]{1,12}$/.test(length)||Number(length)>budget)){await boundedDisposal(()=>response.body?.cancel());throw new Error('byte_budget');}
+  if(length!==null&&(!/^[0-9]{1,12}$/.test(length)||Number(length)>budget)){trace.failure();trace.enter('body_cleanup');await boundedDisposal(()=>response.body?.cancel());throw new Error('byte_budget');}
   const reader=response.body?.getReader();if(!reader)return new Uint8Array();
   const chunks:Uint8Array[]=[];let size=0;
   const cancel=()=>{void reader.cancel().catch(()=>{});};signal.addEventListener('abort',cancel,{once:true});
   try{while(true){abortCheck(signal);const part=await reader.read();abortCheck(signal);if(part.done)break;if(part.value.byteLength>budget-size)throw new Error('byte_budget');size+=part.value.byteLength;chunks.push(part.value);}}
-  finally{signal.removeEventListener('abort',cancel);await boundedDisposal(()=>reader.cancel());reader.releaseLock();}
+  catch(error){trace.failure();throw error;}
+  finally{trace.enter('body_cleanup');signal.removeEventListener('abort',cancel);await boundedDisposal(()=>reader.cancel());reader.releaseLock();}
   const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
 /** Server-only: no background worker; no network until an enabled snapshot GET. */
@@ -106,7 +108,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     const env=host.process?.env;
     return !env||!['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'].some(k=>!!env[k]);
   }
-  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number,stage?:Stage,acquiredAtMs?:number,acquiredClock=now(),onSourceStart:()=>void=()=>{}):Promise<{snapshot:Snapshot}|{stage:Stage}>{
+  async function collect(scope:Scope,requestSignal:AbortSignal,deadline:number,trace:AcquisitionDiagnostics,stage?:Stage,acquiredAtMs?:number,acquiredClock=now(),onSourceStart:()=>void=()=>{}):Promise<{snapshot:Snapshot}|{stage:Stage}>{
     const controller=new AbortController();const abort=()=>controller.abort(requestSignal.reason);
     requestSignal.addEventListener('abort',abort,{once:true});if(requestSignal.aborted)abort();
     const signal=controller.signal;
@@ -123,11 +125,13 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         const query=params(scope,page);let url=`${endpoint}${PATH}?${query}`;let response:Response;let raw:Uint8Array;
         while(true){
           abortCheck(signal);if(state.denied)throw new SourceDenied('source_denial_latched');if(!enabled())throw new Error('disabled');if(!routingAllowed())throw new Error('runtime_routing_unverified');
-          const wait=INTERVAL-(now()-state.lastRequest);if(wait>0)await sleep(wait,signal);
+          const wait=INTERVAL-(now()-state.lastRequest);if(wait>0){trace.enter('source_pacing');await sleep(wait,signal);}
           abortCheck(signal);if(!enabled())throw new Error('disabled');if(now()>=deadline)throw new Error('deadline');
           state.lastRequest=now();
+          trace.enter('source_headers');trace.request(page,endpoint===ORIGIN?'primary':'official_redirect');
           console.info('[ashare lifecycle]',JSON.stringify({event:'source_request',scope:scope.kind,page,redirects,route:endpoint===ORIGIN?'primary':'official_redirect'}));
           onSourceStart();response=await fetcher(url,{method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'},signal});
+          trace.enter('response_validation');
           console.info('[ashare lifecycle]',JSON.stringify({event:'source_response',scope:scope.kind,page,status:response.status}));
           const isRedirect=[301,302,303,307,308].includes(response.status);
           let nextUrl:string|undefined;
@@ -144,11 +148,13 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           if(response.status===200&&response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json'){throw new SourceDenied('non_json_challenge',response);}
           if(response.redirected)throw new SourceDenied('automatic_redirect_denied',response);
           abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
-          raw=await body(response,MAX_BYTES-bytes,signal);bytes+=raw.byteLength;
+          trace.enter('source_body');raw=await body(response,MAX_BYTES-bytes,signal,trace);bytes+=raw.byteLength;
+          trace.enter('response_validation');
           if(isRedirect){redirects++;url=nextUrl!;endpoint=DELAY;continue;}
           if(response.status!==200)throw new Error('upstream_http');
           if(response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json')throw new Error('not_json');break;
         }
+        trace.enter('page_validation');
         const payload=strictJSON(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as {rc?:unknown;data?:{total?:unknown;diff?:unknown}};
         if(payload&&typeof payload==='object'&&payload.rc!==0)throw new SourceDenied('provider_error_or_challenge');
         if(!payload||typeof payload!=='object'||!payload.data||!Number.isSafeInteger(payload.data.total)||!Array.isArray(payload.data.diff))throw new Error('invalid_schema');
@@ -160,6 +166,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           ids.add(value.f12);rows.push(value);}
         abortCheck(signal);if(!enabled())throw new Error('disabled');
         if(staged&&clock()-Date.parse(startedAt)>=STAGE_MAX_AGE_MS)throw new Error('acquisition_expired');
+        trace.validatedPage();
         if(rows.length===total)return {snapshot:{rows,source_total:total,scope,page_count:page,fetched_at:staged?timestamp():new Date().toISOString(),...(staged?{collection_started_at:startedAt}:{})}};
         // Yield only after validating a whole page. Durable partial rows never
         // enter a public snapshot or its denominator. The next normal request
@@ -169,12 +176,14 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       throw new Error('incomplete_snapshot');
     }finally{requestSignal.removeEventListener('abort',abort);controller.abort();}
   }
-  async function refresh(entry:Entry,scope:Scope,signal:AbortSignal,lifetimeReady:()=>boolean,deadline:number){
+  async function refresh(entry:Entry,scope:Scope,signal:AbortSignal,lifetimeReady:()=>boolean,deadline:number,trace:AcquisitionDiagnostics){
     // Serialize entire acquisitions globally, so pages and redirects share pacing.
+    trace.enter('queue');
     const run=state.tail.catch(()=>{}).then(async()=>{
-      if(state.denied||now()<state.backoffUntil){entry.error=true;entry.errorCode=state.errorCode??'source_cooldown';entry.retryAt=state.denied?Infinity:state.backoffUntil;return;}
+      if(state.denied||now()<state.backoffUntil){entry.error=true;entry.errorCode=state.errorCode??'source_cooldown';entry.retryAt=state.denied?Infinity:state.backoffUntil;trace.result('skipped');return;}
       let sourceStarted=false;
       try{
+        trace.enter('preflight');
         // Gate covers the whole acquisition, not just each page or individual isolate.
         // No lease takeover/expiry is permitted: unknown crashed work stays busy.
         if(!lifetimeReady())throw new Error('runtime_lifetime_unverified');
@@ -185,6 +194,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
         const reuseFresh=async()=>{
           if(!options.snapshotStore)return false;
+          trace.enter('cache_recheck');
           const current=await readShared(scope);hydrate(entry,current);
           if(current?.snapshot&&(current.ageMs??Infinity)<TTL)return true;
           if(current?.canAcquire===false)throw new Error(current.code??'snapshot_store_unavailable');
@@ -192,11 +202,11 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         };
         // A queued/cold request may be overtaken by another isolate's commit.
         // Reuse that complete snapshot rather than acquire and fetch it again.
-        if(await reuseFresh())return;
+        if(await reuseFresh()){trace.result('cache_reused');return;}
         const acquire=async()=>{
           abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
           if(!enabled())throw new Error('disabled');
-          try{return await sourceGate.acquire(scope.fs,signal);}
+          try{trace.enter('gate_acquire');return await sourceGate.acquire(scope.fs,signal);}
           catch(error){if(error&&typeof error==='object'&&'code'in error&&error.code==='source_denied')throw new SourceDenied('persistent_source_denial');throw error;}
         };
         let lease:SourceLease;
@@ -205,8 +215,8 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
           if(!error||typeof error!=='object'||!('code'in error)||error.code!=='source_cooldown')throw error;
           // One bounded admission wait, NOT an upstream request retry. Busy,
           // denied and unavailable are never retried or taken over here.
-          await sleep(3100,signal);
-          if(await reuseFresh())return;
+          trace.enter('admission_wait');await sleep(3100,signal);
+          if(await reuseFresh()){trace.result('cache_reused');return;}
           lease=await acquire();
         }
         if(!lease||typeof lease.token!=='string'||!lease.token)throw new SourceDenied('invalid_source_lease');
@@ -215,10 +225,12 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         let next:Snapshot|undefined,partial:Stage|undefined,collectionError:unknown;
         let outcome:SourceOutcome={kind:'success'};
         try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');
+          trace.enter('stage_read');
           const previous=await options.stageStore?.read(lease.token,scope);
-          const collected=await collect(scope,signal,deadline,previous,lease.acquiredAtMs,acquiredClock,()=>{sourceStarted=true;});
+          const collected=await collect(scope,signal,deadline,trace,previous,lease.acquiredAtMs,acquiredClock,()=>{sourceStarted=true;});
           if('snapshot'in collected)next=collected.snapshot;else partial=collected.stage;}
         catch(error){
+          trace.failure();
           // An uncertain mutation inside stage-read expiry cleanup is already an
           // unsettled write. Never retry cleanup or guess a lease release.
           if(error&&typeof error==='object'&&'code'in error&&error.code==='source_gate_release_unconfirmed')throw new SourceDenied('source_gate_release_unconfirmed');
@@ -229,41 +241,43 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         if((next||partial)&&!collectionError){
           // Check before issuing the atomic commit, not after it. An issued
           // commit must settle; a timeout is not permission for a second release.
+          trace.enter('publication_check');
           try{abortCheck(signal);if(now()>=deadline)throw new Error('deadline');}
-          catch(error){next=undefined;partial=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:failureCode(error)};}
+          catch(error){trace.failure();next=undefined;partial=undefined;collectionError=error;outcome={kind:'temporary_failure',reason:failureCode(error)};}
         }
         // Release exactly once, including cancellation, and never silently ignore a
         // failed/uncertain write. No publication until persistence confirms release.
         try{
-          if(next&&!collectionError&&options.snapshotStore)await options.snapshotStore.commit(lease.token,next);
-          else if(partial&&!collectionError&&options.stageStore)await options.stageStore.save(lease.token,partial);
+          if(next&&!collectionError&&options.snapshotStore){trace.enter('snapshot_commit');await options.snapshotStore.commit(lease.token,next);}
+          else if(partial&&!collectionError&&options.stageStore){trace.enter('stage_save');await options.stageStore.save(lease.token,partial);}
           else {
             // Only this invocation's owned stage may be discarded. An uncertain
             // stage mutation is not followed by a guessed gate release.
-            if(options.stageStore&&outcome.kind!=='denied')await options.stageStore.discard(lease.token,scope);
-            await sourceGate.release(lease.token,outcome);
+            if(options.stageStore&&outcome.kind!=='denied'){trace.enter('stage_discard');await options.stageStore.discard(lease.token,scope);}
+            trace.enter('gate_release');await sourceGate.release(lease.token,outcome);
           }
           console.info('[ashare lifecycle]',JSON.stringify({event:'lease_released',scope:scope.kind,outcome:outcome.kind}));}
         catch(error){
+          trace.failure(true);
           if(error instanceof StageSaveNotStarted){
             // Deterministic preflight rejection is known not to have issued the
             // save batch. Clean up this owner's scope once and release normally.
-            try{await options.stageStore!.discard(lease.token,scope);await sourceGate.release(lease.token,{kind:'temporary_failure',reason:'collection_failed'});}
-            catch{throw new SourceDenied('source_gate_release_unconfirmed');}
+            try{trace.enter('stage_discard');await options.stageStore!.discard(lease.token,scope);trace.enter('gate_release');await sourceGate.release(lease.token,{kind:'temporary_failure',reason:'collection_failed'});}
+            catch{trace.failure(true);throw new SourceDenied('source_gate_release_unconfirmed');}
             throw new Error('stage_invalid');
           }
           throw new SourceDenied('source_gate_release_unconfirmed');
         }
-        finally{if(collectionError instanceof SourceDenied)await discardDeniedResponse(collectionError.response);}
+        finally{if(collectionError instanceof SourceDenied){trace.enter('denial_cleanup');await discardDeniedResponse(collectionError.response);}}
         if(collectionError)throw collectionError;
-        if(partial){entry.localIssue=undefined;entry.error=false;entry.errorCode='collection_in_progress';entry.retryAt=now()+3000;return;}
+        if(partial){trace.result('stage_saved');entry.localIssue=undefined;entry.error=false;entry.errorCode='collection_in_progress';entry.retryAt=now()+3000;return;}
         if(!next)throw new Error('missing_snapshot');
-        entry.localIssue=undefined;entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
+        trace.result('snapshot_published');entry.localIssue=undefined;entry.snapshot=next;entry.published=now();entry.error=false;entry.errorCode=undefined;entry.failures=0;entry.retryAt=0;state.backoffFailures=0;state.errorCode=undefined;
       }
-      catch(error){entry.errorCode=failureCode(error);if(!sourceStarted&&!['source_cooldown','source_busy'].includes(entry.errorCode))entry.localIssue=entry.errorCode;state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied||entry.errorCode==='source_outcome_unconfirmed'){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
+      catch(error){trace.failure();trace.result('failed');entry.errorCode=failureCode(error);if(!sourceStarted&&!['source_cooldown','source_busy'].includes(entry.errorCode))entry.localIssue=entry.errorCode;state.errorCode=entry.errorCode;console.warn('[ashare acquisition]',JSON.stringify({scope:scope.kind,code:entry.errorCode}));if(error instanceof SourceDenied||entry.errorCode==='source_outcome_unconfirmed'){state.denied=true;state.backoffUntil=Infinity;}entry.error=true;entry.failures++;state.backoffFailures++;entry.retryAt=state.denied?Infinity:now()+Math.min(900_000,60_000*2**Math.min(state.backoffFailures-1,4));state.backoffUntil=entry.retryAt;}
     });state.tail=run;await run;
   }
-  function retainedRefresh(entry:Entry,scope:Scope,requestSignal:AbortSignal,deadline:number):Promise<void> {
+  function retainedRefresh(entry:Entry,scope:Scope,requestSignal:AbortSignal,deadline:number,trace:AcquisitionDiagnostics):Promise<void> {
     // Register the complete acquisition/release promise before any asynchronous
     // admission. Workers may otherwise terminate it immediately on disconnect.
     // Do not depend on end-to-end disconnect propagation through the host. One
@@ -273,14 +287,15 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     const abort=()=>controller.abort(requestSignal.reason);
     requestSignal.addEventListener('abort',abort,{once:true});
     if(requestSignal.aborted)abort();
-    const expire=()=>{console.info('[ashare lifecycle]',JSON.stringify({event:'acquisition_deadline',scope:scope.kind,budget_ms:ACQUISITION_BUDGET_MS}));controller.abort(new Error('deadline'));};
+    const expire=()=>{console.info('[ashare lifecycle]',JSON.stringify({event:'acquisition_deadline',scope:scope.kind,budget_ms:ACQUISITION_BUDGET_MS}));controller.abort(new Error('deadline'));logAcquisitionDiagnostics('acquisition_deadline',trace);};
     const remaining=deadline-now();
     if(remaining<=0)expire();
     const timer=remaining>0?setTimeout(expire,remaining):undefined;
     let retained=options.isolatedForTests===true&&!options.waitUntil;
-    const work=refresh(entry,scope,controller.signal,()=>retained,deadline).finally(()=>{
+    const work=refresh(entry,scope,controller.signal,()=>retained,deadline,trace).finally(()=>{
       if(timer!==undefined)clearTimeout(timer);
       requestSignal.removeEventListener('abort',abort);controller.abort();
+      logAcquisitionDiagnostics('acquisition_finished',trace);
     });
     try{if(options.waitUntil){options.waitUntil(work);retained=true;}}
     catch{controller.abort();}
@@ -345,6 +360,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     const url=new URL(request.url);if(!['/api/v1/ashare/snapshot','/api/v1/ashare/status'].includes(url.pathname))return reply(404,{error:'not_found'});
     let scope:Scope;try{scope=parseScope(url);}catch{return reply(400,{error:'invalid_scope'});}
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
+    const trace=createAcquisitionDiagnostics(now,deadline-ACQUISITION_BUDGET_MS);
     let shared=await readShared(scope);
     const key=scope.fs;const entry:Entry=state.entries.get(key)??{published:0,error:false,failures:0,retryAt:0};
     hydrate(entry,shared);
@@ -366,7 +382,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
       state.entries.set(key,entry);
     }
     const stale=()=>!!entry!.snapshot&&(state.denied||entry!.error||now()-entry!.published>=TTL);
-    if(!state.denied&&shared?.canAcquire!==false&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal,deadline).finally(()=>{target.pending=undefined;});}
+    if(!state.denied&&shared?.canAcquire!==false&&(!entry.snapshot||now()-entry.published>=TTL)&&now()>=entry.retryAt&&now()>=state.backoffUntil&&!entry.pending){const target=entry;target.pending=retainedRefresh(target,scope,request.signal,deadline,trace).finally(()=>{target.pending=undefined;});}
     if(entry.pending)await entry.pending;
     if(!enabled())return reply(403,{state:'display_not_authorized',message:'来源展示权限未建立；不会返回缓存行情。'});
     shared=await readShared(scope);hydrate(entry,shared);
