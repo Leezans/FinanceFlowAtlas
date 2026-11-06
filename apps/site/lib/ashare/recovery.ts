@@ -28,7 +28,7 @@ export function describeRecovery(code:string):{stage:string;message:string;actio
  if(code==='source_cooldown')return {stage:'来源限速',message:'来源限速等待中，请稍后重试。',action:'等待冷却结束，重试仍受服务端限速约束。'};
  if(code==='unsupported_content_encoding')return {stage:'传输解码',message:'来源返回不支持的内容编码，传输校验未通过。',action:'维护者需核对来源内容编码与 Workers 解码结果。'};
  if(VALIDATION.has(code))return {stage:'完整性校验',message:'来源数据未通过完整性校验。',action:'没有发布部分分页或无效行；重试会重新核对完整快照。'};
- if(code==='browser_timeout')return {stage:'浏览器到应用',message:'浏览器等待应用响应超时，尚未确认来源状态。',action:'本页已停止等待超过 35 秒的请求；不会把超时当成采集失败或成功。稍后仅按普通请求检查，仍由服务端门禁决定是否采集。'};
+ if(code==='browser_timeout')return {stage:'浏览器到应用',message:'浏览器等待应用响应超时，尚未确认来源状态。',action:'本页已停止等待超出应用请求或本轮续采时限的响应；不会把超时当成采集失败或成功。稍后仅按普通请求检查，仍由服务端门禁决定是否采集。'};
  if(code==='browser_network')return {stage:'浏览器到应用',message:'本次连接失败，尚未确认来源状态。',action:'检查当前网络连接；恢复后可在同一页面重试。'};
  if(code==='disabled')return {stage:'展示权限',message:'来源展示权限未建立，已清空缓存数据',action:'需先恢复合法展示权限。'};
  return {stage:'来源连接',message:code==='deadline'||code==='aborted'||code==='source_aborted'

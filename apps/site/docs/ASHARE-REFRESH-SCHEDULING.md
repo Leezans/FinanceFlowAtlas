@@ -122,3 +122,58 @@ closed, and reuse the same durable source gate, serial paging, complete-snapshot
 publication, denial stop and retained retry cooldown. It must never reset a busy,
 unknown or denied source outcome. Scheduling a check does not establish that the
 provider publishes new data every minute, during trading or outside it.
+
+## Finite acquisition batches are separate from minute checks
+
+A naive caller that makes exactly one snapshot request per minute is insufficient
+for larger lists. Each invocation validates at most three pages, and the private
+stage expires 180 seconds after its original start. An offline 901-row / ten-page
+counterexample reaches pages 1–9 at 0, 60 and 120 seconds, then restarts page 1 at
+180 seconds. Repeating the same minute tick never publishes that acquisition.
+This is a synthetic capacity counterexample, not a claim about the size of a live
+industry. The page already followed continuation hints before this change.
+
+`lib/ashare/collection-batch.ts` now separates finite continuation from the outer
+refresh cadence. The page uses its controller; `runCollectionBatch` exposes the
+same policy for a future supported job adapter. It does not choose an endpoint,
+provide authentication, register a schedule, or call an upstream directly. The
+adapter must supply one already-authorized ordinary snapshot request and pass
+its result through the same evidence validation and strict continuation parsing.
+The existing `consumeReply` function provides that validated result shape.
+
+Only an unambiguous `collection_in_progress` result with a valid Retry-After can
+continue. 503 with no snapshot, validated stale 200, and 304 with matching cache
+are supported. Unknown/conflicting error codes, stop flags, malformed/missing
+Retry-After, invalid evidence and a new 200 body's error flag cannot authorize a
+fast continuation. A historical 304 body is not mistaken for a new error report.
+Every other result ends the batch, including busy, cooldown, transport failure,
+denial and uncertain results. Ordinary UI recovery retains its existing cadence
+and complete server cooldown; stopped states still prohibit retry.
+
+One cycle includes its first request and permits at most 20 requests, because a
+slow invocation may validate only one page. Its original 180-second window is
+never renewed by partial progress or manual retry. No further request starts
+without enough remaining time for the unchanged 20-second server budget. The
+page and finite driver cap the application wait by the remaining window and the
+35-second per-request limit. Late responses cannot authorize another request;
+these client limits do not establish the server's outcome or release its lease.
+Timer wakes recheck the deadline, and early wakes do not shorten Retry-After.
+Navigation/unmount cancel the page transport and timer. An exhausted page batch
+returns to the ordinary minute check instead of immediately creating a new batch.
+A suspended browser can deliver its cancellation late; the server's own stage
+expiry and source gate remain authoritative throughout.
+
+The client's local window cannot prove that an existing durable stage has a full
+180 seconds left. Source-side expiry, stable ordering/count checks, maximum rows,
+original start time and atomic complete publication are unchanged. No stage TTL,
+source request spacing, successful quiet interval or failure cooldown was raised
+or lowered. A completed multi-page acquisition may already be stale; its original
+source-observation and trading timestamps remain unknown.
+
+Validation includes the failing minute-caller counterexample, successful finite
+901-row and 2,000-row acquisitions, and ten slow one-page invocations within the
+original window. Native offline workerd/D1 tests exercise the same finite driver
+across independent workers. All source responses are synthetic and external
+networking is disabled. This is not a deployed unattended scheduler or proof of
+live market-data availability. A future job still needs supported scheduling,
+authorized service access, durable job ownership, fairness and no-visitor tests.

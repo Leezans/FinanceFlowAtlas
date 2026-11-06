@@ -4,7 +4,7 @@ import type {EvidenceState} from './client';
 import type {Scope} from './model';
 import {describeRecovery,isSourceStopped} from '@/lib/ashare/recovery';
 import './recovery.css';
-export default function SourceRecovery({state,scope,loading,onRetry}:{state:EvidenceState;scope:Scope;loading:boolean;onRetry:()=>void}) {
+export default function SourceRecovery({state,scope,loading,onRetry,retryNotBefore=0}:{state:EvidenceState;scope:Scope;loading:boolean;onRetry:()=>void;retryNotBefore?:number}) {
  const issue=state.recovery;
  const [now,setNow]=useState(()=>Date.now());
  useEffect(()=>{
@@ -14,11 +14,12 @@ export default function SourceRecovery({state,scope,loading,onRetry}:{state:Evid
   return()=>{clearTimeout(start);clearInterval(timer);window.removeEventListener('focus',tick);};
  },[issue]);
  if(!issue)return null;
- const info=issue.mode==='stopped'&&!isSourceStopped(issue.code)?{stage:'采集已停止',message:'来源访问已停止。',action:'当前服务要求停止采集，需要维护者核查；不提供重试或绕过限制。'}:describeRecovery(issue.code),seconds=issue.retryAt===null?0:Math.max(0,Math.ceil((issue.retryAt-now)/1000));
+ const info=issue.mode==='stopped'&&!isSourceStopped(issue.code)?{stage:'采集已停止',message:'来源访问已停止。',action:'当前服务要求停止采集，需要维护者核查；不提供重试或绕过限制。'}:describeRecovery(issue.code),seconds=issue.retryAt===null?0:Math.max(0,Math.ceil((Math.max(issue.retryAt,retryNotBefore)-now)/1000));
  return <section className="ashare-recovery" aria-label="来源连接与恢复">
   <div className="recovery-summary"><p role="status"><strong>{issue.code==='browser_network'||issue.code==='browser_timeout'?'应用连接':'东方财富'} · {info.stage}</strong><span>{info.message} {state.snapshot?'保留本页上次核对完整的快照，当前不是新行情。':'尚无可显示的完整快照。'}</span></p>
    {issue.mode==='retry'&&<button type="button" onClick={onRetry} disabled={loading||seconds>0} aria-label="重试当前来源">{loading?'正在重试…':seconds>0?`${seconds} 秒后可重试`:'重试当前来源'}</button>}
   </div>
+  {retryNotBefore>now&&<p>本轮有限续采已结束，等待下一次普通检查；不会发布部分数据。</p>}
   <details><summary>故障详情与处理建议</summary><dl>
    <div><dt>数据来源</dt><dd>东方财富 · {scope.kind==='industry_rank'?'一级行业':`行业成分股 ${scope.fs.slice(2)}`}</dd></div>
    <div><dt>故障代码</dt><dd>{issue.code}{issue.httpStatus?` · HTTP ${issue.httpStatus}`:''}</dd></div>

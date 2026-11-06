@@ -8,6 +8,8 @@ const require=createRequire(import.meta.url),wranglerRequire=createRequire(requi
 const {Miniflare,createFetchMock,fetch:mockFetch}=wranglerRequire('miniflare'),{build}=wranglerRequire('esbuild');
 const root=fileURLToPath(new URL('..',import.meta.url));
 const {outputFiles}=await build({stdin:{contents:`import {ashareHandler} from './lib/ashare/host';export default {fetch:ashareHandler};`,resolveDir:root,sourcefile:'offline-ashare-staged.ts'},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
+const clientBundle=await build({stdin:{contents:`export {runCollectionBatch} from './lib/ashare/collection-batch';export {consumeReply,emptyState} from './components/ashare/client';export {parseScope} from './lib/ashare/snapshot';`,resolveDir:root,sourcefile:'offline-batch-client.ts'},bundle:true,format:'esm',platform:'node',target:'es2022',write:false});
+const {runCollectionBatch,consumeReply,emptyState,parseScope}=await import('data:text/javascript;base64,'+Buffer.from(clientBundle.outputFiles[0].text).toString('base64'));
 const migrations=await Promise.all(['0001_wild_jigsaw','0019_lean_golden_guardian','0012_ashare_shared_snapshots','0014_ashare_staged_acquisitions'].map(name=>readFile(new URL('../drizzle/'+name+'.sql',import.meta.url),'utf8')));
 const endpoint='https://offline.invalid/api/v1/ashare/snapshot?scope=BK1216';
 const fields=['f2','f3','f62','f184','f66','f69','f72','f75','f78','f81','f84','f87'];
@@ -77,3 +79,21 @@ await fixture(512,async({fetchers,calls,gate,stages,snapshots})=>{
  const cached=await fetchers[2](endpoint,{headers:{'if-none-match':final.headers.get('etag')}});assert.equal(cached.status,304);assert.ok(Number(cached.headers.get('x-ashare-refresh-after'))<=seconds);assert.equal(calls.length,7);
  console.log('PASS native 512-stock / six-page auto-continuation with one official redirect: '+(Date.now()-started)+'ms total; next check in '+seconds+'s; original timing and pacing preserved');
 },{redirect:true});
+
+// A future once-per-minute job must finish this finite operation rather than
+// treating every partial acquisition as an ordinary minute cache check.
+for(const total of [901,2000])await fixture(total,async({fetchers,calls,gate,stages,snapshots})=>{
+ const started=Date.now(),scope=parseScope(new URL(endpoint));let state=emptyState(),index=0;
+ const result=await runCollectionBatch({request:async signal=>{
+  const response=await fetchers[index++%fetchers.length](endpoint,{signal});
+  state=consumeReply(state,{status:response.status,payload:await response.json(),errorCode:response.headers.get('x-ashare-error-code')??undefined,recoveryMode:response.headers.get('x-ashare-recovery')??undefined,retryAfter:response.headers.get('retry-after')??undefined},scope);
+  if(state.continuationAt!==undefined){assert.equal(state.snapshot,null);assert.equal((await snapshots()).results.length,0);}
+  return state;
+ }});
+ assert.equal(result.reason,'response');assert.equal(result.requests,Math.ceil(Math.ceil(total/100)/3));assert.equal(result.value.snapshot.rows.length,total);assert.equal(result.value.snapshot.source_total,total);
+ assert.equal(new Set(result.value.snapshot.rows.map(row=>row.f12)).size,total);assert.equal(result.value.snapshot.source_observed_at,null);assert.equal(result.value.snapshot.trade_date,null);
+ assert.equal((await snapshots()).results.length,1);assert.equal((await stages()).results.length,0);assert.equal((await gate()).status,'idle');
+ assert.deepEqual(calls.map(call=>call.page),Array.from({length:Math.ceil(total/100)},(_,i)=>i+1));for(let n=1;n<calls.length;n++)assert.ok(calls[n].at-calls[n-1].at>=2950,'source pacing not preserved');
+ assert.ok(Date.parse(result.value.snapshot.fetched_at)-Date.parse(result.value.snapshot.collection_started_at)<180000);
+ console.log('PASS finite driver with native workerd/D1: '+total+' complete synthetic rows, '+result.requests+' cold-worker requests, '+(Date.now()-started)+'ms, no partial publication');
+});

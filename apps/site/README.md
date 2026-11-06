@@ -493,3 +493,13 @@ The source is free and anonymous for this private internal use. Migration
 existing source stops are not reset. Deployment must remain owner-only. See the
 [source, usage and validation contract](docs/source-cboe-delayed.md) and
 `npm run test:cboe-runtime`. No provider observations are bundled in source.
+
+### Bounded A-share collection jobs
+
+A minute cache-check tick is not a complete multi-page collection job. A naive
+one-request-per-minute caller cannot finish the synthetic 901-row case before
+its stage expires. The page uses the shared finite batch controller, and
+`runCollectionBatch` is available for a future authorized scheduling adapter.
+Only explicit, valid continuation hints advance that job; ordinary failures and
+cooldowns are not fast retries. No unattended collector is installed. See
+[batch bounds and the reproducible counterexample](docs/ASHARE-REFRESH-SCHEDULING.md#finite-acquisition-batches-are-separate-from-minute-checks).

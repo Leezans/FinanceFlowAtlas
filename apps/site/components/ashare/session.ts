@@ -5,6 +5,7 @@ import {isSourceStopped} from '@/lib/ashare/recovery';
 export const BROWSER_REQUEST_TIMEOUT_MS=35_000;
 export function createEvidenceSession(){
  let active:AbortController|null=null;
+ let batchDeadline:number|undefined;
  const client=createEvidenceClient(async({scope,ifNoneMatch})=>{
   active?.abort();const controller=new AbortController();active=controller;
   let retryNotBefore:number|undefined;
@@ -12,7 +13,7 @@ export function createEvidenceSession(){
   const interrupted=new Promise<never>((_resolve,reject)=>{
    stop=()=>reject(controller.signal.reason);
    controller.signal.addEventListener('abort',stop,{once:true});
-   timer=setTimeout(()=>controller.abort(new BrowserTimeoutError(retryNotBefore)),BROWSER_REQUEST_TIMEOUT_MS);
+   timer=setTimeout(()=>controller.abort(new BrowserTimeoutError(retryNotBefore)),Math.min(BROWSER_REQUEST_TIMEOUT_MS,batchDeadline===undefined?Infinity:Math.max(0,batchDeadline-Date.now())));
   });
   const read=async():Promise<WireReply>=>{
    const key=scope.kind==='industry_rank'?'level1':scope.fs.slice(2);
@@ -35,5 +36,5 @@ export function createEvidenceSession(){
    if(active===controller)active=null;
   }
  });
- return {client,cancel:()=>active?.abort()};
+ return {client,setDeadline:(deadline:number)=>{batchDeadline=deadline;},cancel:()=>{batchDeadline=undefined;active?.abort();}};
 }
