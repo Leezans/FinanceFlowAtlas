@@ -9,6 +9,12 @@ const root=fileURLToPath(new URL('..',import.meta.url));
 const {outputFiles}=await build({stdin:{contents:`import {cboeHandler} from './lib/cboe/host';export default {fetch:cboeHandler};`,resolveDir:root},bundle:true,format:'esm',platform:'neutral',target:'es2022',external:['cloudflare:workers'],write:false});
 const journal=JSON.parse(await readFile(new URL('../drizzle/meta/_journal.json',import.meta.url),'utf8'));
 const migrations=await Promise.all(journal.entries.map(({tag})=>readFile(new URL(`../drizzle/${tag}.sql`,import.meta.url),'utf8')));
+const cboeMigrationIndex=journal.entries.findIndex(({tag})=>tag==='0018_cboe_delayed_quotes');
+assert.ok(cboeMigrationIndex>=0,'Cboe migration must be selected by identity, not journal position');
+async function applyMigrations(db,items){for(const sql of items)for(const statement of sql.split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();}
+async function otherTables(db){return (await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name<>'cboe_delayed_source_gate'").all()).results.map(row=>row.name);}
+async function readTables(db,tables){return Promise.all(tables.map(table=>db.prepare(`SELECT * FROM ${table}`).all()));}
+async function unchanged(db,tables,before,phase){for(let i=0;i<tables.length;i++)assert.deepEqual((await db.prepare(`SELECT * FROM ${tables[i]}`).all()).results,before[i].results,`${tables[i]} untouched by ${phase}`);}
 const now=new Date(),day=now.toISOString().slice(0,10),sourceMinute=new Date(Math.floor((Date.now()-20*60000)/60000)*60000).toISOString();
 assert.equal(sourceMinute.slice(0,10),day,'Run this test after 00:20 UTC');
 const digits=sourceMinute.slice(0,10).replaceAll('-','')+'_'+sourceMinute.slice(11,16).replace(':','');
@@ -25,12 +31,16 @@ async function scenario(mode,check){
  const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('observer')]});
  try{
   const db=await mf.getD1Database('DB','warm');
-  for(const sql of migrations.slice(0,-1))for(const statement of sql.split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();
-  const tables=(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all()).results.map(row=>row.name);
-  const before=await Promise.all(tables.map(table=>db.prepare(`SELECT * FROM ${table}`).all()));
-  for(const statement of migrations.at(-1).split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();
+  await applyMigrations(db,migrations.slice(0,cboeMigrationIndex));
+  const priorTables=await otherTables(db),prior=await readTables(db,priorTables);
+  await applyMigrations(db,[migrations[cboeMigrationIndex]]);
+  await unchanged(db,priorTables,prior,'Cboe migration');
+  // Later migrations may intentionally change other tables. Compare runtime
+  // isolation only after the complete current journal has been applied.
+  await applyMigrations(db,migrations.slice(cboeMigrationIndex+1));
+  const tables=await otherTables(db),before=await readTables(db,tables);
   await check(mf,db,()=>calls,()=>csvCalls,next=>{mode=next;});
-  for(let i=0;i<tables.length;i++)assert.deepEqual((await db.prepare(`SELECT * FROM ${tables[i]}`).all()).results,before[i].results,`${tables[i]} untouched`);
+  await unchanged(db,tables,before,'Cboe runtime');
  }finally{await mf.dispose();await mock.close();}
 }
 await scenario('plain',async(mf,db,calls,csvCalls)=>{
@@ -85,7 +95,7 @@ async function absentClientSignalDeadline(phase){
  const worker=name=>({name,modules:true,script:outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:`offline-cboe-deadline-${phase}`},fetchMock:mock});
  const mf=new Miniflare({workers:[worker('warm'),worker('cold'),worker('observer')]});
  try{
-  const db=await mf.getD1Database('DB','warm');for(const statement of migrations.at(-1).split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();
+  const db=await mf.getD1Database('DB','warm');await applyMigrations(db,migrations);
   const started=Date.now(),response=await mf.dispatchFetch(url),body=await response.json();
   const gate=await db.prepare('SELECT status,lease_token,payload,not_before_ms FROM cboe_delayed_source_gate').first(),elapsed=Date.now()-started;
   assert.equal(response.status,503,JSON.stringify(body));assert.equal(body.snapshot,null);assert.equal(body.status.error_code,'timeout');

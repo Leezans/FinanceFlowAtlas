@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {untilAborted,timerDelay,retryAfterDeadline} from './browser-request';
+import {untilAborted,timerDelay,retryAfterDeadline} from '@/lib/browser-request';
 import {replySchema,REFRESH_MS,refreshInterval,snapshotView,visibleSnapshot,type PolymarketReply,type PolymarketView} from '@/lib/polymarket/model';
 type SnapshotError='network'|'invalid'|'permission'|'gate'|'cooldown'|null;
 const emptyReplies=():Record<PolymarketView,PolymarketReply|null>=>({hot:null,newest:null,interest:null});
