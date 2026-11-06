@@ -525,3 +525,16 @@ coordination state, recorded cache times and unverified scheduler installation.
 It does not certify valid live data. See [the contract and status-route audit](docs/READ-ONLY-DIAGNOSTICS.md).
 
 The shared **来源状态** navigation entry opens `/diagnostics`, a read-only metadata summary. It distinguishes stops, missing records, unknown freshness and recorded cache expiry, separates acquisition/check clocks from unverified source observation time, and never starts collection or promises an installed background schedule. It reads once on entry or explicit reread, with no polling. See `docs/READ-ONLY-DIAGNOSTICS.md` for boundaries and offline synthetic UI validation.
+
+
+## Personal-use BTC options matrix
+
+`/options` adds an independent Deribit BTC option chain. Matrix area uses the
+source 24-hour USD turnover, never open interest or a guessed net capital flow.
+The page supports expiry, call/put and contract search, with zero turnover retained
+in details. Per-minute shared snapshot acquisition is not a continuous real-time
+stream; source timestamps, fetch timestamps and unconfirmed publication delay are
+shown separately. Only the existing owner-only personal site is within the source
+data-use scope. Apply `0022_deribit_options_gate.sql` after prior migrations.
+See [source, units, rights and delay contract](docs/source-deribit-options.md) and
+run `npm run test:deribit-runtime`. No provider observations are bundled.

@@ -74,6 +74,7 @@ export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
       THEN json_extract(s.payload,'$.retrieved_at') END END AS acquired_at
     FROM tic_snapshot_cache g LEFT JOIN tic_snapshot_cache s ON s.id='${view === 'latest' ? 'tic-equity-latest-v2' : 'tic-equity-history-latest-12-v2'}'
     WHERE g.id='tic-treasury-source-gate-v1' LIMIT 1`})),
+  common('deribit-options', 'deribit_options_gate', 'btc_options', 'deribit-btc-options/1'),
 ];
 
 // This optional table is evidence of observed work, never proof of cron installation.
