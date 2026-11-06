@@ -8,7 +8,7 @@ export default function MarketLanding({onOpenTic}:{onOpenTic?:()=>void}={}){
    <a className={s.featured} href="/ashare" aria-label="打开 A 股热力图：行业到个股">A 股行业 <span>行业 → 个股</span></a>
    <a href="/markets" aria-label="打开全球市场矩阵">全球市场</a>
    <a href="/crypto" aria-label="打开加密现货：Kraken BTC 和 ETH">加密现货</a>
-   <a href="/options" aria-label="打开BTC期权成交矩阵：Deribit单交易所">期权成交矩阵</a>
+   <a href="/options" aria-label="打开BTC / ETH 期权成交矩阵：Deribit单交易所">期权成交矩阵</a>
    <a href="/futures" aria-label="打开期货持仓：美国 CFTC 精选市场">期货持仓</a>
    <a href="/forex" aria-label="打开外汇行情：Kraken 法币现货与 ECB 每日参考">外汇行情</a>
    <a href="#tic-view" onClick={onOpenTic}>继续看美国 TIC</a>

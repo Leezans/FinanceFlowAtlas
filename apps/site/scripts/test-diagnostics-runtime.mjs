@@ -57,6 +57,16 @@ try {
   // Dates and values below are deliberately synthetic; no market observations.
   const at = Date.now() - 60_000, stamp = new Date(at).toISOString(), older = new Date(at - 60_000).toISOString();
   const later = new Date(at + 30_000).toISOString();
+  for(const schema of ['deribit-btc-options/1','deribit-options/2','deribit-options/unknown']){
+    await db.prepare("UPDATE deribit_options_gate SET payload=? WHERE id='btc_options'").bind(JSON.stringify({schema,fetched_at:stamp,acquisition_started_at:older,rows:[{secret:'SECRET_FINANCIAL_ROW'}]})).run();
+    const baseline=await dump(),body=await(await mf.dispatchFetch(url)).json(),record=body.sources.find(row=>row.source==='deribit-options');
+    assert.equal(record.cache.recorded_acquisition_at,schema.endsWith('/unknown')?null:stamp);
+    assert.equal(record.cache.recorded_collection_start_at,schema.endsWith('/unknown')?null:older);
+    assert.equal(await dump(),baseline);assert.equal(outbound,0);assert.ok(!JSON.stringify(body).includes('SECRET_FINANCIAL_ROW'));
+  }
+  await db.prepare("UPDATE deribit_options_gate SET payload=NULL WHERE id='btc_options'").run();
+  console.log('PASS legacy BTC and combined BTC/ETH recorded cache clocks, unknown schemas withheld, zero writes/source calls');
+
   await db.prepare("UPDATE cboe_delayed_source_gate SET payload=? WHERE id='bxe_equities'").bind(JSON.stringify({schema: 'cboe-cache/1', snapshot: {schema: 'cboe-delayed/1', fetchedAt: stamp, acquisitionStartedAt: older, secret: 'SECRET_FINANCIAL_ROW'}, latestEmptyCheck: {schema: 'cboe-delayed/1', fetchedAt: later, acquisitionStartedAt: stamp}})).run();
   await db.prepare("UPDATE polymarket_source_gate SET payload=? WHERE id='active_markets'").bind(JSON.stringify({schema: 'polymarket-discovery/2', newest: {schema: 'polymarket-gamma/2', fetched_at: stamp, acquisition_started_at: older}, hot: {schema: 'polymarket-gamma/hot/1', fetched_at: older, acquisition_started_at: older}, interest: {schema: 'polymarket-open-interest/1', fetched_at: later, acquisition_started_at: stamp}})).run();
   await db.prepare("UPDATE ecb_fx_source_gate SET payload=?,checked_ms=? WHERE id='daily_reference'").bind(JSON.stringify({schema: 'ecb-fx-reference/1', retrieved_at: older, secret: 'SECRET_FINANCIAL_ROW'}), at).run();

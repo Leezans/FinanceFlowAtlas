@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
-import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,within} from '@testing-library/react';
 import DeribitOptions from '../components/options/DeribitOptions';
-import {at,optionsReply} from './deribit-fixture';
+import {at,optionsReply,combinedOptionsReply} from './deribit-fixture';
 const visible=(state:string)=>Object.defineProperty(document,'visibilityState',{value:state,configurable:true});
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(at);visible('visible');});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();visible('visible');});
@@ -23,5 +23,27 @@ describe('Deribit snapshot UI',()=>{
  it('checks again 60 seconds after completion',async()=>{let resolve!:(r:Response)=>void;const fetcher=vi.fn(()=>new Promise<Response>(r=>{resolve=r;}));vi.stubGlobal('fetch',fetcher);await start();await act(()=>vi.advanceTimersByTimeAsync(5000));await act(async()=>resolve(Response.json(optionsReply())));await act(()=>vi.advanceTimersByTimeAsync(59999));expect(fetcher).toHaveBeenCalledTimes(1);await act(()=>vi.advanceTimersByTimeAsync(1));expect(fetcher).toHaveBeenCalledTimes(2);});
  it('removes expired contracts on the clock without waiting for a fetch',async()=>{const reply=optionsReply();reply.snapshot!.rows.forEach(row=>{row.expiration_timestamp=at+2000;});vi.stubGlobal('fetch',vi.fn(async()=>Response.json(reply)));await start();expect(tile()).toBeTruthy();await act(()=>vi.advanceTimersByTimeAsync(2100));expect(tile()).toBeNull();});
  it('retains validated evidence on a non-JSON temporary gateway failure',async()=>{const fetcher=vi.fn(async()=>Response.json(optionsReply()));vi.stubGlobal('fetch',fetcher);await start();fetcher.mockImplementation(async()=>new Response('temporary',{status:502}));fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(tile()).toBeTruthy();expect(screen.getByText(/更新失败/)).toBeTruthy();});
-
+ it('shows combined coverage and exact ETH units with a local-only underlying filter',async()=>{
+  const fetcher=vi.fn(async()=>Response.json(combinedOptionsReply()));vi.stubGlobal('fetch',fetcher);await start();
+  expect(screen.getByText('本次快照覆盖：BTC / ETH。')).toBeTruthy();expect(tile()).toBeTruthy();
+  fireEvent.click(document.querySelector('g[data-id="ETH-27NOV26-3000-C"]')!);
+  const detail=within(screen.getByRole('region',{name:'期权合约详情'}));
+  expect(detail.getByText('12 ETH')).toBeTruthy();expect(detail.getByText('40 ETH · 发布延迟未确认')).toBeTruthy();expect(detail.getAllByText('0.03 ETH / 标的 ETH')).toHaveLength(2);expect(detail.getByText('1 ETH')).toBeTruthy();expect(detail.getByText('3,000 USD')).toBeTruthy();expect(detail.queryByText(/ BTC/)).toBeNull();
+  fireEvent.click(detail.getByRole('button',{name:'关闭详情'}));expect(screen.queryByRole('region',{name:'期权合约详情'})).toBeNull();
+  fireEvent.change(screen.getByLabelText('期权标的'),{target:{value:'ETH'}});expect(tile()).toBeNull();expect(document.querySelector('g[data-id="ETH-27NOV26-3000-C"]')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('查找期权合约'),{target:{value:'3500'}});expect(screen.getByText(/当前只有零值或缺失金额/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:/ · ETH-27NOV26-3500-C · /}));expect(within(screen.getByRole('region',{name:'期权合约详情'})).getByText('0 ETH')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('期权标的'),{target:{value:'BTC'}});expect(screen.queryByRole('region',{name:'期权合约详情'})).toBeNull();
+  fireEvent.change(screen.getByLabelText('查找期权合约'),{target:{value:''}});expect(tile()).toBeTruthy();expect(fetcher).toHaveBeenCalledTimes(1);expect((fetcher.mock.calls as unknown as [string,RequestInit][])[0][0]).toBe('/api/v1/options/deribit/snapshot');
+ });
+ it('does not label a retained single-BTC snapshot as combined evidence',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json(optionsReply())));await start();
+  expect(screen.getByText('本次快照覆盖：BTC · 仅显示已核验标的，不代表 BTC 与 ETH 均已更新。')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('期权标的'),{target:{value:'ETH'}});expect(tile()).toBeNull();expect(document.querySelector('g[data-id^="ETH-"]')).toBeNull();
+ });
+ it('clears contradictory combined coverage rather than displaying partial evidence',async()=>{
+  const fetcher=vi.fn(async()=>Response.json(combinedOptionsReply()));vi.stubGlobal('fetch',fetcher);await start();expect(tile()).toBeTruthy();
+  const invalid=combinedOptionsReply();invalid.snapshot!.rows=invalid.snapshot!.rows.filter(row=>row.underlying_currency==='BTC');fetcher.mockImplementation(async()=>Response.json(invalid));
+  fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await act(()=>vi.advanceTimersByTimeAsync(1));expect(tile()).toBeNull();expect(screen.getByText(/响应数据未通过校验/)).toBeTruthy();
+ });
 });

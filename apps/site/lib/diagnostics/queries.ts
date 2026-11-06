@@ -6,10 +6,10 @@
 export const DB_NOW = "(CAST(strftime('%s','now') AS INTEGER)*1000 + CAST(substr(strftime('%f','now'),4,3) AS INTEGER))";
 export type DiagnosticQuery = {source: string; view: string; sql: string};
 const json = (payload: string, path: string) => `json_extract(${payload},'${path}')`;
-function recorded(payload: string, schema: string, path: string) {
-  return `CASE WHEN json_valid(${payload}) THEN CASE WHEN ${json(payload, '$.schema')}='${schema}' THEN ${json(payload, path)} END END`;
+function recorded(payload: string, schema: string | readonly string[], path: string) {
+  return `CASE WHEN json_valid(${payload}) THEN CASE WHEN ${json(payload, '$.schema')} ${typeof schema==='string'?`='${schema}'`:`IN (${schema.map(value=>`'${value}'`).join(',')})`} THEN ${json(payload, path)} END END`;
 }
-function common(source: string, table: string, key: string, schema: string): DiagnosticQuery {
+function common(source: string, table: string, key: string, schema: string | readonly string[]): DiagnosticQuery {
   return {source, view: 'default', sql: `SELECT status AS state, ${DB_NOW} AS now_ms, updated_ms, not_before_ms AS retry_ms,
     NULL AS checked_ms, (payload IS NOT NULL) AS cache_present,
     ${recorded('payload', schema, '$.fetched_at')} AS acquired_at,
@@ -74,7 +74,7 @@ export const DIAGNOSTIC_QUERIES: readonly DiagnosticQuery[] = [
       THEN json_extract(s.payload,'$.retrieved_at') END END AS acquired_at
     FROM tic_snapshot_cache g LEFT JOIN tic_snapshot_cache s ON s.id='${view === 'latest' ? 'tic-equity-latest-v2' : 'tic-equity-history-latest-12-v2'}'
     WHERE g.id='tic-treasury-source-gate-v1' LIMIT 1`})),
-  common('deribit-options', 'deribit_options_gate', 'btc_options', 'deribit-btc-options/1'),
+  common('deribit-options', 'deribit_options_gate', 'btc_options', ['deribit-btc-options/1','deribit-options/2']),
 ];
 
 // This optional table is evidence of observed work, never proof of cron installation.
