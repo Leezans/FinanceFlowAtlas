@@ -85,3 +85,40 @@ cancel its timeout; late headers/bodies cannot publish old-scope evidence.
 Healthy responses and 304s still use their server-relative cache-check hint.
 Regression tests use synthetic fetch and body stalls with no provider networking;
 they do not establish live source availability.
+
+## Access-driven operation and resuming a page
+
+This deployment does not run an unattended A-share collector. A snapshot GET
+may start collection after ordinary server admission; the status endpoint only
+reads state. The status contract now says `collection_trigger: snapshot_request`
+and `background_collection: false`. The normal 60-second value describes the
+open page's target check interval, not a production scheduling service or a
+market-observation guarantee. No new request is scheduled after page unmount;
+already-started server work can still finish its bounded cleanup.
+
+The browser now catches up an overdue check on visible-page focus, pageshow
+(including back/forward-cache restoration), or visibilitychange. It does not
+refresh before its previously scheduled deadline. The same client cooldown and
+stopped state remain authoritative, and the existing in-flight guard prevents
+focus/visibility bursts from overlapping requests. Event listeners and the timer
+are removed on scope change/unmount. Browser throttling/suspension and provider
+failures can still prevent a complete fresh observation every minute.
+
+## Unattended scheduling remains unconfigured
+
+The deployed Worker exports fetch, not scheduled, and its generated configuration
+has no cron triggers. No Site-linked automation was present when this behavior
+was reviewed. The supported Sites publication tools available during this change
+did not expose a verified native cron configuration/readback path. Adding a local
+scheduled function or a cron string alone would not prove a production scheduler
+was installed. No shell loop, assistant task or repeatedly open browser was used
+as a substitute collector.
+
+Cloudflare's [Cron Trigger documentation](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
+requires both a scheduled handler and an installed trigger. Before claiming
+unattended minute collection here, a supported hosting path must install and read
+back that trigger, verify unattended access and actual executions with the page
+closed, and reuse the same durable source gate, serial paging, complete-snapshot
+publication, denial stop and retained retry cooldown. It must never reset a busy,
+unknown or denied source outcome. Scheduling a check does not establish that the
+provider publishes new data every minute, during trading or outside it.

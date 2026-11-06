@@ -66,6 +66,16 @@ The separate `/ashare` page provides industry/stock provider evidence using boun
 
 Validated A-share snapshots are shared in primary D1 `ashare_snapshot_cache` alongside the unchanged `ashare_source_gate`. Apply migration `0012_ashare_shared_snapshots.sql` after the existing migrations through the deployment’s supported workflow. One complete snapshot per scope is committed atomically with lease release; cold workers reuse it without another provider fetch. Freshness remains 60 seconds. Last-good evidence can survive temporary failures for at most 24 hours, retaining its original acquisition timestamp and explicit stale/error status. Storage is limited to 32 scopes (industry ranking plus up to 31 constituent scopes), each at most 2 MB; obsolete versions are replaced and expired entries pruned on successful publication. Busy, unknown, denied or unreadable permission state never returns persisted rows. Source observation time and trading date remain unknown. Authentication remains owner-only. Denials/challenges stop acquisition persistently rather than triggering alternate-route retries. Temporary collection failures enforce a shared minimum 60-second pause across isolates; successful acquisitions retain the 3-second quiet interval. The longer in-isolate exponential backoff remains in place. See HOSTED_PROOF.md for limitations; actual authenticated production source access is not claimed to have been verified.
 
+### A-share refresh trigger
+
+A-share collection is request-driven, not an unattended minute collector. Only
+ordinary snapshot GETs may acquire the shared source gate; status requests are
+read-only. The open page checks approximately every minute and catches up an
+overdue check when it becomes visible again, without shortening server cooldowns
+or overriding stopped state. Closing the page stops its future checks. The Site
+has no verified native cron configuration in this release. See
+[refresh scheduling and its limits](docs/ASHARE-REFRESH-SCHEDULING.md).
+
 ### A-share exploration
 
 The time panel separates the scheduled ordinary auction session (published 2026

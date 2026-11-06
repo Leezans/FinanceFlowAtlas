@@ -358,7 +358,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         }catch{if(!issue?.stopped)issue={code:'source_gate_unavailable',stopped:false,retrySeconds:60};}
         finally{if(timer!==undefined)clearTimeout(timer);}
       }
-      return reply(200,{state:!state.denied&&entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue&&issue.code!=='collection_in_progress',refresh_interval_seconds:60,acquisition_is_separate:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
+      return reply(200,{state:!state.denied&&entry?.snapshot?'ready':'unavailable',refreshing:!!entry?.pending,stale:!!entry?.snapshot&&(!!issue||entry.error||now()-entry.published>=TTL),has_error:!!issue&&issue.code!=='collection_in_progress',refresh_interval_seconds:60,acquisition_is_separate:false,collection_trigger:'snapshot_request',background_collection:false,...(issue?{error_code:issue.code,message:failureMessage(issue.code)}:{})},undefined,issue);
     }
     if(!state.entries.has(key)){
       // One level-1 plus one selected industry cache. Never evict in-flight work.
