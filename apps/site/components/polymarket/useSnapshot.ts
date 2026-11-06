@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {untilAborted,timerDelay,retryAfterDeadline,absoluteRetryDeadline} from '@/lib/browser-request';
-import {replySchema,REFRESH_MS,refreshInterval,snapshotView,visibleSnapshot,type PolymarketReply,type PolymarketView} from '@/lib/polymarket/model';
+import {replySchema,REFRESH_MS,refreshInterval,snapshotView,snapshotCacheTime,visibleSnapshot,type PolymarketReply,type PolymarketView} from '@/lib/polymarket/model';
 type SnapshotError='network'|'invalid'|'permission'|'gate'|'cooldown'|null;
 const emptyReplies=():Record<PolymarketView,PolymarketReply|null>=>({hot:null,newest:null,interest:null});
 /** One browser request/cooldown across modes; evidence and controls never cross modes. */
@@ -52,6 +52,6 @@ export function useSnapshot(view:PolymarketView='hot'){
   return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);if(poll.current)clearTimeout(poll.current);document.removeEventListener('visibilitychange',visible);active.current?.abort();active.current=null;};
  },[refresh]);
  useEffect(()=>{selected.current=view;const start=setTimeout(()=>void refresh(),0);return()=>clearTimeout(start);},[view,refresh]);
- const reply=replies[view],error=globalError??errors[view],snapshot=visibleSnapshot(reply,now),age=snapshot?now-Date.parse(snapshot.fetched_at):null;
+ const reply=replies[view],error=globalError??errors[view],snapshot=visibleSnapshot(reply,now),age=snapshot?now-snapshotCacheTime(snapshot):null;
  return {reply,snapshot,age,loading,error,refresh,coolingDown:now<Math.max(retryDeadline,viewDeadlines[view]),denied,stale:!!snapshot&&(error==='network'||reply?.status.state==='stale'||age!>refreshInterval(view))};
 }

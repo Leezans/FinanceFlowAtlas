@@ -109,6 +109,8 @@ try {
     [{schema: 'polymarket-gamma/1', fetched_at: stamp}, [stamp, null, null]],
     [{schema: 'polymarket-gamma/hot/1', fetched_at: stamp}, [null, stamp, null]],
     [{schema: 'polymarket-open-interest/1', fetched_at: stamp}, [null, null, stamp]],
+    [{schema: 'polymarket-open-interest/2', fetched_at: stamp}, [null, null, stamp]],
+    [{schema: 'polymarket-discovery/2', newest: null, hot: null, interest: {schema: 'polymarket-open-interest/2', fetched_at: later}}, [null, null, later]],
   ];
   for (const [payload, expected] of variants) {
     await db.prepare("UPDATE polymarket_source_gate SET payload=? WHERE id='active_markets'").bind(JSON.stringify(payload)).run();

@@ -27,12 +27,12 @@ function setup(){
  return {sql,db,fetcher,handler,request,read,clearCooldown:()=>sql.exec('UPDATE polymarket_source_gate SET not_before_ms=0,interest_not_before_ms=0')};
 }
 describe('verified open-interest metric and bounded cohort',()=>{
- it('uses one batch of the first 20 distinct supported conditions, never a global query or newest scan',async()=>{
+ it('uses two batches of the first 40 distinct supported conditions, never a global query or newest scan',async()=>{
   const rows=raw(60);rows[0].conditionId='bad';rows[2].conditionId=rows[1].conditionId;rows[3].conditionId=String(rows[3].conditionId).toUpperCase();
   const fetcher=vi.fn<typeof fetch>(async input=>Response.json(new URL(String(input)).pathname==='/v2/oi'?{data:[]}:rows));
   const result=await acquireOpenInterest(fetcher,new AbortController().signal,()=>NOW,NOW);
-  expect(fetcher).toHaveBeenCalledTimes(2);expect(result.rows).toHaveLength(20);expect(result.discovery.rows).toHaveLength(60);expect(result.rows[0].id).toBe('59');expect(result.rows[1].id).toBe('57');
-  const query=new URL(String(fetcher.mock.calls[1][0]));expect(query.origin+query.pathname).toBe('https://data-api.polymarket.com/v2/oi');expect([...query.searchParams.keys()]).toEqual(['condition']);expect(query.searchParams.get('condition')!.split(',')).toEqual(result.rows.map(r=>r.condition_id));
+  expect(fetcher).toHaveBeenCalledTimes(3);expect(result.rows).toHaveLength(40);expect(result.discovery.rows).toHaveLength(60);expect(result.rows[0].id).toBe('59');expect(result.rows[1].id).toBe('57');
+  const query=new URL(String(fetcher.mock.calls[1][0]));expect(query.origin+query.pathname).toBe('https://data-api.polymarket.com/v2/oi');expect([...query.searchParams.keys()]).toEqual(['condition']);expect(query.searchParams.get('condition')!.split(',')).toEqual(result.rows.slice(0,20).map(r=>r.condition_id));expect(new URL(String(fetcher.mock.calls[2][0])).searchParams.get('condition')!.split(',')).toEqual(result.rows.slice(20).map(r=>r.condition_id));
   expect(fetcher.mock.calls[1][1]).toMatchObject({credentials:'omit',redirect:'manual',cache:'no-store'});expect(result.values).toEqual([]);
  });
  it('never requests OI when all condition IDs are missing, malformed or unsupported',async()=>{
@@ -73,7 +73,7 @@ describe('verified open-interest metric and bounded cohort',()=>{
 });
 describe('OI uses the existing durable permission and publication gate',()=>{
  it('persists five-minute OI cooldown without slowing ordinary modes',async()=>{
-  const t=setup();try{const result=await t.read();expect(result.snapshot?.schema).toBe('polymarket-open-interest/1');expect(result.status.refresh_ms).toBe(300_000);expect(result.status.max_cache_age_ms).toBe(600_000);
+  const t=setup();try{const result=await t.read();expect(result.snapshot?.schema).toBe('polymarket-open-interest/2');expect(result.status.refresh_ms).toBe(300_000);expect(result.status.max_cache_age_ms).toBe(600_000);
    const gate=t.sql.prepare('SELECT not_before_ms,interest_not_before_ms,interest_checked_ms FROM polymarket_source_gate').get()!;expect(Number(gate.interest_not_before_ms)-Number(gate.interest_checked_ms)).toBeGreaterThanOrEqual(300_000);
    for(const view of ['interest','hot','newest'])await t.read(view);expect(t.fetcher).toHaveBeenCalledTimes(2);
    t.sql.exec('UPDATE polymarket_source_gate SET not_before_ms=0');await t.read();expect(t.fetcher).toHaveBeenCalledTimes(2);await t.read('hot');expect(t.fetcher).toHaveBeenCalledTimes(3);await t.read();expect(t.fetcher).toHaveBeenCalledTimes(3);

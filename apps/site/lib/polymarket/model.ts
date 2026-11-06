@@ -6,8 +6,10 @@ export const HOT_SOURCE_DOCS='https://docs.polymarket.com/api-reference/markets/
 export const HOT_MARKETS=100;
 export type PolymarketView='hot'|'newest'|'interest';
 export const INTEREST_SOURCE_URL='https://data-api.polymarket.com/v2/oi';
-export const INTEREST_SOURCE_DOCS='https://docs.polymarket.com/market-data/public-analytics#open-interest';
-export const INTEREST_MARKETS=20,INTEREST_REFRESH_MS=300_000,INTEREST_MAX_CACHE_AGE_MS=600_000;
+export const INTEREST_SOURCE_DOCS='https://docs.polymarket.com/api-reference/markets/get-open-interest';
+export const INTEREST_BATCH_SIZE=20,INTEREST_MARKETS=40,LEGACY_INTEREST_MARKETS=20,INTEREST_MAX_BATCHES=2;
+export const INTEREST_COLLECTION_BUDGET_MS=12_000;
+export const INTEREST_REFRESH_MS=300_000,INTEREST_MAX_CACHE_AGE_MS=600_000;
 export const refreshInterval=(view:PolymarketView)=>view==='interest'?INTEREST_REFRESH_MS:REFRESH_MS;
 export const maximumCacheAge=(view:PolymarketView)=>view==='interest'?INTEREST_MAX_CACHE_AGE_MS:MAX_CACHE_AGE_MS;
 export const conditionSchema=z.string().regex(/^0x[0-9a-f]{64}$/);
@@ -67,22 +69,47 @@ export const hotSnapshotSchema=z.object({
  rows:z.array(marketSchema).min(1).max(HOT_MARKETS),
 }).strict().refine(s=>Date.parse(s.fetched_at)>=Date.parse(s.acquisition_started_at)&&s.source_page_sizes[0]===s.source_market_count&&s.rows.length+s.excluded_market_count===s.source_market_count&&(s.stop_reason==='sample_limit')===(s.source_market_count===HOT_MARKETS)&&descendingKnownVolume(s.rows)&&new Set(s.rows.map(r=>r.id)).size===s.rows.length&&s.rows.every(r=>!r.source_record_updated_at||Date.parse(r.source_record_updated_at)<=Date.parse(s.fetched_at)+60_000));
 /** Select one bounded source-ranked cohort, never a full market or OI ranking. */
-export function interestSelection(rows:PolymarketMarket[]):PolymarketMarket[]{
+export function interestSelection(rows:PolymarketMarket[],limit:number=INTEREST_MARKETS):PolymarketMarket[]{
  const seen=new Set<string>();
- return rows.filter(row=>{if(!row.condition_id||seen.has(row.condition_id))return false;seen.add(row.condition_id);return true;}).slice(0,INTEREST_MARKETS);
+ return rows.filter(row=>{if(!row.condition_id||seen.has(row.condition_id))return false;seen.add(row.condition_id);return true;}).slice(0,limit);
 }
-export const interestSnapshotSchema=z.object({
+export const legacyInterestSnapshotSchema=z.object({
  schema:z.literal('polymarket-open-interest/1'),source:z.literal('Polymarket Data API v2'),
  coverage:z.literal('bounded_hot_market_open_interest'),complete_universe:z.literal(false),total_market_count:z.null(),
- sample_limit:z.literal(INTEREST_MARKETS),selection:z.literal('first_distinct_standard_conditions_in_hot_window'),
+ sample_limit:z.literal(LEGACY_INTEREST_MARKETS),selection:z.literal('first_distinct_standard_conditions_in_hot_window'),
  metric:z.literal('priced_gross_open_interest'),currency:z.literal('USDC'),
- discovery:hotSnapshotSchema,rows:z.array(marketSchema).min(1).max(INTEREST_MARKETS),
- values:z.array(z.object({condition_id:conditionSchema,value:z.number().finite().nonnegative().max(1e15)}).strict()).max(INTEREST_MARKETS),
+ discovery:hotSnapshotSchema,rows:z.array(marketSchema).min(1).max(LEGACY_INTEREST_MARKETS),
+ values:z.array(z.object({condition_id:conditionSchema,value:z.number().finite().nonnegative().max(1e15)}).strict()).max(LEGACY_INTEREST_MARKETS),
  acquisition_started_at:instant,oi_request_started_at:instant,fetched_at:instant,source_observed_at:z.null(),net_capital_flow:z.null(),
-}).strict().refine(s=>s.acquisition_started_at===s.discovery.acquisition_started_at&&Date.parse(s.oi_request_started_at)>=Date.parse(s.discovery.fetched_at)&&Date.parse(s.fetched_at)>=Date.parse(s.oi_request_started_at)&&JSON.stringify(s.rows)===JSON.stringify(interestSelection(s.discovery.rows))&&new Set(s.values.map(r=>r.condition_id)).size===s.values.length&&s.values.every(v=>s.rows.some(r=>r.condition_id===v.condition_id)));
+}).strict().refine(s=>s.acquisition_started_at===s.discovery.acquisition_started_at&&Date.parse(s.oi_request_started_at)>=Date.parse(s.discovery.fetched_at)&&Date.parse(s.fetched_at)>=Date.parse(s.oi_request_started_at)&&JSON.stringify(s.rows)===JSON.stringify(interestSelection(s.discovery.rows,LEGACY_INTEREST_MARKETS))&&new Set(s.values.map(r=>r.condition_id)).size===s.values.length&&s.values.every(v=>s.rows.some(r=>r.condition_id===v.condition_id)));
+/** Every batch belongs to one frozen cohort; absent returned IDs are not zero. */
+export const interestBatchSchema=z.object({
+ condition_ids:z.array(conditionSchema).min(1).max(INTEREST_BATCH_SIZE),
+ returned_condition_ids:z.array(conditionSchema).max(INTEREST_BATCH_SIZE),
+ requested_at:instant,fetched_at:instant,
+}).strict().refine(b=>Date.parse(b.fetched_at)>=Date.parse(b.requested_at)&&new Set(b.condition_ids).size===b.condition_ids.length&&new Set(b.returned_condition_ids).size===b.returned_condition_ids.length&&b.returned_condition_ids.every(id=>b.condition_ids.includes(id)));
+export const batchedInterestSnapshotSchema=legacyInterestSnapshotSchema.innerType().extend({
+ schema:z.literal('polymarket-open-interest/2'),sample_limit:z.literal(INTEREST_MARKETS),
+ rows:z.array(marketSchema).min(1).max(INTEREST_MARKETS),
+ values:legacyInterestSnapshotSchema.innerType().shape.values.max(INTEREST_MARKETS),
+ batch_size:z.literal(INTEREST_BATCH_SIZE),batches:z.array(interestBatchSchema).min(1).max(INTEREST_MAX_BATCHES),
+}).strict().refine(s=>{
+ if(s.rows.length===0||s.batches.length===0)return false;
+ const start=Date.parse(s.acquisition_started_at),end=Date.parse(s.fetched_at);
+ return s.acquisition_started_at===s.discovery.acquisition_started_at&&end>=start&&end-start<=INTEREST_COLLECTION_BUDGET_MS&&
+  JSON.stringify(s.rows)===JSON.stringify(interestSelection(s.discovery.rows))&&
+  s.batches.length===Math.ceil(s.rows.length/INTEREST_BATCH_SIZE)&&
+  s.oi_request_started_at===s.batches[0].requested_at&&s.fetched_at===s.batches[s.batches.length-1].fetched_at&&
+  s.batches.every((batch,index)=>Date.parse(batch.requested_at)>=Date.parse(index===0?s.discovery.fetched_at:s.batches[index-1].fetched_at)&&
+   JSON.stringify(batch.condition_ids)===JSON.stringify(s.rows.slice(index*INTEREST_BATCH_SIZE,(index+1)*INTEREST_BATCH_SIZE).map(row=>row.condition_id)))&&
+  JSON.stringify(s.values.map(value=>value.condition_id))===JSON.stringify(s.batches.flatMap(batch=>batch.returned_condition_ids));
+});
+export const interestSnapshotSchema=z.union([batchedInterestSnapshotSchema,legacyInterestSnapshotSchema]);
 export type PolymarketInterestSnapshot=z.infer<typeof interestSnapshotSchema>;
+export type PolymarketBatchedInterestSnapshot=z.infer<typeof batchedInterestSnapshotSchema>;
+export type PolymarketInterestBatch=z.infer<typeof interestBatchSchema>;
 export const snapshotSchema=z.union([keysetSnapshotSchema,legacySnapshotSchema,hotSnapshotSchema,interestSnapshotSchema]);
-export function snapshotView(snapshot:PolymarketSnapshot):PolymarketView{return snapshot.schema==='polymarket-open-interest/1'?'interest':snapshot.schema==='polymarket-gamma/hot/1'?'hot':'newest';}
+export function snapshotView(snapshot:PolymarketSnapshot):PolymarketView{return (snapshot.schema==='polymarket-open-interest/1'||snapshot.schema==='polymarket-open-interest/2')?'interest':snapshot.schema==='polymarket-gamma/hot/1'?'hot':'newest';}
 export type PolymarketHotSnapshot=z.infer<typeof hotSnapshotSchema>;
 // Both modes use the existing single durable lease and bounded payload. No
 // table, permission state or cooldown is reset during this cache evolution.
@@ -108,7 +135,7 @@ export function updateStoredCache(cache:PolymarketStoredCache|null,snapshot:Poly
  // Reclaim only evidence already beyond its own display lifetime, as part of
  // this successful replacement. Expired companion windows must not pin the
  // shared byte budget forever. A temporary acquisition failure still leaves stored bytes intact.
- const retained=(mode:PolymarketView)=>{const prior=selectSnapshot(cache,mode);return prior&&at-Date.parse(prior.fetched_at)>maximumCacheAge(mode)?null:prior;};
+ const retained=(mode:PolymarketView)=>{const prior=selectSnapshot(cache,mode);return prior&&at-snapshotCacheTime(prior)>maximumCacheAge(mode)?null:prior;};
  const interest=view==='interest'?snapshot:retained('interest');
  if(interest)return interestCacheSchema.parse({schema:'polymarket-discovery/2',interest,hot:view==='hot'?snapshot:retained('hot'),newest:view==='newest'?snapshot:retained('newest')});
  const opposite=retained(view==='hot'?'newest':'hot');
@@ -123,7 +150,12 @@ export type PolymarketSnapshot=z.infer<typeof snapshotSchema>;
 export const statusSchema=z.object({state:z.enum(['available','stale','unavailable','denied']),error_code:z.string().regex(/^[a-z_]{1,64}$/).nullable(),last_attempt_at:instant.nullable(),fetched_at:instant.nullable(),cache_age_ms:z.number().int().safe().nullable(),refresh_ms:z.union([z.literal(REFRESH_MS),z.literal(INTEREST_REFRESH_MS)]),max_cache_age_ms:z.union([z.literal(MAX_CACHE_AGE_MS),z.literal(INTEREST_MAX_CACHE_AGE_MS)]),next_retry_at:instant.nullable(),source_next_retry_at:instant.nullable().optional()}).strict();
 export const replySchema=z.object({status:statusSchema,snapshot:snapshotSchema.nullable()}).strict().refine(r=>(r.status.state==='available'||r.status.state==='stale')===!!r.snapshot&&(!r.snapshot||r.snapshot.fetched_at===r.status.fetched_at&&r.status.refresh_ms===refreshInterval(snapshotView(r.snapshot))&&r.status.max_cache_age_ms===maximumCacheAge(snapshotView(r.snapshot))));
 export type PolymarketReply=z.infer<typeof replySchema>;
+/** Conservative cache age for multi-batch OI starts before its oldest request.
+ * Receipt time stays separately available; neither clock is a source valuation time. */
+export function snapshotCacheTime(snapshot:PolymarketSnapshot):number{
+ return Date.parse(snapshot.schema==='polymarket-open-interest/2'?snapshot.oi_request_started_at:snapshot.fetched_at);
+}
 export function visibleSnapshot(reply:PolymarketReply|null,now:number):PolymarketSnapshot|null{
  const s=reply?.snapshot;if(!s||!['available','stale'].includes(reply.status.state))return null;
- const age=now-Date.parse(s.fetched_at);return age>=0&&age<=maximumCacheAge(snapshotView(s))?s:null;
+ const age=now-snapshotCacheTime(s);return age>=0&&now>=Date.parse(s.fetched_at)&&age<=maximumCacheAge(snapshotView(s))?s:null;
 }

@@ -1,6 +1,6 @@
 import {strictJSON} from '../ashare/strict-json';
 import {PolymarketError} from './adapter';
-import {SOURCE_URL,HOT_SOURCE_URL,HOT_MARKETS,PAGE_SIZE,MAX_PAGES,INTEREST_SOURCE_URL,INTEREST_MARKETS,conditionSchema} from './model';
+import {SOURCE_URL,HOT_SOURCE_URL,HOT_MARKETS,PAGE_SIZE,MAX_PAGES,INTEREST_SOURCE_URL,INTEREST_BATCH_SIZE,conditionSchema} from './model';
 export const MAX_BYTES=4_000_000,MAX_TOTAL_BYTES=8_000_000;
 export const PAGE_INTERVAL_MS=250,COLLECTION_BUDGET_MS=8_000;
 export type PolymarketCoverage={pageSizes:number[];stopReason:'source_exhausted'|'page_limit'|'time_budget';hasMore:boolean};
@@ -86,7 +86,7 @@ export async function fetchHotPolymarket(fetcher:typeof fetch,signal:AbortSignal
 
 /** One explicitly selected public OI batch. Never omit condition: omission means GLOBAL. */
 export async function fetchOpenInterest(conditions:string[],fetcher:typeof fetch,signal:AbortSignal,now:()=>number,budget:{bytes:number}):Promise<unknown>{
- if(conditions.length<1||conditions.length>INTEREST_MARKETS||new Set(conditions).size!==conditions.length||conditions.some(id=>!conditionSchema.safeParse(id).success))fail('invalid_condition_selection');
+ if(conditions.length<1||conditions.length>INTEREST_BATCH_SIZE||new Set(conditions).size!==conditions.length||conditions.some(id=>!conditionSchema.safeParse(id).success))fail('invalid_condition_selection');
  const url=new URL(INTEREST_SOURCE_URL);url.searchParams.set('condition',conditions.join(','));
  return fetchPage(url.toString(),fetcher,signal,now,budget,64_000);
 }
