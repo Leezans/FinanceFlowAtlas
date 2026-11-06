@@ -34,7 +34,8 @@
     "test:polymarket-interest-runtime": "node scripts/test-polymarket-interest-runtime.mjs",
     "test:tic-runtime": "node scripts/test-tic-runtime.mjs",
     "test:ashare-scheduler-runtime": "node scripts/test-ashare-scheduler-runtime.mjs",
-    "scheduler:status": "node scripts/check-ashare-scheduler.mjs"
+    "scheduler:status": "node scripts/check-ashare-scheduler.mjs",
+    "test:diagnostics-runtime": "node scripts/test-diagnostics-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

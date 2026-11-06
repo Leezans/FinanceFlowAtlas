@@ -516,3 +516,10 @@ See [the source, coverage and cooldown contract](docs/polymarket-open-interest.m
 This separate private view weights area by verified-unit USDC open interest for
 at most 20 hot-sample conditions, never by unverified Gamma volume or inferred
 net flow. Apply appended migration 0021; do not reset existing source gates.
+
+## Read-only source diagnostics
+
+`GET /api/v1/diagnostics` provides bounded, owner-private metadata inspection with
+no provider calls, database writes, initialization or gate repair. It distinguishes
+coordination state, recorded cache times and unverified scheduler installation.
+It does not certify valid live data. See [the contract and status-route audit](docs/READ-ONLY-DIAGNOSTICS.md).
