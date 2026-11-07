@@ -306,6 +306,20 @@ existing gates. Denial is durable; seven-day cache expiry also applies in the
 browser. Run `npm run test:equity-runtime` for native workerd/D1 tests with real
 network disabled. See [source evidence and limitations](../../docs/source-worldbank-equities.md).
 
+The browser reuses the shared official-report lifecycle: hidden pages do not
+start requests, manual/visibility checks cannot shorten either `Retry-After` or
+`next_retry_at`, and temporary failures or coordination waits recover after a
+minimum one-minute browser pause when the source permits. A successful reply
+without a server deadline falls back to the normal one-day cadence. Hung fetch
+or body reads settle after 35 seconds; late replies cannot replace newer data.
+Permission stops clear evidence and stop checks. Network failures or invalid
+5xx replies retain only the original validated snapshot within its seven-day
+lifetime; a valid unavailable report follows the server state and clears it.
+The UI shows the next permitted check and disables early manual refreshes.
+This does not enable background collection or make annual observations real-time.
+Regression coverage is in `tests/equity-browser-lifecycle.test.tsx` and
+`tests/equity-ui.test.tsx`, using synthetic fixtures only.
+
 ## ASEAN annual country-sector FDI
 
 The ASEAN view retains the full country × sector source-coordinate table and its

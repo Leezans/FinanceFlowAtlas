@@ -9,6 +9,15 @@ import {reply, NOW} from './equity-fixture';
 beforeEach(() => {vi.useFakeTimers(); vi.setSystemTime(NOW); window.history.replaceState({}, '', '/equities');});
 afterEach(() => {cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); Object.defineProperty(document, 'visibilityState', {value: 'visible', configurable: true});});
 async function start() {render(<EquityContext/>); await act(() => vi.advanceTimersByTimeAsync(1));}
+async function refreshWhenDue() {
+  // Move the wall clock without firing the poll first, then let the display tick.
+  vi.setSystemTime(NOW + REFRESH_MS + 1);
+  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  const button = screen.getByRole('button', {name: '检查数据'}) as HTMLButtonElement;
+  expect(button.disabled).toBe(false);
+  fireEvent.click(button);
+  await act(() => vi.advanceTimersByTimeAsync(1));
+}
 const globalMatrix = () => screen.getByRole('region', {name: '全球股市年度矩阵'});
 const focus = () => screen.getByRole('region', {name: '所选国家年度股市'});
 const expectEmpty = () => {
@@ -29,6 +38,14 @@ describe('annual equity context UI', () => {
     expect(screen.getByRole('link', {name: /美国真实月度跨境股票净买入/}).getAttribute('href')).toBe('/');
     expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText(/前 15 名/)).toBeNull();
   });
+  it('shows the next allowed check and disables early manual refreshes', async () => {
+    const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
+    const button = screen.getByRole('button', {name: '检查数据'}) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText('下次可检查：2026-11-06 06:00:00.000 UTC')).toBeTruthy();
+    fireEvent.click(button); await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('changes country and metric locally without mixing the retained older metric into the newest year', async () => {
     const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
     fireEvent.click(globalMatrix().querySelector('[data-id=JPN]')!);
@@ -41,12 +58,13 @@ describe('annual equity context UI', () => {
     expect(fetcher).toHaveBeenCalledTimes(1); expect(window.location.search).toBe('?country=JPN');
   });
   it('keeps the color scale and current controls through region filtering and a same-scope refresh', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json(reply()))); await start();
+    const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
     fireEvent.change(screen.getByLabelText('筛选区域'), {target: {value: 'Asia'}});
     expect(globalMatrix().querySelector('[data-id=USA]')).toBeNull();
     expect(globalMatrix().querySelector('[data-id=JPN]')?.getAttribute('data-color')).toBe('magnitude-1');
     fireEvent.keyDown(globalMatrix().querySelector('[data-id=JPN]')!, {key: 'Enter'});
-    fireEvent.click(screen.getByRole('button', {name: '检查数据'})); await act(() => vi.advanceTimersByTimeAsync(1));
+    await refreshWhenDue();
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect((screen.getByLabelText('筛选区域') as unknown as {value: string}).value).toBe('Asia');
     expect(screen.getByRole('heading', {name: '日本'})).toBeTruthy();
   });
@@ -56,8 +74,7 @@ describe('annual equity context UI', () => {
     const scale = () => globalMatrix().querySelector('[data-zoom]')?.getAttribute('data-zoom');
     zoom(); expect(scale()).toBe('1.5');
     fireEvent.change(screen.getByLabelText('筛选区域'), {target: {value: 'Asia'}}); expect(scale()).toBe('1');
-    zoom(); fireEvent.click(screen.getByRole('button', {name: '检查数据'}));
-    await act(() => vi.advanceTimersByTimeAsync(1)); expect(scale()).toBe('1.5');
+    zoom(); await refreshWhenDue(); expect(scale()).toBe('1.5');
     fireEvent.change(screen.getByLabelText('筛选区域'), {target: {value: ''}}); expect(scale()).toBe('1');
     zoom(); fireEvent.change(screen.getByLabelText('比较指标'), {target: {value: 'traded_value'}}); expect(scale()).toBe('1');
   });
@@ -86,15 +103,14 @@ describe('annual equity context UI', () => {
   });
   it('retains verified data on transient failure and hides it after seven days even in a hidden tab', async () => {
     const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
-    fetcher.mockRejectedValue(new Error()); fireEvent.click(screen.getByRole('button', {name: '检查数据'}));
-    await act(() => vi.advanceTimersByTimeAsync(1)); expect(screen.getByText('已保留数据 · 获取状态陈旧')).toBeTruthy();
+    fetcher.mockRejectedValue(new Error()); await refreshWhenDue(); expect(screen.getByText('已保留数据 · 获取状态陈旧')).toBeTruthy();
     Object.defineProperty(document, 'visibilityState', {value: 'hidden', configurable: true});
     vi.setSystemTime(NOW + MAX_CACHE_AGE_MS + 30_001); await act(() => vi.advanceTimersByTimeAsync(30_000)); expectEmpty();
   });
-  it.each([401, 403, 302])('clears evidence and stops requests after permission HTTP %s', async status => {
+  it.each([401, 403, 407, 451, 302])('clears evidence and stops requests after permission HTTP %s', async status => {
     const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
     fetcher.mockImplementation(async () => new Response('Login', {status}));
-    fireEvent.click(screen.getByRole('button', {name: '检查数据'})); await act(() => vi.advanceTimersByTimeAsync(1));
+    await refreshWhenDue();
     expect(screen.getByText('展示权限已失效')).toBeTruthy(); expectEmpty();
     await act(() => vi.advanceTimersByTimeAsync(2 * REFRESH_MS)); expect(fetcher).toHaveBeenCalledTimes(2);
   });
@@ -115,7 +131,7 @@ describe('annual equity context UI', () => {
   it('clears malformed successful responses while retaining the empty matrix shell', async () => {
     const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
     fetcher.mockImplementation(async () => Response.json({snapshot: {...reply().snapshot, rows: []}, status: reply().status}));
-    fireEvent.click(screen.getByRole('button', {name: '检查数据'})); await act(() => vi.advanceTimersByTimeAsync(1));
+    await refreshWhenDue();
     expect(screen.getByText('响应未通过校验，已清空浏览器数据。')).toBeTruthy(); expectEmpty();
   });
 });
