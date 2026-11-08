@@ -1,5 +1,5 @@
- 'use client';
-import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
+'use client';
+import React,{useMemo,useState} from 'react';
 import {FLOW_DATASET,COMPANY_DATASET,LICENSE,PARTICIPANTS,REFRESH_MS,STALE_REPORT_DAYS,replySchema,visibleSnapshot,reportAge,type TpexReply,type Participant} from '@/lib/tpex/model';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {industries,industryLabel,signed,tpexMatrixGroups} from './matrix';
@@ -7,31 +7,17 @@ import {INDUSTRY_REFERENCE} from '@/lib/tpex/industries';
 import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
 import {projectTpexShareReport} from '@/lib/evidence/tpex-share-projection';
 import s from './tpex.module.css';
+import {useReport} from '@/components/markets/useReport';
+const parseReply=(value:unknown):TpexReply=>replySchema.parse(value);
 const timestamp=(t:string|null)=>t?t.replace('T',' ').replace('Z',' UTC'):'未提供';
+const retryTimestamp=(deadline:number)=>{
+ const date=new Date(deadline);
+ return Number.isFinite(date.getTime())?timestamp(date.toISOString()):'服务器指定的等待期结束后';
+};
 export default function TpexInstitutional({embedded=false}:{embedded?:boolean}={}){
- const [data,setData]=useState<TpexReply|null>(null),[loading,setLoading]=useState(false),[failure,setFailure]=useState<'network'|'permission'|'invalid'|null>(null),[now,setNow]=useState(0),[participant,setParticipant]=useState<Participant>('total'),[industry,setIndustry]=useState<string|null>(null),[selectedCode,setSelectedCode]=useState<string|null>(null);
- const active=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false);
- const refresh=useCallback(async()=>{
-  if(active.current||blocked.current)return;
-  const controller=new AbortController();active.current=controller;setLoading(true);
-  const timeout=setTimeout(()=>controller.abort(),30_000);
-  try{
-   const response=await fetch('/api/v1/taiwan/tpex/snapshot',{credentials:'same-origin',cache:'no-store',redirect:'manual',signal:controller.signal});
-   if(response.status===401||response.status===403||response.type==='opaqueredirect'||response.redirected||response.status>=300&&response.status<400){if(mounted.current&&active.current===controller){blocked.current=true;setData(null);setFailure('permission');}return;}
-   let result:TpexReply;
-   try{result=replySchema.parse(await response.json());if(response.redirected||![200,503].includes(response.status))throw new Error('invalid_response');}
-   catch(error){if(response.status>=500&&response.status<=599)throw error;if(mounted.current&&active.current===controller){setData(null);setFailure('invalid');}return;}
-   if(mounted.current&&active.current===controller){blocked.current=result.status.state==='denied';setData(result);setFailure(null);setNow(Date.now());}
-  }catch{if(mounted.current&&active.current===controller){setFailure('network');setNow(Date.now());}}
-  finally{clearTimeout(timeout);if(active.current===controller){active.current=null;if(mounted.current)setLoading(false);}}
- },[]);
- useEffect(()=>{
-  mounted.current=true;const start=setTimeout(()=>{setNow(Date.now());void refresh();},0);
-  const tick=setInterval(()=>setNow(Date.now()),30_000),poll=setInterval(()=>{if(document.visibilityState==='visible')void refresh();},REFRESH_MS);
-  const visible=()=>{setNow(Date.now());if(document.visibilityState==='visible')void refresh();};document.addEventListener('visibilitychange',visible);
-  return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);clearInterval(poll);document.removeEventListener('visibilitychange',visible);active.current?.abort();active.current=null;};
- },[refresh]);
-const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
+ const {reply:data,loading,failure,now,setNow,refresh,coolingDown,nextDeadline}=useReport('/api/v1/taiwan/tpex/snapshot',parseReply,REFRESH_MS);
+ const [participant,setParticipant]=useState<Participant>('total'),[industry,setIndustry]=useState<string|null>(null),[selectedCode,setSelectedCode]=useState<string|null>(null);
+ const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
  const stale=!!snapshot&&(failure==='network'||data?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||days!>STALE_REPORT_DAYS);
  const organized=useMemo(()=>projectTpexShareReport(snapshot,stale),[snapshot,stale]);
  const allIndustries=snapshot?industries(snapshot,participant):[];
@@ -43,7 +29,7 @@ const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):n
  return <div className={`${s.surface} ${embedded?s.embedded:''}`}><Container className={s.root}>
   {!embedded&&<header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/ashare">A 股热力图 ↗</a></header>}
   <section className={s.intro}><p className={s.eyebrow}>TAIWAN OTC / TPEX OPEN DATA</p>{embedded?<h3>台股上柜 · 法人行业矩阵</h3>:<h1>台股上柜 · 法人行业矩阵</h1>}<p className={s.subtitle}>官方行业 → 公司下钻 · 免费开放数据 · 无需账户或密钥</p><p className={s.notice}>仅台湾 TPEx 上柜公司。三大法人买卖超是特定参与者的净交易股数，不是全市场资金净流入，也不含 TWSE 上市市场。不把股数换算成金额。</p></section>
-  <section className={s.status} aria-live="polite"><div><strong>{failure==='permission'?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取 TPEx 官方报告':snapshot?stale?'已保留报告 · 请注意陈旧状态':'已取得可校验报告':'暂无可验证的法人行业报告'}</strong><p>{failure==='permission'?'已清空浏览器证据并停止检查。':failure==='invalid'?'响应未通过校验，已清空浏览器证据。':denied?'来源拒绝访问后停止自动请求，不切换路径。':failure==='network'?'连接失败，仅保留仍在展示期限内的已校验报告。':'每日源数据，每小时检查。获取时间不代表实时行情或官方发布时间。'}</p>{data?.status.error_code&&<small>{data.status.error_code}</small>}</div><button onClick={()=>void refresh()} disabled={loading||denied||failure==='permission'}>{loading?'正在检查…':'检查报告'}</button></section>
+  <section className={s.status} aria-live="polite"><div><strong>{failure==='permission'?'展示权限已失效':denied?'来源访问已停止':loading&&!snapshot?'正在获取 TPEx 官方报告':snapshot?stale?'已保留报告 · 请注意陈旧状态':'已取得可校验报告':'暂无可验证的法人行业报告'}</strong><p>{failure==='permission'?'已清空浏览器证据并停止检查。':failure==='invalid'?'响应未通过校验，已清空浏览器证据。':denied?'来源拒绝访问后停止自动请求，不切换路径。':failure==='network'?'连接失败，仅保留仍在展示期限内的已校验报告。':'每日源数据，每小时检查。获取时间不代表实时行情或官方发布时间。'}</p>{coolingDown&&!denied&&failure!=='permission'&&<p>下次允许检查：{retryTimestamp(nextDeadline)}。手动检查和恢复可见均不会提前请求。</p>}{data?.status.error_code&&<small>{data.status.error_code}</small>}</div><button onClick={()=>void refresh()} disabled={loading||coolingDown||denied||failure==='permission'}>{loading?'正在检查…':'检查报告'}</button></section>
   <div className={s.times}><span>交易资料日期<b>{snapshot?.report_date??'暂无报告'}</b></span><span>行业分类出表日期<b>{snapshot?.classification_date??'暂无分类'}</b></span><span>来源实际发布时间<b>接口未提供</b></span><span>最近成功获取<b>{timestamp(snapshot?.fetched_at??data?.status.fetched_at??null)}</b></span></div>
   {snapshot&&<>
    <div className={s.coverage}><span><b>{matched} / {snapshot.rows.length}</b> 家公司有报告</span><span><b>{snapshot.rows.length-matched}</b> 家缺少法人记录</span><span><b>{allIndustries.length}</b> 个官方产业代码</span><span><b>{snapshot.excluded_security_count}</b> 条证券记录未匹配公司分类，排除</span></div>
@@ -54,7 +40,7 @@ const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):n
   <OrganizedEvidence report={organized} onDownload={event=>{
    const current=Date.now();
    // A suspended tab may deliver a click before its regular visibility tick.
-   if(blocked.current||visibleSnapshot(data,current)!==snapshot){event.preventDefault();setNow(current);}
+   if(denied||failure==='permission'||visibleSnapshot(data,current)!==snapshot){event.preventDefault();setNow(current);}
   }}/>
   {activeIndustry&&<p className={s.coverageNote}>{activeIndustry.label}：已报告 {activeIndustry.known}/{activeIndustry.rows.length} 家；{activeIndustry.missing} 家缺失。已报告净股数合计 {activeIndustry.totals?signed(activeIndustry.totals.net):'未知'} 股，非完整行业资金总额。</p>}
   {selected&&<section className={s.detailSection} aria-label="选中公司详情" aria-live="polite"><article className={s.card}><div className={s.cardTitle}><div><p>{selected.code} · {industryLabel(selected.industry_code)}</p><h3>{selected.name}</h3></div><span>{snapshot?.report_date}</span></div><p>{participantLabel}</p>{selected.flow?<><div className={s.value}>{signed(selected.flow[participant].net)}<small>股</small></div><dl className={s.stats}><div><dt>买进</dt><dd>{selected.flow[participant].buy.toLocaleString('zh-CN')} 股</dd></div><div><dt>卖出</dt><dd>{selected.flow[participant].sell.toLocaleString('zh-CN')} 股</dd></div><div><dt>买卖超</dt><dd>{signed(selected.flow[participant].net)} 股</dd></div></dl></>:<p>公司在官方行业名册中，但当天法人报告没有匹配记录。数值未知，不视为零。</p>}</article></section>}

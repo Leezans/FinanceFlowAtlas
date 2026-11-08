@@ -128,6 +128,16 @@ hidden, independently in server/browser; another failed fetch cannot renew it.
 These are application safeguards, not official release SLAs. No historical
 backfill/date-query support is inferred from the latest-snapshot endpoints.
 
+The industry page uses the same bounded `useReport` browser lifecycle as other
+validated report views. Fetch and JSON body waits each share the 30-second
+request deadline, even if the underlying operation ignores abort. A late result
+cannot replace newer evidence. Automatic, manual and visibility-resume checks
+respect the latest of `Retry-After`, validated `next_retry_at`, and the browser
+retry floor. Successful reports without a server deadline use the hourly cadence.
+The displayed next check is a browser wait, not a change to the provider gate.
+Permission failures and durable source denial clear evidence and stop checking;
+local downloads retain their independent click-time expiry guard.
+
 ## Validation
 
 - Focused unit/component tests cover exact joins, all participants, missing/zero,
