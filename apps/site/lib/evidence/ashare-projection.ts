@@ -3,7 +3,7 @@ import {numeric,numericFields,scopeKey,validateEvidence,type EvidenceSnapshot,ty
 import type {EvidenceState} from '@/components/ashare/client';
 import {SNAPSHOT_MAX_AGE_MS} from '@/lib/ashare/snapshot';
 import {ASHARE_FLOW_METHODOLOGY_URL} from '@/lib/ashare/metric-semantics';
-import type {EvidenceRow} from './report-projection';
+import type {EvidenceRow} from './types';
 
 export type OrganizedAshareReport={
  schema:'organized-market-report/1';source_id:'eastmoney-ashare';native_schema:'ashare-provider-evidence/1';native_snapshot:EvidenceSnapshot;

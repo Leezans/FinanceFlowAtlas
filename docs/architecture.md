@@ -72,6 +72,10 @@ The projection directory location is historical, not permission to depend on JSX
 Projection types now import the pure matrix model; compatibility re-exports keep
 existing consumers working. New sources should use the pure import directly.
 
+Current-report exports follow a separate [evidence presentation boundary](evidence-architecture.md):
+source projections and typed views retain their meanings, an exhaustive dispatcher
+only routes them, and the local Blob helper has no financial-model dependencies.
+
 ## 4. Evidence is not just a number
 
 Keep source-specific discriminated schemas. Do not replace them with a giant
