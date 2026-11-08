@@ -45,3 +45,7 @@ An optional [CVM daily fund-share preaggregator](docs/source-cvm-daily-fund-shar
 can process already-acquired local archives in Python. It is not a running
 collector, scheduled service or hosted Site integration. Fund subscriptions and
 redemptions are distinct from the hosted Brazil page's monthly stock transactions.
+
+An optional [SSE offline margin-financing parser](docs/source-sse-margin-offline.md)
+reads already-acquired daily XLS files. Financing buys minus repayments are a
+separate metric, not equity-market net flow. No production feed or panel is enabled.
