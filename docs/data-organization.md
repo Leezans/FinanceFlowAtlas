@@ -76,7 +76,8 @@ selected only at its explicit US supplement anchor, not from USA selection alone
 
 Actual data projections are now consumed by Japan MOF, TPEx monetary, A-share
 current-scope, TPEx company-share, CVM fund-equity, CFTC futures, Deribit
-option, Kraken trade-direction and Polymarket Gamma hot/newest pages: see
+option, Kraken trade-direction and Polymarket Gamma hot/newest plus independent
+USDC open-interest pages: see
 [organized current-report evidence](organized-report-projection.md).
 It supplies source-preserving normalized rows and local JSON export from each
 current visible snapshot, without changing storage or acquisition.

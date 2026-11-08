@@ -16,6 +16,8 @@ view, retaining per-row native units, contract identity and source row clocks.
 trade-direction snapshot with exact decimal strings and fixed-window coverage.
 `apps/site/lib/evidence/polymarket-projection.ts` adds only the current Gamma
 hot/newest snapshot, with every retained outcome price and source 24h volume.
+`apps/site/lib/evidence/polymarket-interest-projection.ts` independently organizes
+priced gross OI in USDC from the current permitted open-interest snapshot.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -92,9 +94,9 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   Missing legacy coverage fields have no locator and are not fabricated. Short
   pages or exhausted cursors do not prove whole-market coverage. Prices, volumes,
   overlapping windows, markets, outcomes and sources are never added together.
-- The separate USDC priced-gross-OI view stays unchanged and has no organized
-  file in this iteration. Liquidity is absent from the retained Gamma model and
-  is explicitly excluded. This does not extend metrics or source validation.
+- The independent USDC priced-gross-OI projection is described below; OI is
+  never added to the Gamma report. Liquidity is absent from the retained Gamma
+  model and remains excluded. This does not extend source metrics or validation.
 - A stable memoized report feeds the existing local Blob helper; ordinary clock
   ticks and search/group/metric controls do not recreate it. The table previews
   at most 120 fields, while JSON retains all fields, bounded by 500 markets ×
@@ -110,6 +112,66 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   Expiry, replacement, permission withdrawal and unmount revoke Blob URLs; failed
   preparation reports that no local file is available. Downloaded copies cannot
   be retracted automatically.
+
+### Polymarket independent USDC open interest
+
+- The current interest mode receives its own `polymarket-open-interest` report,
+  below the unchanged primary amount heatmap. It consumes only the validated
+  snapshot already allowed by `useSnapshot`; it cannot create a file from a
+  cache, reply envelope, Gamma-only snapshot or a no-longer-permitted mode.
+  Search does not trim the exported selected cohort. There is no new source
+  request, validation rule, endpoint, storage, gate, permission or credential.
+- One row per selected standard condition retains `priced_gross_open_interest`
+  as its original numeric USDC value. It is a priced gross stock valuation,
+  not fiat USD, trade volume, collateral deposits or capital net flow. No
+  market/category/batch/source sum, average or currency conversion is added.
+  Condition ID identifies the returned amount; Gamma market ID identifies its
+  selected market. Event IDs are not retained and are never inferred from names,
+  categories, tags, market IDs or condition IDs. Country and industry stay null.
+- Returned amounts are looked up by exact condition ID, not response position.
+  Reported values have the actual `values[n].value` and returned condition path,
+  even when both batches return conditions in a different order. A selected
+  condition absent from `values` has a projected null, explicit missing state
+  and null value locator, with the real `values` collection and selected
+  condition locator retained. Only an explicitly returned zero is zero. No
+  absent value field, event ID or source observation time is manufactured.
+- The exact strict native snapshot remains included. Its Gamma `discovery` and
+  selected-row prices/volumes are provenance for the frozen hot cohort, not
+  extra unified metrics or synchronous price/OI evidence. The original discovery
+  is bounded to one volume-ranked page of at most 100 source rows. Candidate,
+  excluded, missing/unsupported condition, duplicate condition, selected,
+  cap-excluded and returned/missing counts remain distinct. A short page does
+  not prove universe completeness; this is not a full-market OI ranking.
+- `/1` keeps its actual maximum of 20 selected conditions, single-request
+  start/receipt clocks and missing native `batches`/`batch_size` fields. Its
+  organized single-request metadata points at existing root/row/value fields,
+  never fabricated native batch paths. `/2` retains up to 40 conditions,
+  actual one or two completed batches of at most 20, exact per-batch condition
+  and returned-condition paths, request starts and response receipts. There
+  is no scope upgrade, resampling or partial-batch publication.
+- Full acquisition, Gamma discovery, OI requests/receipts and Gamma record
+  updates remain separate clocks. Source valuation time, exact publication
+  time and delay are unknown. Neither separate batches nor even conditions
+  within a single batch establish simultaneous valuation. Source record
+  updates and cache ages do not substitute for OI observation time.
+- The existing age policy is unchanged: `/2` starts at the first OI request;
+  `/1` starts at its response receipt. Age over five minutes is stale, and over
+  ten minutes hides evidence, with the existing inclusive upper boundary and
+  future rejection. Discovery age is disclosed, not imposed as a new gate;
+  valid legacy OI may retain an older Gamma discovery record. Temporary failures
+  retain only eligible evidence with original clocks and a stale label.
+- The 120-row preview ceiling is shared in spirit with other evidence panels;
+  the actual strict OI schema permits only 20/40 rows, so every current row
+  fits without expanding validation. The complete local Blob includes all
+  selected conditions and the exact native provenance. Memoization avoids
+  recreating it on search or ordinary clock ticks. No upload or sharing occurs,
+  and the existing personal/private-use boundary is unchanged.
+- Mode change, invalid reply, permission/source denial, uncertain source gate,
+  expiry, replacement and unmount remove the file and revoke its Blob. The
+  existing download guard checks current time, latest selected mode, snapshot
+  identity, mounted/blocked state and stale label, including suspended timers
+  and retained callbacks. Local Blob failure leaves the preview with no download;
+  pending preparation is canceled. Already downloaded copies cannot be revoked.
 
 ### Kraken USD trade-direction evidence
 
@@ -472,7 +534,7 @@ unfinished preparation is canceled, and preparation failures show no download.
 No new request, polling, storage, auth, gate, parser or endpoint is introduced.
 
 Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
-shares, CVM, CFTC, Deribit, Kraken trades and Polymarket Gamma; existing data URLs
+shares, CVM, CFTC, Deribit, Kraken trades and independent Polymarket Gamma/OI; existing data URLs
 for the earlier sources); previously saved files
 cannot be revoked automatically. No observations enter source control.
 
@@ -481,7 +543,8 @@ cannot be revoked automatically. No observations enter source control.
 This release covers the two monetary reports, A-share current-scope f62 and TPEx
 company institutional shares, CVM disclosed monthly fund-equity transactions,
 CFTC selected-market position fields, Deribit currently visible option fields,
-Kraken trade-direction fields and Polymarket Gamma outcome prices/24h volumes,
+Kraken trade-direction fields, Polymarket Gamma outcome prices/24h volumes
+and independent Polymarket priced gross OI,
 not other A-share normalized metrics, CVM daily fund subscriptions/redemptions,
 all historical snapshots, global identity reconciliation,
 or a common server database. Country/industry links do not imply compatible
@@ -558,9 +621,24 @@ and string zeros, legacy omissions, native coverage and nested private-field
 rejection. It checks the existing 500-market/16-outcome, 8,500-field maximum.
 `tests/organized-polymarket-lifecycle.test.tsx` checks matrix-first integration,
 complete current-mode exports independent of display filters, a 120-field preview,
-stable rerenders, mode switches and old callbacks, separate OI exclusion, pending
+stable rerenders, mode switches and old callbacks, separate OI-only export, pending
 old-mode replies, source/display denial and gate uncertainty, invalid/private
 extras, request counts, suspended-tab expiry/stale guards, hidden expiry,
 temporary-failure clocks, replacement, unmount and Blob preparation failure.
 The precision UI test's synthetic single-row snapshot now updates its source
 counts to remain valid under the existing strict schema; no validation was relaxed.
+
+
+`tests/organized-polymarket-interest-projection.test.ts` checks condition-based
+response-order locators in both batches, native market/group/cohort/clock paths,
+reported zero versus absent/null paths, all-absent and small single-batch cases,
+actual 20/40 limits and 100-row discovery, duplicate/unsupported/excluded cohort
+counts, unknown valuation clocks, native discovery-only provenance, strict nested
+privacy rejection, existing inclusive retention and older legacy discovery.
+`tests/organized-polymarket-interest-lifecycle.test.tsx` checks below-heatmap
+integration, complete search-independent stable local files, mode separation,
+both original age clocks, stale/expired suspended clicks, hidden expiry, old
+callbacks, late previous-mode replies, permission/source denial and gate states,
+malformed/private-extra/wrong-mode/unavailable responses, temporary retention,
+replacement, future snapshots, no added requests/storage and Blob cleanup/failure.
+Existing Gamma and OI renderer/acquisition suites remain regression checks.
