@@ -75,7 +75,8 @@ Query-backed MOF/TPEx/TIC context follows country selection and history; TIC is
 selected only at its explicit US supplement anchor, not from USA selection alone.
 
 Actual data projections are now consumed by Japan MOF, TPEx monetary, A-share
-current-scope, TPEx company-share, CVM fund-equity and CFTC futures pages: see
+current-scope, TPEx company-share, CVM fund-equity, CFTC futures and Deribit
+option pages: see
 [organized current-report evidence](organized-report-projection.md).
 It supplies source-preserving normalized rows and local JSON export from each
 current visible snapshot, without changing storage or acquisition.

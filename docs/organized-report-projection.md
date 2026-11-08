@@ -10,6 +10,8 @@ official industry and institutional-participant share snapshot.
 fund-equity transaction snapshot, preserving its native integer-cent amounts.
 `apps/site/lib/evidence/cftc-projection.ts` adds retained CFTC Legacy Futures Only
 contract-market positions, preserving both report slots and contract specifications.
+`apps/site/lib/evidence/deribit-projection.ts` adds the current Deribit option
+view, retaining per-row native units, contract identity and source row clocks.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -32,6 +34,10 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
 - CFTC: every retained contract market × current/previous report × eight original
   position fields. Native unit is each market's own `contracts`; currency and
   monetary multiplier remain null. No calculated net, change or total is added.
+- Deribit: every currently visible unexpired contract × seven original fields:
+  volume, volume_usd, open_interest, mark_price, bid_price, ask_price and last.
+  Units belong to each row: underlying BTC/ETH quantity, source USD turnover,
+  or BTC/BTC and ETH/ETH quotes. No total or currency conversion is added.
 - Every reported observation has its source-scoped dimension, metric ID, original
   value and actual native field path. The validated native snapshot is included
   alongside the organized rows for self-contained traceability, with the A-share
@@ -44,6 +50,69 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   update date when retained, unknown publication time and absent raw hash as null.
   CVM retains its two existing CDA/FCA archive SHA-256 hashes instead of null.
   It contains no industry/instrument classification where the source has none.
+
+### Deribit BTC / ETH option evidence
+
+- The collapsed panel follows the existing `/options` heatmap. It consumes the
+  exact permission/age-filtered hook view; underlying, expiry, Call/Put, search
+  and contract-selection controls do not narrow the export. The DOM previews
+  at most 120 rows. The file retains all current active instruments and seven
+  selected fields per instrument, at most 4,000 × 7 = 28,000 normalized rows.
+- Each identity is `Deribit.instrument_name`. Underlying currency, expiration
+  timestamp, strike in USD, option type, contract size in the underlying coin,
+  creation timestamp and original numeric/null field each have an exact locator
+  into the included native visible view. No exchange-country assignment,
+  industry taxonomy, identity mapping, sums or derived net flow is invented.
+- `volume` and `open_interest` use BTC or ETH according to each row, not integer
+  contract counts. `volume_usd` is the source 24-hour traded amount in USD, not
+  OI valuation, net inflow or a locally calculated conversion. Quoted/mark/last
+  prices use BTC per underlying BTC or ETH per underlying ETH. The envelope
+  uses `unit.code: per_row`, not a misleading common monetary unit. Other native
+  fields, including mark IV and price change, stay unnormalized in the view.
+- Null bid, ask and last fields become `source_null`, distinct from `reported`
+  zero; required numeric fields are never filled with null or zero. Source
+  creation timestamps, source_as_of, acquisition-start, successful fetch and
+  per-currency metadata-fetch times stay unchanged. Creation time is not a
+  guaranteed publication or trade time. Exact rolling 24-hour endpoints and
+  last-trade time remain unknown/null. `source_delay_unconfirmed` is preserved:
+  the postponed release announcement proves neither an implemented delay
+  policy nor real-time OI/turnover.
+- The hook's original strict full-reply validation is unchanged. Filtering out
+  expired contracts can remove the earliest source-clock row or every row of
+  one currency. Such a view no longer satisfies the original complete-acquisition
+  schema, and must not be reinterpreted as a new full snapshot. The export uses
+  the explicit `deribit-options-visible/1` native view schema. Its separate
+  strict view validator preserves numeric, row identity, unique instruments,
+  per-currency bounds, source scope and clock coherence; it does not require
+  every original currency to remain active or reset source_as_of to an active
+  row. Native payload contains only active rows, not hidden expired observations.
+- Coverage distinguishes original source scope/currencies/instrument count from
+  current visible currencies/count. Original count comes from the validated
+  hook payload; it stays null when a standalone caller lacks that provenance.
+  Actual wire input schema is captured before the original legacy transform.
+  A schema-1 BTC input records that the existing reader changed its currency
+  field to a one-element array, keyed its metadata clock by BTC and added BTC
+  underlying identity. Values/clocks remain unchanged and no ETH appears.
+  A BTC-only schema-2 response is not labeled legacy merely because it is BTC-only:
+  upstream cache history not present on the wire is not guessed. The included
+  native payload is explicitly the normalized visible view, not the raw input.
+- The existing selector still runs every second. Its output is memoized by the
+  retained reply and exact active instrument set, so unchanged ticks do not
+  rebuild the Blob; expiry and stale-state changes do. Export reuses the existing
+  inclusive five-minute fetch/source-age bounds, future-clock tolerance,
+  individual-contract expiry and permission/denial handling. Metadata age stays
+  the existing acquisition-time check, not a new current-clock expiry policy.
+  A final click rechecks the same selector, active row set and stale flag. If a
+  suspended tab missed a tick, the old download is canceled and removed before
+  a replacement is prepared. One expired contract is sufficient to reject an
+  old file even when other contracts remain visible. Hidden-tab clocks still
+  withdraw expired rows, while polling remains stopped. Temporary failure keeps
+  only eligible evidence and original clocks with `presentation.stale: true`.
+- Existing Blob preparation/revocation is shared: replace/withdraw/unmount revoke
+  old URLs; unfinished preparation is canceled; preparation failure exposes no
+  download. No provider requests, API endpoints, storage, auth, gate, retry or
+  retention changes are added. Deribit terms are linked from the existing source
+  documentation; personal-use scope does not imply a redistribution license.
 
 ### CFTC Legacy Futures Only positions
 
@@ -273,14 +342,14 @@ unfinished preparation is canceled, and preparation failures show no download.
 No new request, polling, storage, auth, gate, parser or endpoint is introduced.
 
 Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
-shares, CVM and CFTC, existing data URLs for the earlier sources); previously saved files
+shares, CVM, CFTC and Deribit, existing data URLs for the earlier sources); previously saved files
 cannot be revoked automatically. No observations enter source control.
 
 ## Limits
 
 This release covers the two monetary reports, A-share current-scope f62 and TPEx
-company institutional shares, CVM disclosed monthly fund-equity transactions
-and CFTC selected-market position fields,
+company institutional shares, CVM disclosed monthly fund-equity transactions,
+CFTC selected-market position fields and Deribit currently visible option fields,
 not other A-share normalized metrics, CVM daily fund subscriptions/redemptions,
 all historical snapshots, global identity reconciliation,
 or a common server database. Country/industry links do not imply compatible
@@ -337,3 +406,14 @@ invalid/private-extra/unavailable/future data, hidden-tab and late-click expiry,
 revocation/canceled preparation, unmount and honest local preparation failure.
 Existing CFTC UI assertions verify the new details panel is collapsed below the
 matrix rather than assuming there can be no secondary table anywhere in the DOM.
+
+`tests/organized-deribit-projection.test.ts` checks native numeric/identity/metadata/
+clock locators, per-row quantity/USD/quote units, null versus zero, actual input
+schema and normalization provenance, source versus active currency scope,
+strict private-extra rejection, unchanged source/cache/metadata limits and the
+4,000-instrument/28,000-field bound. `tests/organized-deribit-lifecycle.test.tsx`
+checks matrix-first integration, filter-independent stable Blob export, 120-row
+preview, earliest-row-only and entire-currency expiry, suspended-tab age/stale
+click guards, actual legacy-to-current response replacement, hidden-tab policy,
+source/display denials, invalid/unavailable/future data, temporary failures and
+Blob cleanup/preparation failure. Older report/UI suites remain regression checks.

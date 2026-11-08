@@ -3,8 +3,9 @@ import React,{useEffect,useState} from 'react';
 import type {OrganizedTpexShareReport} from '@/lib/evidence/tpex-share-projection';
 import type {OrganizedCvmReport} from '@/lib/evidence/cvm-projection';
 import type {OrganizedCftcReport} from '@/lib/evidence/cftc-projection';
+import type {OrganizedDeribitReport} from '@/lib/evidence/deribit-projection';
 import s from './evidence.module.css';
-type BlobReport=OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport;
+type BlobReport=OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport;
 
 /** A complete local file without a multi-megabyte data URI. No upload or request. */
 export default function BlobEvidenceDownload({report,filename,onDownload}:{report:BlobReport;filename:string;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}) {
