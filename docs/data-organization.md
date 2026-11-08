@@ -47,8 +47,29 @@ country roles, exact route selection, unit/metric boundaries, changing-country
 links and no discovery fetches. Existing navigation and country matrix tests
 continue to protect primary heatmaps and unavailable-country states.
 
-Known discovery limits: multi-country ASEAN and World Bank entries are accessible
-by asset but not yet linked to every country selection. Country relationships
-do not assert complete coverage. Query-backed MOF/TPEx/TIC context listens to
-country selection, hash changes and Back/Forward; TIC is selected only when its
-explicit US supplement anchor is selected, not merely from a USA country selection.
+## Annual country relationships
+
+World Bank links carry a validated ISO3 query identity and land on the selected
+country's annual indicator matrix. They deliberately say “verify this country's
+annual indicators”: the 249-code geography registry is not a World Bank coverage
+list. The target validates the snapshot and renders each indicator's actual
+observation year independently, retaining absent values rather than inventing
+zero or using the fetch date as the observation year. Market capitalization is
+a year-end stock; traded value is annual turnover. Neither is a net capital flow.
+
+ASEAN relationships use the source's 11 verified host dimensions with explicit
+ISO3-to-source-code mapping. Country links request the last supported selectable
+year (currently 2025), not a “latest observed” or real-time value. The destination
+reads country/year from its URL, shows the requested country's existing heatmap,
+allows changing year/host, clears stale cell detail and supports Back/Forward.
+The fixed year range is 2017–2025. Invalid parameters visibly disclose fallback.
+FDI is annual inward direct investment by destination, not securities-market flow.
+Existing Philippines/Singapore and unspecified-sector comparability caveats remain.
+
+Discovery links never fetch provider reports, reset gates or mark a source online.
+Unknown country identities get no fabricated relationship. Source permissions,
+missing/duplicate/NA states, original classifications and monetary denominators
+are unchanged. Relationships remain navigation, not numeric reconciliation.
+
+Query-backed MOF/TPEx/TIC context follows country selection and history; TIC is
+selected only at its explicit US supplement anchor, not from USA selection alone.

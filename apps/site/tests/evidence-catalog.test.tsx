@@ -21,15 +21,15 @@ describe('evidence relationship contract',()=>{
  });
  it('links Taiwan across asset classes without treating shares, notional and premium as money children',()=>{
   const sources=sourcesForCountry('TWN');
-  expect(sources.map(s=>s.id)).toEqual(['tpex-shares','taifex-futures','taifex-options','tpex-money']);
-  expect(new Set(sources.map(s=>s.metric)).size).toBe(4);
+  expect(sources.map(s=>s.id)).toEqual(['tpex-shares','taifex-futures','taifex-options','tpex-money','worldbank']);
+  expect(new Set(sources.map(s=>s.metric)).size).toBe(5);
   expect(sources.find(s=>s.id==='tpex-shares')?.unit).toBe('股');
   expect(sources.find(s=>s.id==='taifex-futures')?.boundary).toContain('不与期权权利金合计');
  });
  it('does not map US counterparties, currencies or global venues to a local equity market',()=>{
-  expect(sourcesForCountry('JPN').map(s=>s.id)).toEqual(['mof']);
-  expect(sourcesForCountry('DEU')).toEqual([]);
-  expect(sourcesForCountry('USA').map(s=>s.geographyRole)).toEqual(['监管报告市场','发行人市场']);
+  expect(sourcesForCountry('JPN').map(s=>s.id)).toEqual(['mof','worldbank']);
+  expect(sourcesForCountry('DEU').map(s=>s.id)).toEqual(['worldbank']);
+  expect(sourcesForCountry('USA').map(s=>s.geographyRole)).toEqual(['监管报告市场','发行人市场','国家统计']);
   expect(evidenceSources.find(s=>s.id==='kraken')?.country).toBe('');
  });
  it('keeps exact routes and links only related assets or explicit country identities',()=>{
@@ -51,11 +51,11 @@ describe('contextual navigation',()=>{
  });
  it('changes same-country links when the selected country changes',()=>{
   const view=render(<CountryEvidence country="TWN"/>);
-  expect(screen.getAllByRole('link')).toHaveLength(4);
+  expect(screen.getAllByRole('link')).toHaveLength(5);
   view.rerender(<CountryEvidence country="JPN"/>);
-  expect(screen.getAllByRole('link')).toHaveLength(1);
+  expect(screen.getAllByRole('link')).toHaveLength(2);
   expect(screen.queryByText('台湾期权日报')).toBeNull();
-  view.rerender(<CountryEvidence country="DEU"/>);expect(view.container.textContent).toBe('');
+  view.rerender(<CountryEvidence country="INVALID"/>);expect(view.container.textContent).toBe('');
  });
  it('tracks query-backed sources through country selection, Back/Forward and TIC hash changes',()=>{
   pathname='/markets';window.history.replaceState({},'', '/markets?country=TWN');

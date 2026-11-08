@@ -17,19 +17,24 @@ export default function EquityContext() {
       : '来源要求暂停，恢复时间超出可显示范围'
     : '未提供';
   const [selected, setSelected] = useState('USA');
+  const [selectionWarning,setSelectionWarning]=useState('');
   useEffect(() => {
     const sync = () => {
       const code = new URLSearchParams(window.location.search).get('country');
-      setSelected(equityCountries.some(country => country.iso3 === code) ? code! : 'USA');
+      const valid=equityCountries.some(country => country.iso3 === code);
+      setSelected(valid ? code! : 'USA');
+      setSelectionWarning(code!==null&&!valid?'国家参数无效，已选择美国作为默认查询；不代表当前有观测。':'');
     };
     sync(); window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
   function select(code: string) {
-    setSelected(code);
+    setSelected(code);setSelectionWarning('');
     const url = new URL(window.location.href); url.searchParams.set('country', code);
     if (url.href !== window.location.href) window.history.pushState({}, '', url);
+    window.dispatchEvent(new Event('atlas-country-change'));
   }
+  const selectedRow=snapshot?.rows.find(row=>row.iso3===selected);
   const countryGroups = useMemo(() => projectCountryEquity(snapshot, selected), [snapshot, selected]);
   return <div className={s.surface}><main className={s.root}>
     <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><a href="/#tic-view">美国 TIC 跨境流量 ↗</a></header>
@@ -51,8 +56,10 @@ export default function EquityContext() {
       <select id="equity-country" value={selected} onChange={event => select(event.target.value)}>{equityCountries.map(country => <option key={country.iso3} value={country.iso3}>{country.label} · {country.iso3}</option>)}</select>
       <button onClick={() => select('USA')}>美国优先 ↗</button>
     </section>
-    <section className={s.focus} aria-label="所选国家年度股市">
+    <section id="country-equity" className={s.focus} aria-label="所选国家年度股市">
+      {selectionWarning&&<p role="status">{selectionWarning}</p>}
       <div className={s.focusHeader}><div><p className={s.eyebrow}>{selected} / ANNUAL EQUITY CONTEXT</p><h2>{equityCountryName(selected)}</h2></div><a href={`/markets?country=${selected}`}>返回国家证据 →</a></div>
+      <p aria-label="各指标观察年份">年末市值：{selectedRow?.capitalization?`${selectedRow.capitalization.year} 年末`:'未取得该项观测'}；全年成交额：{selectedRow?.traded_value?`${selectedRow.traded_value.year} 全年`:'未取得该项观测'}。两项各自保留观察年份，均非净资金流。</p>
       <MatrixHeatmap groups={countryGroups} title="所选国家年度指标矩阵" layout="readable-grid" stretchSmallGroups colorMode="neutral"
         areaMeaning="无可比较金额：指标等面积；市值是存量，成交额是全年累计"
         colorMeaning="中性色；不同指标、不同年份不共用大小或涨跌色标"

@@ -1,12 +1,12 @@
 /** Fixed, publicly verified portal dimensions, not a claim of complete ASEAN coverage. */
 export const YEARS=[2017,2018,2019,2020,2021,2022,2023,2024,2025] as const;
 export const HOSTS=[
- {code:'BN',label:'文莱',source:'Brunei Darussalam'}, {code:'KH',label:'柬埔寨',source:'Cambodia'},
- {code:'ID',label:'印度尼西亚',source:'Indonesia'}, {code:'LA',label:'老挝',source:'Lao PDR'},
- {code:'MY',label:'马来西亚',source:'Malaysia'}, {code:'MM',label:'缅甸',source:'Myanmar'},
- {code:'PH',label:'菲律宾',source:'Philippines'}, {code:'SG',label:'新加坡',source:'Singapore'},
- {code:'TH',label:'泰国',source:'Thailand'}, {code:'TL',label:'东帝汶',source:'Timor Leste'},
- {code:'VN',label:'越南',source:'Viet Nam'},
+ {code:'BN',iso3:'BRN',label:'文莱',source:'Brunei Darussalam'}, {code:'KH',iso3:'KHM',label:'柬埔寨',source:'Cambodia'},
+ {code:'ID',iso3:'IDN',label:'印度尼西亚',source:'Indonesia'}, {code:'LA',iso3:'LAO',label:'老挝',source:'Lao PDR'},
+ {code:'MY',iso3:'MYS',label:'马来西亚',source:'Malaysia'}, {code:'MM',iso3:'MMR',label:'缅甸',source:'Myanmar'},
+ {code:'PH',iso3:'PHL',label:'菲律宾',source:'Philippines'}, {code:'SG',iso3:'SGP',label:'新加坡',source:'Singapore'},
+ {code:'TH',iso3:'THA',label:'泰国',source:'Thailand'}, {code:'TL',iso3:'TLS',label:'东帝汶',source:'Timor Leste'},
+ {code:'VN',iso3:'VNM',label:'越南',source:'Viet Nam'},
 ] as const;
 export const SECTORS=[
  {code:'A',label:'农林渔业',source:'Agriculture, forestry, and fishing'},

@@ -1,9 +1,11 @@
+import geography from '@/components/atlas/countries.json';
+import {HOSTS,YEARS} from '@/lib/asean/dimensions';
 /** Discovery metadata only: never observations, availability, classifications or aggregation keys. */
 export const assetLabels = {equity:'股票', securities:'跨境证券', direct:'直接投资', crypto:'加密现货', futures:'期货', options:'期权', fx:'外汇', prediction:'预测市场'} as const;
 export type AssetClass = keyof typeof assetLabels;
 export type EvidenceSource = {
  id:string; label:string; href:string; asset:AssetClass; country:string; geographyRole:string;
- relatedIds?:readonly string[]; provider:string; metric:string; unit:string; frequency:string; drilldown:string; boundary:string;
+ period?:string; relatedIds?:readonly string[]; provider:string; metric:string; unit:string; frequency:string; drilldown:string; boundary:string;
 };
 export const evidenceSources: readonly EvidenceSource[] = [
  {"id": "ashare", "label": "A 股热力图", "href": "/ashare", "asset": "equity", "country": "CHN", "geographyRole": "本地市场", "provider": "东方财富", "metric": "订单分类估算", "unit": "CNY", "frequency": "盘中检查；来源时间可能未知", "drilldown": "提供商行业 → 成分股", "boundary": "大单与超大单净额，不是全市场新增资金。"},
@@ -23,17 +25,34 @@ export const evidenceSources: readonly EvidenceSource[] = [
  {"id": "mof", "label": "日本跨境证券交易", "href": "/markets?country=JPN", "asset": "securities", "country": "JPN", "geographyRole": "发行人市场", "provider": "日本财务省 MOF", "metric": "非居民证券净取得", "unit": "亿 JPY", "frequency": "周度", "drilldown": "股票及基金份额 / 长债 / 短债", "boundary": "指定主要机构样本；无行业与个股分解。"},
  {"id": "tic", "label": "美国 TIC 跨境交易", "href": "/markets?country=USA#us-tic-supplement", "asset": "equity", "country": "USA", "geographyRole": "发行人市场", "provider": "U.S. Treasury TIC", "metric": "外国居民净购买美国股权", "unit": "USD（原始百万 USD）", "frequency": "月度", "drilldown": "投资者居住地；无行业 / 个股", "boundary": "居住地是交易对手，不是当地股市流向；国家行不穷尽总额。"},
  ];
-/** Country links require an explicit role; never infer geography from a currency or counterparty. */
-export function sourcesForCountry(iso3:string) { return evidenceSources.filter(source => source.country === iso3); }
+/** Geography is a query identity, never proof of a financial observation. */
+const countryCodes=new Set(geography.map(country=>country.iso3));
+const baseSource=(id:string)=>evidenceSources.find(source=>source.id===id)!;
+export function annualCountrySources(iso3:string):EvidenceSource[] {
+ if(!countryCodes.has(iso3)) return [];
+ const annual:EvidenceSource={...baseSource('worldbank'),country:iso3,href:`/equities?country=${iso3}#country-equity`,label:'核验该国年度股市指标',period:'各指标实际年份在目标矩阵分别核验；此处未加载观测',boundary:'国家仅用于查询定位，不保证来源有该国数据。市值是年末存量，成交额是全年交易量；都不是净资金流。'};
+ const host=HOSTS.find(host=>host.iso3===iso3);
+ return host?[annual,{...baseSource('asean'),country:iso3,href:`/asean?country=${iso3}&year=${YEARS.at(-1)}`,period:`请求观察年度 ${YEARS.at(-1)}；有无观测待目标矩阵核验`}]:[annual];
+}
+export function sourcesForCountry(iso3:string) {
+ return [...evidenceSources.filter(source=>source.country===iso3),...annualCountrySources(iso3)];
+}
 export function sourcesForPath(path:string) { return evidenceSources.filter(source => source.href === path || (path === '/' && source.id === 'ashare')); }
 export function relatedSources(source:EvidenceSource) {
- return evidenceSources.filter(other => other.id !== source.id && (other.asset === source.asset || !!source.country && other.country === source.country || source.relatedIds?.includes(other.id)));
+ const candidates=[...evidenceSources.filter(other=>other.asset===source.asset||source.relatedIds?.includes(other.id)),...(source.country?sourcesForCountry(source.country):[])];
+ return [...new Map(candidates.filter(other=>other.id!==source.id).map(other=>[other.id,other])).values()];
 }
-
 /** Canonical query identities ignore unrelated parameters, never infer TIC from country alone. */
 export function sourceForLocation(path:string, search='', hash='') {
+ const query=new URLSearchParams(search),country=query.get('country');
+ if(path==='/equities'&&countryCodes.has(country??'')) return annualCountrySources(country!).find(source=>source.id==='worldbank');
+ if(path==='/asean') {
+  const source=country?annualCountrySources(country).find(source=>source.id==='asean'):undefined;
+  const year=Number(query.get('year'));
+  const selectedYear=YEARS.some(value=>value===year)?year:YEARS.at(-1)!;
+  return {...(source??baseSource('asean')),period:`请求观察年度 ${selectedYear}；有无观测待目标矩阵核验`};
+ }
  if(path !== '/markets') return sourcesForPath(path)[0];
- const country=new URLSearchParams(search).get('country');
  const id=country==='TWN'?'tpex-money':country==='JPN'?'mof':country==='USA'&&hash==='#us-tic-supplement'?'tic':null;
  return evidenceSources.find(source=>source.id===id);
 }
