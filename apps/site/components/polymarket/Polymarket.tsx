@@ -1,5 +1,7 @@
 'use client';
-import React,{useState} from 'react';
+import React,{useMemo,useState} from 'react';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
+import {projectPolymarketReport} from '@/lib/evidence/polymarket-projection';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {SOURCE_DOCS,HOT_SOURCE_DOCS,SOURCE_TERMS,MAX_MARKETS,MAX_PAGES,type PolymarketView} from '@/lib/polymarket/model';
 import {categoryMatrix,filterMarkets,marketMatrix,marketItem,namedOutcome,formatProbability,type Metric} from './matrix';
@@ -9,9 +11,10 @@ import OpenInterest from './OpenInterest';
 const time=(value:string|null|undefined)=>value?value.replace('T',' ').replace('Z',' UTC'):'未提供';
 export default function Polymarket(){
  const [view,setView]=useState<PolymarketView>('hot');
- const {snapshot:evidence,age,loading,error,refresh,coolingDown,denied,stale}=useSnapshot(view);
+ const {snapshot:evidence,age,loading,error,refresh,coolingDown,denied,stale,validateDownload}=useSnapshot(view);
  const interest=evidence?.schema==='polymarket-open-interest/1'||evidence?.schema==='polymarket-open-interest/2'?evidence:null;
  const snapshot=evidence?.schema==='polymarket-open-interest/1'||evidence?.schema==='polymarket-open-interest/2'?null:evidence;
+ const organized=useMemo(()=>projectPolymarketReport(snapshot,stale),[snapshot,stale]);
  type Controls={query:string;category:string|null;metric:Metric;grouped:boolean};
  const [controls,setControls]=useState<Record<PolymarketView,Controls>>({hot:{query:'',category:null,metric:'probability',grouped:false},newest:{query:'',category:null,metric:'probability',grouped:false},interest:{query:'',category:null,metric:'probability',grouped:false}});
  const {query,category,metric,grouped}=controls[view];
@@ -36,6 +39,7 @@ export default function Polymarket(){
   <div className={s.controls}><label>搜索市场<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="完整问题、分类或结果"/></label><label>市场指标<select value={metric} onChange={e=>setMetric(e.target.value as Metric)}><option value="probability">指定结果的价格隐含概率</option><option value="volume">平台报告的 24 小时成交量</option></select></label><button aria-pressed={grouped} onClick={()=>change({grouped:!grouped,category:null})}>{grouped?'直接查看市场':'按分组浏览'}</button>{category!==null&&<button onClick={()=>setCategory(null)}>返回全部分组</button>}</div>
   {snapshot&&<p className={s.availability} aria-label="当前筛选字段可用性">当前筛选 {displayed.length} 个市场：指定结果价格可用 {availablePrices} 个、缺失 {displayed.length-availablePrices} 个；24 小时成交量缺失 {missingVolumes} 个、零 {zeroVolumes} 个、正值 {displayed.length-missingVolumes-zeroVolumes} 个。缺失不等于零。</p>}
   <MatrixHeatmap groups={groups} title={showGroups?'样本分组矩阵':'市场问题矩阵'} description={showGroups?'每个市场只归入一个展示分组；数字仅统计当前样本，不是官方分类总数。点击下钻查看市场指标。':'所有问题完整展示，不截断名称。筛选与指标在更新时保持不变。'} layout="readable-grid" colorMode="sequential" colorMaxAbs={!showGroups&&metric==='probability'?1:undefined} colorMeaning={showGroups?'匹配市场数量':metric==='probability'?'所标明结果的价格隐含概率，0%–100%':'平台报告的 24 小时成交量，当前可见市场内相对着色'} areaMeaning="等面积；不代表交易额或资金规模" emptyTitle="矩阵暂无可核验数据" emptyMessage={snapshot?'当前搜索或分类没有匹配市场；可修改搜索或返回全部分组。':'等待来源返回通过校验且未过期的数据。'} emptyNote="缺失不是零，不使用示例数据。" onSelect={showGroups?item=>setCategory(item.id):undefined}/>
+  <OrganizedEvidence report={organized} onDownload={event=>{if(!snapshot||!validateDownload(snapshot,stale))event.preventDefault();}}/>
   {!showGroups&&snapshot&&<details className={s.sources}><summary>市场结果与来源记录更新时间</summary>{displayed.map(row=><section key={row.id}><h3>{row.question}</h3><p>{row.outcomes.map(o=>`${o.name}：${formatProbability(o.price)}`).join('；')}</p><p>来源标签：{row.tags.map(tag=>tag.label).join('、')||'未提供'}</p><p>来源记录更新时间：{time(row.source_record_updated_at)}（不是价格观测时间）</p></section>)}</details>}
   <section className={s.sources}><h2>指标与使用边界</h2><ul><li>二元 Yes / No 市场明确使用 Yes 对应价格；其他市场使用来源列出的第一个结果，并在区块中标明结果名称。不同问题的概率不相加、不平均。</li><li>24 小时成交量保留来源数值，单位尚未核实，不标为美元，不计算分类合计。零为来源报告的零，灰色表示来源未提供。</li><li>{snapshot?.schema==='polymarket-gamma/1'?'上一版样本的展示分组使用来源分类，否则使用来源首个标签。':'展示分组优先使用来源分类；没有分类时，选取标签 slug 按字符排序最前的一项，避免来源标签顺序变化导致分组漂移。'}这不是官方主分类或完整标签体系。所有来源标签均保留并可搜索；缺失时标为未分类。</li><li>仅供个人信息参考，保持现有私人访问边界。公开接口和代码开源不代表取得商业使用或再分发许可。</li></ul><p><a href={view==='hot'?HOT_SOURCE_DOCS:SOURCE_DOCS} target="_blank" rel="noreferrer">官方字段说明 ↗</a> · <a href={SOURCE_TERMS} target="_blank" rel="noreferrer">Polymarket 使用条款 ↗</a></p></section>
  </>}

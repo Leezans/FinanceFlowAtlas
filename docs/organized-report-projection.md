@@ -14,6 +14,8 @@ contract-market positions, preserving both report slots and contract specificati
 view, retaining per-row native units, contract identity and source row clocks.
 `apps/site/lib/evidence/kraken-trade-projection.ts` adds the current Kraken
 trade-direction snapshot with exact decimal strings and fixed-window coverage.
+`apps/site/lib/evidence/polymarket-projection.ts` adds only the current Gamma
+hot/newest snapshot, with every retained outcome price and source 24h volume.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -52,6 +54,62 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   update date when retained, unknown publication time and absent raw hash as null.
   CVM retains its two existing CDA/FCA archive SHA-256 hashes instead of null.
   It contains no industry/instrument classification where the source has none.
+
+### Polymarket Gamma prices and volume
+
+- The collapsed panel follows the existing `/polymarket` Gamma heatmap. It uses
+  the current mode's existing validated and age/permission-filtered snapshot.
+  The file includes all retained markets and all outcomes in that Gamma mode,
+  explicitly independent of search, category drilldown and the selected heatmap
+  metric. The existing controls and heatmap are unchanged; the export never
+  joins hot/newest modes or the independent open-interest discovery cohort.
+- One normalized row per outcome keeps the exact decimal **string** on the 0–1
+  scale, its outcome name/index, market ID and native paths. No conversion to
+  display percentages, averaging, probability sum or monetary unit is added.
+  The separate market-level `volume_24h` stays its original numeric value and
+  `source_reported` unit; currency and multiplier remain null. It is not
+  relabeled as USD or USDC, or treated as event volume, liquidity, OI, capital
+  flow or cumulative volume.
+- Gamma market ID, condition ID and event ID are different identities. Optional
+  condition-field absence remains absent in `native_snapshot`, with a null
+  locator and `not_retained` state in normalized identity. A retained null has
+  `retained_null` state: the adapter may have received an absent, malformed or
+  unsupported condition ID, so its original cause is not asserted. Event ID is
+  not retained in these schemas and stays unavailable with no invented path.
+  No event, country or industry is inferred from question, category or tags.
+- Original categories, grouping basis, all tags and accepting-orders flags stay
+  in the exact native snapshot. Source grouping is not an official primary
+  taxonomy. Legacy `/1` retains its actual 200-record, volume-ranked sample and
+  missing condition/pagination/grouping fields; it is not silently upgraded to
+  keyset `/2` or a 100-record hot sample. Existing strict native schemas reject
+  unknown fields at every nesting level rather than exporting private extras.
+- Acquisition start, fetch and per-market record-update times remain separate.
+  A record update is not a price observation. The 24-hour label is retained, but
+  its exact start/end are unknown; the fetch clock is not substituted. Price
+  observation time, precise publication time and delay remain unknown/null.
+- Actual sample limit, source/excluded/retained counts, source ordering, pages,
+  page sizes, stop reason and has_more are retained without completeness claims.
+  Missing legacy coverage fields have no locator and are not fabricated. Short
+  pages or exhausted cursors do not prove whole-market coverage. Prices, volumes,
+  overlapping windows, markets, outcomes and sources are never added together.
+- The separate USDC priced-gross-OI view stays unchanged and has no organized
+  file in this iteration. Liquidity is absent from the retained Gamma model and
+  is explicitly excluded. This does not extend metrics or source validation.
+- A stable memoized report feeds the existing local Blob helper; ordinary clock
+  ticks and search/group/metric controls do not recreate it. The table previews
+  at most 120 fields, while JSON retains all fields, bounded by 500 markets ×
+  (16 outcomes + volume) = 8,500 normalized rows in the existing newest schema.
+  The file stays local; no upload, storage, API, credentials or provider request
+  is introduced. Personal-use attribution does not assert redistribution rights.
+- Mode changes remove the previous file immediately, with no request beyond the
+  existing shared cooldown. The existing inclusive five-minute cache age, future
+  rejection, denial/gate/invalid-response clearing and eligible temporary-failure
+  behavior govern both the heatmap and file. The click guard checks current time,
+  latest committed mode/snapshot, permission stop and stale state, including
+  suspended-tab clicks and retained old callbacks. It cannot extend freshness.
+  Expiry, replacement, permission withdrawal and unmount revoke Blob URLs; failed
+  preparation reports that no local file is available. Downloaded copies cannot
+  be retracted automatically.
 
 ### Kraken USD trade-direction evidence
 
@@ -414,14 +472,16 @@ unfinished preparation is canceled, and preparation failures show no download.
 No new request, polling, storage, auth, gate, parser or endpoint is introduced.
 
 Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
-shares, CVM, CFTC and Deribit, existing data URLs for the earlier sources); previously saved files
+shares, CVM, CFTC, Deribit, Kraken trades and Polymarket Gamma; existing data URLs
+for the earlier sources); previously saved files
 cannot be revoked automatically. No observations enter source control.
 
 ## Limits
 
 This release covers the two monetary reports, A-share current-scope f62 and TPEx
 company institutional shares, CVM disclosed monthly fund-equity transactions,
-CFTC selected-market position fields and Deribit currently visible option fields,
+CFTC selected-market position fields, Deribit currently visible option fields,
+Kraken trade-direction fields and Polymarket Gamma outcome prices/24h volumes,
 not other A-share normalized metrics, CVM daily fund subscriptions/redemptions,
 all historical snapshots, global identity reconciliation,
 or a common server database. Country/industry links do not imply compatible
@@ -489,3 +549,18 @@ preview, earliest-row-only and entire-currency expiry, suspended-tab age/stale
 click guards, actual legacy-to-current response replacement, hidden-tab policy,
 source/display denials, invalid/unavailable/future data, temporary failures and
 Blob cleanup/preparation failure. Older report/UI suites remain regression checks.
+
+
+`tests/organized-polymarket-projection.test.ts` checks exact price strings and all
+outcomes, native field/market/condition/grouping/clock locators, unknown event
+identity, unverified volume units, rolling-window limits, null versus numeric
+and string zeros, legacy omissions, native coverage and nested private-field
+rejection. It checks the existing 500-market/16-outcome, 8,500-field maximum.
+`tests/organized-polymarket-lifecycle.test.tsx` checks matrix-first integration,
+complete current-mode exports independent of display filters, a 120-field preview,
+stable rerenders, mode switches and old callbacks, separate OI exclusion, pending
+old-mode replies, source/display denial and gate uncertainty, invalid/private
+extras, request counts, suspended-tab expiry/stale guards, hidden expiry,
+temporary-failure clocks, replacement, unmount and Blob preparation failure.
+The precision UI test's synthetic single-row snapshot now updates its source
+counts to remain valid under the existing strict schema; no validation was relaxed.
