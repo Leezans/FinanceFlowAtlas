@@ -15,7 +15,7 @@ function reply(window:'1m'|'5m'='5m'):KrakenReply{
  const rows=snapshot.rows.filter(row=>row.pair!=='ADA/USD').map(quote=>parseKrakenTrades({error:[],result:{[quote.source_pair]:[['10','2',(at-1000)/1000,'b','m','',1]],last:'123'}},{pair:quote.pair,source_pair:quote.source_pair,base:quote.base,quote:quote.quote},at-300_000,at,at));
  const trades=tradeSnapshot(rows,at,at);
  if(window==='1m'){trades.window_ms=60_000;trades.window_started_at=new Date(at-60_000).toISOString();}
- return {snapshot,trade_snapshot:trades,...(window==='1m'?{requested_window:window}:{}),status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:new Date(at+60_000).toISOString()}};
+ return {snapshot,trade_snapshot:trades,...(window==='1m'?{requested_window:window}:{}),status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:iso}};
 }
 const tick=()=>act(()=>vi.advanceTimersByTimeAsync(1));
 const matrix=()=>screen.getByRole('region',{name:'来源买卖标记成交额差矩阵工作区'});

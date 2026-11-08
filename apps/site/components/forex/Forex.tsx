@@ -1,5 +1,6 @@
 'use client';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {absoluteRetryDeadline,retryAfterDeadline,timerDelay,untilAborted} from '@/lib/browser-request';
 import {CACHE_TTL_MS,CHECK_INTERVAL_MS,ECB_INFO,ECB_RIGHTS,ECB_URL,crossRate,fxPayloadSchema,referenceAgeDays,type FxPayload} from '@/lib/fx/model';
 import s from './forex.module.css';
 import FxReferenceMatrix from './FxReferenceMatrix';
@@ -10,18 +11,22 @@ function time(value:string|null){return value?new Date(value).toISOString().repl
 function number(value:number){return new Intl.NumberFormat('zh-CN',{maximumSignificantDigits:8}).format(value)}
 
 export default function Forex(){
- const [payload,setPayload]=useState<FxPayload|null>(null),[loading,setLoading]=useState(true),[browserError,setBrowserError]=useState(''),[blocked,setBlocked]=useState(false);
+ const [payload,setPayload]=useState<FxPayload|null>(null),[loading,setLoading]=useState(true),[browserError,setBrowserError]=useState(''),[blocked,setBlocked]=useState(false),[retryDeadline,setRetryDeadline]=useState(0);
  const [from,setFrom]=useState('USD'),[to,setTo]=useState('CNY'),[amount,setAmount]=useState('1'),[query,setQuery]=useState(''),[clock,setClock]=useState(()=>Date.now());
  const busy=useRef(false),alive=useRef(false),stop=useRef(false),abort=useRef<AbortController|null>(null);
+ const retryAt=useRef(0),poll=useRef<ReturnType<typeof setTimeout>|null>(null),reload=useRef<()=>Promise<void>>(async()=>{});
  const load=useCallback(async()=>{
   if(busy.current||stop.current||!alive.current)return;
+  if(poll.current)clearTimeout(poll.current);poll.current=null;
+  if(Date.now()<retryAt.current){poll.current=setTimeout(()=>void reload.current(),timerDelay(retryAt.current));return;}
   busy.current=true;setLoading(true);const controller=new AbortController();abort.current=controller;
   const timeout=setTimeout(()=>controller.abort(),20_000);
   try{
-   const response=await fetch('/api/v1/fx/reference',{cache:'no-store',signal:controller.signal});
+   const response=await untilAborted(fetch('/api/v1/fx/reference',{cache:'no-store',signal:controller.signal}),controller.signal);
    if(!alive.current||controller!==abort.current)return;
+   retryAt.current=Math.max(retryAt.current,retryAfterDeadline(response.headers.get('Retry-After')));
    if(response.status===401||response.status===403){setPayload(null);setBrowserError('展示权限不可用，已清空数据并停止检查。');stop.current=true;setBlocked(true);return}
-   const parsed=fxPayloadSchema.safeParse(await response.json().catch(()=>null));
+   const parsed=fxPayloadSchema.safeParse(await untilAborted(response.json(),controller.signal).catch(()=>null));
    if(!alive.current||controller!==abort.current)return;
    if(!parsed.success){
     if(response.ok){setPayload(null);setBrowserError('响应校验失败，已清空数据。')}
@@ -29,15 +34,16 @@ export default function Forex(){
     return;
    }
    if(!response.ok&&response.status!==503){setBrowserError('页面连接暂时失败；如有旧值，仅保留本页已校验的参考数据。');return}
+   retryAt.current=Math.max(retryAt.current,absoluteRetryDeadline(parsed.data.next_check_at));
    setPayload(parsed.data);setBrowserError('');
    if(parsed.data.source_state==='stopped'){stop.current=true;setBlocked(true)}
    setClock(Date.now());
   }catch{if(alive.current&&controller===abort.current)setBrowserError('页面连接暂时失败；如有旧值，仅保留本页已校验的参考数据。')}
-  finally{clearTimeout(timeout);if(controller===abort.current){busy.current=false;if(alive.current)setLoading(false)}}
+  finally{clearTimeout(timeout);if(controller===abort.current){busy.current=false;if(alive.current){setLoading(false);setRetryDeadline(retryAt.current);setClock(Date.now());if(!stop.current)poll.current=setTimeout(()=>void reload.current(),timerDelay(Math.max(retryAt.current,Date.now()+CHECK_INTERVAL_MS)))}}}
  },[]);
  useEffect(()=>{
-  alive.current=true;const start=setTimeout(()=>void load(),0),timer=setInterval(()=>void load(),CHECK_INTERVAL_MS),clockTimer=setInterval(()=>setClock(Date.now()),60_000);
-  return()=>{alive.current=false;clearTimeout(start);clearInterval(timer);clearInterval(clockTimer);abort.current?.abort();abort.current=null;busy.current=false};
+  alive.current=true;reload.current=load;const start=setTimeout(()=>void load(),0),clockTimer=setInterval(()=>setClock(Date.now()),60_000);
+  return()=>{alive.current=false;clearTimeout(start);if(poll.current)clearTimeout(poll.current);poll.current=null;clearInterval(clockTimer);abort.current?.abort();abort.current=null;busy.current=false};
  },[load]);
  useEffect(()=>{
   const refreshClock=()=>setClock(Date.now());
@@ -56,8 +62,10 @@ export default function Forex(){
  const age=snapshot?referenceAgeDays(snapshot.reference_date,clock):null;
  const overdue=!!payload?.checked_at&&clock-Date.parse(payload.checked_at)>CHECK_INTERVAL_MS;
  const stale=!!snapshot&&(!!browserError||payload?.source_state==='stale'||overdue);
- const next=payload?.next_check_at?Date.parse(payload.next_check_at):0;
+ const next=Math.max(retryDeadline,absoluteRetryDeadline(payload?.next_check_at));
  const waiting=!!next&&clock<next;
+ const nextDate=new Date(next);
+ const nextLabel=Number.isFinite(nextDate.getTime())?time(nextDate.toISOString()):'等待服务器允许后再检查';
  return <main className={s.root}>
   <header className={s.header}><a href="/markets" className={s.brand}>◉ Finance Flow Atlas</a><nav aria-label="资产导航"><a href="/markets">全球市场</a><a href="/ashare">A 股</a><span>外汇参考</span></nav></header>
   <section className={s.hero}><div><p className={s.eyebrow}>FOREIGN EXCHANGE / ECB</p><h1>看清汇率，分清口径。</h1><p>欧洲央行每日参考汇率。独立外汇资料层，<strong>不是资金流、实时行情或可成交报价。</strong></p></div><span className={s.badge}>免费官方来源 · 无需账户</span></section>
@@ -69,7 +77,7 @@ export default function Forex(){
    {payload?.error_code&&<p role="alert">{errors[payload.error_code]}{snapshot?' 当前保留上次校验通过的参考值。':' 不展示替代或模拟数据。'}</p>}
    {age!==null&&age>7&&<p role="alert">参考日期已超过 7 个日历日，请谨慎使用。这是保守提醒，不是已核验的节假日发布日历。</p>}
    {overdue&&<p>最近来源检查距今超过 1 小时，请查看日期后使用。</p>}
-   <p>共享来源检查成功后至少间隔 1 小时；临时失败后至少等待 15 分钟。{next&&!blocked?`下次页面检查时间（来源仍可能冷却）：${time(payload?.next_check_at??null)}`:''}</p>
+   <p>共享来源检查成功后至少间隔 1 小时；临时失败后至少等待 15 分钟。{next&&!blocked?`下次页面检查时间（来源仍可能冷却）：${nextLabel}`:''}</p>
   </div><button disabled={loading||blocked||waiting} onClick={()=>void load()}>{loading?'检查中…':blocked?'来源检查已停止':waiting?'等待下次检查':'检查 ECB 来源'}</button></section>
   <FxReferenceMatrix snapshot={snapshot} query={query} onQueryChange={setQuery} loading={loading}/>
   {snapshot&&<details className={s.conversionPanel}><summary>交叉汇率换算 · 同一参考日的计算工具</summary><div className={s.workspace}>

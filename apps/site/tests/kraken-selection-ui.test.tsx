@@ -12,7 +12,7 @@ function reply():KrakenReply{
  const names=['ADA','BTC','ETH','SOL','XRP'];
  const universe=parseKrakenUniverse({error:[],result:Object.fromEntries(names.map(base=>[base+'USD',pairMetadata(base)]))},iso);
  const snapshot=parseKrakenTicker({error:[],result:Object.fromEntries(names.map(base=>[base+'USD',{c:['10','1'],v:['1','1'],p:['1','10'],t:[1,1]}]))},iso,iso,universe);
- return {snapshot,trade_snapshot:null,status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:new Date(at+60_000).toISOString()}};
+ return {snapshot,trade_snapshot:null,status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:iso}};
 }
 function defaultTradesReply():KrakenReply{
  const result=reply();const rows=result.snapshot!.rows.filter(row=>['BTC/USD','ETH/USD','SOL/USD'].includes(row.pair)).map(quote=>parseKrakenTrades({error:[],result:{[quote.source_pair]:[['10','2',(at-1000)/1000,'b','m','',1]],last:'123'}},{pair:quote.pair,source_pair:quote.source_pair,base:quote.base,quote:quote.quote},at-300_000,at,at));
