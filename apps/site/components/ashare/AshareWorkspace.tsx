@@ -7,6 +7,7 @@ import MarketTiming from '@/components/ashare/MarketTiming';
 import {emptyState,type EvidenceState} from '@/components/ashare/client';
 import {createEvidenceSession} from '@/components/ashare/session';
 import {createCollectionBatch} from '@/lib/ashare/collection-batch';
+import {ashareSnapshotExpiresAt} from '@/lib/ashare/retention';
 import type {Scope} from '@/components/ashare/model';
 const ROOT:Scope={kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'};
 export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
@@ -14,6 +15,31 @@ export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
  const [batchPauseUntil,setBatchPauseUntil]=useState(0);
  const [{client,cancel,setDeadline}]=useState(createEvidenceSession);
  const retry=useRef<()=>void>(()=>{});
+ // Local retention never changes collection, cooldown or request lifetime.
+ // Keep the generation intact so a fresh in-flight reply can still succeed.
+ useEffect(() => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expire = () => {
+   if (timer !== undefined) clearTimeout(timer);
+   const current = client.getState();
+   setState(current);
+   if (current.snapshot) {
+    const remaining = ashareSnapshotExpiresAt(current.snapshot) - Date.now();
+    // If the clock crosses expiry during this callback, recheck immediately.
+    timer = setTimeout(expire, Math.max(0, Math.min(remaining, 2_147_483_647)));
+   }
+  };
+  expire();
+  window.addEventListener('focus', expire);
+  window.addEventListener('pageshow', expire);
+  document.addEventListener('visibilitychange', expire);
+  return () => {
+   if (timer !== undefined) clearTimeout(timer);
+   window.removeEventListener('focus', expire);
+   window.removeEventListener('pageshow', expire);
+   document.removeEventListener('visibilitychange', expire);
+  };
+ }, [client, state.snapshot]);
  useEffect(()=>{
   let live=true,busy=false,timer:ReturnType<typeof setTimeout>|undefined,scheduledFor:number|undefined;
   let batch:ReturnType<typeof createCollectionBatch>|undefined,nextCycleAt=0;

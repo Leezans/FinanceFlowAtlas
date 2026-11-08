@@ -1,6 +1,7 @@
 /** Read-only organization of current A-share evidence. No acquisition or aggregation. */
 import {numeric,numericFields,scopeKey,validateEvidence,type EvidenceSnapshot,type Scope,type ValidEvidence} from '@/components/ashare/model';
 import type {EvidenceState} from '@/components/ashare/client';
+import {ashareSnapshotExpiresAt,ashareSnapshotExpired} from '@/lib/ashare/retention';
 import {SNAPSHOT_MAX_AGE_MS} from '@/lib/ashare/snapshot';
 import {ASHARE_FLOW_METHODOLOGY_URL} from '@/lib/ashare/metric-semantics';
 import type {EvidenceRow} from './types';
@@ -23,15 +24,13 @@ export type OrganizedAshareReport={
 };
 
 /** Reuse the durable source policy, measured from the oldest retained acquisition clock. */
-export function ashareExportExpiresAt(snapshot:ValidEvidence):number {
- return Math.min(Date.parse(snapshot.fetched_at),Date.parse(snapshot.collection_started_at??snapshot.fetched_at))+SNAPSHOT_MAX_AGE_MS;
-}
+export const ashareExportExpiresAt=ashareSnapshotExpiresAt;
 /** Scope and permission checks happen during render, not after a navigation effect. */
 export function visibleAshareExportSnapshot(state:EvidenceState,requestedScope:Scope,now:number|null):ValidEvidence|null {
  const snapshot=state.snapshot;
  if(!snapshot||(state.status!=='ready'&&state.status!=='stale')||state.recovery?.mode==='stopped'||
   scopeKey(snapshot.scope)!==scopeKey(requestedScope)||now===null||!Number.isFinite(now)||
-  now<Date.parse(snapshot.fetched_at)||now>=ashareExportExpiresAt(snapshot))return null;
+  now<Date.parse(snapshot.fetched_at)||ashareSnapshotExpired(snapshot,now))return null;
  return snapshot;
 }
 

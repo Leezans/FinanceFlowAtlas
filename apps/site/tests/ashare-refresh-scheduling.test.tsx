@@ -32,14 +32,14 @@ describe('server-relative next A-share check',()=>{
   await advance(2000);expect(source).toHaveBeenCalledTimes(2);expect(screen.getByRole('button',{name:/合成行业.*BK0001/})).toBeTruthy();
  });
  it('rechecks a nearly expired cache without losing another minute or changing evidence timestamps',async()=>{
-  vi.useFakeTimers();vi.setSystemTime(new Date('2040-01-01T00:00:00Z')); // Client wall-clock is deliberately unrelated to source timestamps.
+  vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-05T14:00:00Z')); // Acquisition age differs from the server-relative hint, but remains within retention.
   const mock=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(evidence),{headers:{etag:'"old"','x-ashare-refresh-after':'1'}})).mockResolvedValueOnce(new Response(JSON.stringify({...evidence,rows:[{...row,f62:2}]}),{headers:{etag:'"new"','x-ashare-refresh-after':'40'}}));vi.stubGlobal('fetch',mock);
   render(<Page/>);await advance(1);expect(mock).toHaveBeenCalledOnce();expect(screen.getByRole('button',{name:/合成行业.*BK0001/})).toBeTruthy();
   await advance(999);expect(mock).toHaveBeenCalledOnce();await advance(101);expect(mock).toHaveBeenCalledTimes(2);expect(mock.mock.calls[1][1].headers).toEqual({'If-None-Match':'"old"'});
   await advance(39000);expect(mock).toHaveBeenCalledTimes(2);
  });
  it('never overlaps an expiry refresh and cancels the scheduled check on unmount',async()=>{
-  vi.useFakeTimers();let finish!:(response:Response)=>void;
+  vi.useFakeTimers();vi.setSystemTime(new Date(evidence.fetched_at));let finish!:(response:Response)=>void;
   const mock=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(evidence),{headers:{'x-ashare-refresh-after':'1'}})).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));vi.stubGlobal('fetch',mock);
   const view=render(<Page/>);await advance(1200);expect(mock).toHaveBeenCalledTimes(2);
   await advance(30000);expect(mock).toHaveBeenCalledTimes(2);
@@ -47,7 +47,7 @@ describe('server-relative next A-share check',()=>{
   view.unmount();await advance(60000);expect(mock).toHaveBeenCalledTimes(2);
  });
  it('replaces an old-scope expiry timer when a stock scope is selected',async()=>{
-  vi.useFakeTimers();const mock=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(evidence),{headers:{'x-ashare-refresh-after':'1'}})).mockResolvedValue(new Response(JSON.stringify({error_code:'source_denied'}),{status:503,headers:{'x-ashare-recovery':'stopped'}}));vi.stubGlobal('fetch',mock);
+  vi.useFakeTimers();vi.setSystemTime(new Date(evidence.fetched_at));const mock=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(evidence),{headers:{'x-ashare-refresh-after':'1'}})).mockResolvedValue(new Response(JSON.stringify({error_code:'source_denied'}),{status:503,headers:{'x-ashare-recovery':'stopped'}}));vi.stubGlobal('fetch',mock);
   render(<Page/>);await advance(1);fireEvent.click(screen.getByRole('button',{name:/合成行业.*BK0001/}));await advance(1);
   expect(mock.mock.calls[1][0]).toContain('scope=BK0001');await advance(180000);expect(mock).toHaveBeenCalledTimes(2);
  });

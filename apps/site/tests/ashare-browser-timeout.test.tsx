@@ -10,7 +10,7 @@ async function advance(ms:number){await act(async()=>{await vi.advanceTimersByTi
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.useRealTimers();});
 describe('bounded A-share browser requests',()=>{
  it('keeps 429 retry disabled and blocks timer/focus checks for its full wait',async()=>{
-  vi.useFakeTimers();
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));
   const fetcher=vi.fn().mockResolvedValueOnce(new Response('not JSON',{status:429,headers:{'retry-after':'900'}})).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
   const view=render(<Page/>);await advance(1);
   expect(screen.getByText(/应用请求限速，请等待后再检查。/)).toBeTruthy();
@@ -23,14 +23,14 @@ describe('bounded A-share browser requests',()=>{
   view.unmount();await advance(120000);expect(fetcher).toHaveBeenCalledTimes(2);
  });
  it('stops when a retryable header conflicts with a stopped body',async()=>{
-  vi.useFakeTimers();const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({error_code:'source_outcome_unconfirmed'}),{status:503,headers:{'x-ashare-error-code':'source_cooldown','retry-after':'1'}}));vi.stubGlobal('fetch',fetcher);
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({error_code:'source_outcome_unconfirmed'}),{status:503,headers:{'x-ashare-error-code':'source_cooldown','retry-after':'1'}}));vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(1);expect(screen.getByText('上次采集未能确认结果，已停止自动重试。')).toBeTruthy();
   expect(screen.queryByRole('button',{name:'重试当前来源'})).toBeNull();
   await advance(180000);fireEvent.focus(window);await advance(1);expect(fetcher).toHaveBeenCalledOnce();
  });
 
  it('ends a hung initial connection and uses ordinary cooldown before trying the application again',async()=>{
-  vi.useFakeTimers();const fetcher=vi.fn().mockImplementationOnce(()=>new Promise(()=>{})).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));const fetcher=vi.fn().mockImplementationOnce(()=>new Promise(()=>{})).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(1);await advance(34998);expect(screen.queryByLabelText('来源连接与恢复')).toBeNull();
   await advance(2);expect(fetcher.mock.calls[0][1].signal!.aborted).toBe(true);
   expect(screen.getByText('浏览器等待应用响应超时，尚未确认来源状态。')).toBeTruthy();
@@ -40,7 +40,7 @@ describe('bounded A-share browser requests',()=>{
   expect(screen.queryByLabelText('来源连接与恢复')).toBeNull();
  });
  it('bounds a stalled response body, retains same-scope evidence and ignores its late bytes',async()=>{
-  vi.useFakeTimers();let finish!:(value:unknown)=>void;
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));let finish!:(value:unknown)=>void;
   const hung={status:200,headers:new Headers({etag:'"late"'}),json:vi.fn(()=>new Promise(resolve=>{finish=resolve;}))};
   const fetcher=vi.fn().mockResolvedValueOnce(response()).mockResolvedValueOnce(hung).mockResolvedValueOnce(new Response(null,{status:304,headers:{etag:'"complete"'}}));vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(1);fireEvent.change(screen.getByLabelText('搜索代码或名称'),{target:{value:'合成'}});
@@ -52,7 +52,7 @@ describe('bounded A-share browser requests',()=>{
   expect(screen.queryByText(/迟到的旧响应/)).toBeNull();expect(screen.queryByLabelText('来源连接与恢复')).toBeNull();
  });
  it('does not shorten a long Retry-After received before a body stalls',async()=>{
-  vi.useFakeTimers();const failed={status:503,headers:new Headers({'retry-after':'900','x-ashare-error-code':'upstream_http'}),json:vi.fn(()=>new Promise(()=>{}))};
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));const failed={status:503,headers:new Headers({'retry-after':'900','x-ashare-error-code':'upstream_http'}),json:vi.fn(()=>new Promise(()=>{}))};
   const fetcher=vi.fn().mockResolvedValueOnce(failed).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(35001);expect(screen.getByText('浏览器等待应用响应超时，尚未确认来源状态。')).toBeTruthy();
   await advance(60_000);expect(fetcher).toHaveBeenCalledOnce();expect((screen.getByRole('button',{name:'重试当前来源'}) as HTMLButtonElement).disabled).toBe(true);
@@ -60,7 +60,7 @@ describe('bounded A-share browser requests',()=>{
   fireEvent.click(screen.getByRole('button',{name:'重试当前来源'}));await advance(1);expect(fetcher).toHaveBeenCalledTimes(2);
  });
  it.each([401,403,'stopped','source_outcome_unconfirmed'] as const)('does not wait for a body after known access stop %s',async stop=>{
-  vi.useFakeTimers();const json=vi.fn(()=>new Promise(()=>{}));
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));const json=vi.fn(()=>new Promise(()=>{}));
   const failed={status:typeof stop==='number'?stop:503,headers:new Headers(typeof stop==='number'?{}:stop==='stopped'?{'x-ashare-recovery':'stopped'}:{'x-ashare-error-code':stop}),json};
   const fetcher=vi.fn().mockResolvedValueOnce(response()).mockResolvedValueOnce(failed);vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(1);await advance(60000);
@@ -68,14 +68,14 @@ describe('bounded A-share browser requests',()=>{
   expect(screen.queryByRole('button',{name:'重试当前来源'})).toBeNull();await advance(180000);expect(fetcher).toHaveBeenCalledTimes(2);
  });
  it('ignores headers arriving after timeout without consuming the old response body',async()=>{
-  vi.useFakeTimers();let finish!:(response:unknown)=>void;const json=vi.fn(async()=>root);
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));let finish!:(response:unknown)=>void;const json=vi.fn(async()=>root);
   const fetcher=vi.fn().mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;})).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(95001);expect(fetcher).toHaveBeenCalledTimes(2);
   await act(async()=>finish({status:200,headers:new Headers(),json}));
   expect(json).not.toHaveBeenCalled();expect(screen.queryByLabelText('来源连接与恢复')).toBeNull();expect(screen.getByRole('button',{name:/合成行业.*BK0001/})).toBeTruthy();
  });
  it.each(['fetch','body'] as const)('aborts a pending %s on unmount and never schedules a replacement',async phase=>{
-  vi.useFakeTimers();let finish!:(value:unknown)=>void;
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));let finish!:(value:unknown)=>void;
   const pending=new Promise(resolve=>{finish=resolve;});const json=vi.fn(()=>pending);
   const fetcher=vi.fn<(url:string,init:RequestInit)=>Promise<unknown>>().mockImplementation(()=>phase==='fetch'?pending:Promise.resolve({status:200,headers:new Headers(),json}));vi.stubGlobal('fetch',fetcher);
   const view=render(<Page/>);await advance(1);view.unmount();expect(fetcher.mock.calls[0][1].signal!.aborted).toBe(true);
@@ -83,7 +83,7 @@ describe('bounded A-share browser requests',()=>{
   expect(fetcher).toHaveBeenCalledOnce();if(phase==='fetch')expect(json).not.toHaveBeenCalled();expect(screen.queryByLabelText('来源连接与恢复')).toBeNull();
  });
  it('cancels the timeout on scope change and unmount without interrupting the next scope',async()=>{
-  vi.useFakeTimers();const stock={...root,field_units:{...root.field_units,f2:'CNY'},rows:[{...row,f12:'000001',f14:'合成股票'}],scope:{kind:'industry_stocks',fs:'b:BK0001',classification_level:'unknown_may_mix_levels'}};
+  vi.useFakeTimers();vi.setSystemTime(new Date(root.fetched_at));const stock={...root,field_units:{...root.field_units,f2:'CNY'},rows:[{...row,f12:'000001',f14:'合成股票'}],scope:{kind:'industry_stocks',fs:'b:BK0001',classification_level:'unknown_may_mix_levels'}};
   const fetcher=vi.fn().mockResolvedValueOnce(response()).mockImplementationOnce(()=>new Promise(()=>{})).mockResolvedValueOnce(new Response(JSON.stringify(stock)));vi.stubGlobal('fetch',fetcher);
   const view=render(<Page/>);await advance(1);await advance(60000);fireEvent.click(screen.getByRole('button',{name:/合成行业.*BK0001/}));await advance(1);
   expect(fetcher.mock.calls[1][1].signal.aborted).toBe(true);await advance(35000);
