@@ -144,3 +144,24 @@ the presence of this document.
 The v72 gate migration must already be applied, or must be applied through the
 supported hosting workflow on a fresh install. This extension adds no migration. A commit alone does not deploy or migrate production. Do not bypass
 the existing owner authentication boundary to verify the deployment.
+
+## Organized current visible evidence
+
+The secondary collapsed panel below the heatmap provides a local JSON file of
+seven native fields per active contract with exact identity and field locators.
+It retains separate BTC/ETH quantity and quote units, source USD 24-hour turnover,
+null versus zero and all source/acquisition/metadata clocks. It does not calculate
+sums, flow or OI valuation. A bounded 120-row preview is separate from the complete
+active-view file, at most 28,000 normalized rows. The original source scope remains
+separate from currently active currency coverage after contracts expire.
+
+`deribit-options-visible/1` explicitly identifies the exported normalized view,
+not a new full acquisition or raw provider payload. The hook records the actual
+received schema before any existing legacy normalization; BTC-only schema 2 is
+not assumed to be a legacy cache. Expired rows never enter the file. Original
+strict reply validation, five-minute clocks, acquisition-time metadata checks,
+individual expiry, stop/denial behavior and polling remain unchanged. A final
+click rechecks visibility and stale state to reject outdated suspended-tab files.
+Blob URLs are revoked on replacement, withdrawal and unmount. This adds no source
+request, endpoint, storage or distribution permission. See the repository's
+[organized evidence contract](../../../docs/organized-report-projection.md).
