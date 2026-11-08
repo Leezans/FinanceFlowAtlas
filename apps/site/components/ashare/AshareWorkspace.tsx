@@ -1,6 +1,7 @@
 'use client';
 import React,{useEffect,useState,useRef} from 'react';
 import EvidenceHeatmap from '@/components/ashare/EvidenceHeatmap';
+import OrganizedAshareEvidence from '@/components/ashare/OrganizedAshareEvidence';
 import SourceRecovery from '@/components/ashare/SourceRecovery';
 import MarketTiming from '@/components/ashare/MarketTiming';
 import {emptyState,type EvidenceState} from '@/components/ashare/client';
@@ -54,6 +55,7 @@ export default function AshareWorkspace({embedded=false}:{embedded?:boolean}){
   <nav aria-label="市场与行业" style={{display:'flex',gap:10,alignItems:'center',marginBottom:12}}>{scope.kind==='industry_stocks'?<><button style={{background:'#182936',color:'#d9e7ec',border:'1px solid #3c5361',padding:'8px 12px',borderRadius:5}} onClick={()=>{setIndustry('');setScope(ROOT)}}>← 全部一级行业</button><span>{industry}</span></>:<span>东财一级行业</span>}<span role="status" style={{fontSize:12,color:'#92aabd'}}>{loading?'正在获取并核对完整分页…':state.recovery?.mode==='stopped'?'来源检查已停止':batchPauseUntil>0?'本轮续采已结束，等待下一次普通检查':state.recovery?.code==='collection_in_progress'?'正在核对完整分页；未发布部分数据':state.recovery?'等待恢复；不代表行情更新':'页面打开时约每分钟检查；不代表行情更新'}</span></nav>
   <p aria-label="采集触发方式" style={{fontSize:12,color:'#92aabd'}}>页面访问触发采集；关闭后不会继续后台更新。分页核对按服务端提示有限续采，与一分钟检查分开。浏览器休眠可能延迟检查，返回页面后补查已到期请求，仍遵守来源冷却或停止状态。</p>
   <EvidenceHeatmap state={state} onIndustrySelect={(next,row)=>{setIndustry(row.f14);setScope(next)}}/>
+  <OrganizedAshareEvidence state={state} scope={scope}/>
   <SourceRecovery state={state} scope={scope} loading={loading} retryNotBefore={batchPauseUntil} onRetry={()=>retry.current()}/>
   <MarketTiming state={state} loading={loading}/>
   <p style={{fontSize:11,color:'#92aabd'}}>来源：东方财富公开接口。主力净额仅是大单与超大单的分类估算，不是所有交易资金净流入或市场新增资金。行情日期、观测时点与延迟尚未核实。</p>
