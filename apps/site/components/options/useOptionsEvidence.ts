@@ -1,40 +1,18 @@
 'use client';
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useMemo} from 'react';
 import {replySchema,visibleSnapshot,REFRESH_MS,type OptionsReply} from '@/lib/options/model';
 import type {DeribitInputSchema} from '@/lib/evidence/deribit-projection';
+import {useReport} from '@/components/markets/useReport';
+// Preserve the wire schema before the legacy reader normalizes the snapshot.
+const parseReply=(payload:unknown):OptionsReply & {inputSchema:DeribitInputSchema|null}=>{
+ const result=replySchema.parse(payload);
+ return {...result,inputSchema:(payload as {snapshot:{schema:DeribitInputSchema}|null}).snapshot?.schema??null};
+};
 export function useOptionsEvidence(){
- const [data,setData]=useState<OptionsReply|null>(null),[now,setNow]=useState(0),[loading,setLoading]=useState(false),[problem,setProblem]=useState(''),[stopped,setStopped]=useState(false);
- const [inputSchema,setInputSchema]=useState<DeribitInputSchema|null>(null);
- const active=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false),poll=useRef<ReturnType<typeof setTimeout>|null>(null),run=useRef<()=>Promise<void>>(async()=>{});
- const refresh=useCallback(async()=>{
-  if(active.current||blocked.current||document.visibilityState!=='visible')return;
-  if(poll.current)clearTimeout(poll.current);
-  const controller=new AbortController();active.current=controller;
-  const current=()=>mounted.current&&active.current===controller;
-  setLoading(true);const timeout=setTimeout(()=>controller.abort(),20_000);
-  try{
-   const response=await fetch('/api/v1/options/deribit/snapshot',{credentials:'same-origin',cache:'no-store',redirect:'manual',signal:controller.signal});
-   if(!current())return;
-   if(response.status===401||response.status===403||response.redirected||response.type==='opaqueredirect'||response.status>=300&&response.status<400){blocked.current=true;setStopped(true);setData(null);setProblem('展示权限已失效');return;}
-   let result:OptionsReply,wireSchema:DeribitInputSchema|null;
-   try{const payload:unknown=await response.json();result=replySchema.parse(payload);if(response.status!==200&&response.status!==503)throw new Error('status');
-    // Capture the actual wire schema before the existing legacy reader normalizes it.
-    wireSchema=(payload as {snapshot:{schema:DeribitInputSchema}|null}).snapshot?.schema??null;
-   }
-   catch(error){if(!current())return;if(response.status>=500)throw error;setData(null);setProblem('响应数据未通过校验，已清空浏览器行情。');return;}
-   if(!current())return;
-   if(result.status.state==='denied'){blocked.current=true;setStopped(true);setData(null);setProblem('来源访问已停止');}
-   else{setData(result);setInputSchema(wireSchema);setProblem('');}
-  }catch{if(current())setProblem('更新失败 · 上次有效快照已陈旧');}
-  finally{clearTimeout(timeout);if(current()){setNow(Date.now());setLoading(false);active.current=null;if(!blocked.current&&document.visibilityState==='visible')poll.current=setTimeout(()=>void run.current(),REFRESH_MS);}}
- },[]);
- useEffect(()=>{
-  mounted.current=true;run.current=refresh;
-  const start=setTimeout(()=>{setNow(Date.now());void refresh();},0),tick=setInterval(()=>setNow(Date.now()),1000);
-  const visibility=()=>{setNow(Date.now());if(poll.current)clearTimeout(poll.current);if(document.visibilityState==='visible')void refresh();};
-  document.addEventListener('visibilitychange',visibility);
-  return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);if(poll.current)clearTimeout(poll.current);document.removeEventListener('visibilitychange',visibility);active.current?.abort();active.current=null;};
- },[refresh]);
+ const {reply:data,now,setNow,loading,failure,refresh,coolingDown}=useReport('/api/v1/options/deribit/snapshot',parseReply,REFRESH_MS,20_000,1000);
+ const stopped=failure==='permission'||data?.status.state==='denied';
+ const problem=failure==='permission'?'展示权限已失效':data?.status.state==='denied'?'来源访问已停止':failure==='invalid'?'响应数据未通过校验，已清空浏览器行情。':failure==='network'?'更新失败 · 上次有效快照已陈旧':'';
+ const inputSchema=data?.inputSchema??null;
  // The selector still runs each tick. Only memoize the identical active row set,
  // so an unchanged one-second clock does not rebuild the complete local Blob.
  const visible=visibleSnapshot(data,now),activeInstruments=visible?.rows.map(row=>row.instrument).join('|')??'';
@@ -50,9 +28,9 @@ export function useOptionsEvidence(){
   const currentStale=!!eligible&&(!!problem||data?.status.state==='stale'||current-Date.parse(eligible.fetched_at)>REFRESH_MS||current-Date.parse(eligible.source_as_of)>REFRESH_MS);
   // A suspended tab can miss a tick. Withdraw a file containing even one newly
   // expired instrument, not only a fully expired snapshot, before the browser saves it.
-  const allowed=!blocked.current&&!!eligible&&eligible.rows.map(row=>row.instrument).join('|')===activeInstruments&&currentStale===stale;
+  const allowed=!stopped&&!!eligible&&eligible.rows.map(row=>row.instrument).join('|')===activeInstruments&&currentStale===stale;
   if(!allowed)setNow(current);
   return allowed;
  };
- return {snapshot,loading,problem,blocked:stopped,refresh,stale,provenance,validateDownload};
+ return {snapshot,loading,problem,blocked:stopped,coolingDown,refresh,stale,provenance,validateDownload};
 }

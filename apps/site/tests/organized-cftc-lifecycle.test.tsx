@@ -21,7 +21,8 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();visibility('visible',false);});
 async function start(){const view=render(<FuturesPositioning/>);await tick();await tick();return view;}
-async function nextCheck(){fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await tick();await tick();}
+// Advance to eligibility instead of bypassing the browser cooldown.
+async function nextCheck(){vi.setSystemTime(Date.now()+REFRESH_MS);fireEvent(document,new Event('visibilitychange'));await tick();await tick();}
 
 describe('CFTC complete current-snapshot export and lifecycle',()=>{
  it('keeps the matrix primary and exports all 832 fields independently of trader or selected-market controls',async()=>{
@@ -82,7 +83,7 @@ describe('CFTC complete current-snapshot export and lifecycle',()=>{
   const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();const before=await exported(),original=link()!.getAttribute('href');
   fetcher.mockRejectedValue(new Error('offline'));await nextCheck();const retained=await exported();
   expect(retained.presentation.stale).toBe(true);expect(retained.native_snapshot).toEqual(before.native_snapshot);expect(retained.clocks).toEqual(before.clocks);expect(retained.rows).toEqual(before.rows);expect(revoke).toHaveBeenCalledWith(original);
-  const stale=link()!.getAttribute('href'),replacement=reply(),fetched=new Date(NOW+1000).toISOString();vi.setSystemTime(NOW+1000);
+  const stale=link()!.getAttribute('href'),replacement=reply(),fetched=new Date(Date.now()+REFRESH_MS).toISOString();
   replacement.snapshot!.acquisition_started_at=replacement.snapshot!.fetched_at=replacement.status.fetched_at=fetched;
   fetcher.mockResolvedValue(Response.json(replacement));await nextCheck();
   expect((await exported()).clocks.fetched_at).toBe(fetched);expect((await exported()).presentation.stale).toBe(false);expect(revoke).toHaveBeenCalledWith(stale);expect(files.size).toBe(1);expect(fetcher).toHaveBeenCalledTimes(3);

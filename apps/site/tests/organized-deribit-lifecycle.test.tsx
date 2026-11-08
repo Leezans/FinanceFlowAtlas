@@ -22,7 +22,8 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();visibility('visible',false);});
 async function start(){const view=render(<DeribitOptions/>);await tick();await tick();return view;}
-async function nextCheck(){fireEvent.click(screen.getByRole('button',{name:'检查更新'}));await tick();await tick();}
+// Advance to eligibility instead of bypassing the browser cooldown.
+async function nextCheck(){vi.setSystemTime(Date.now()+REFRESH_MS);fireEvent(document,new Event('visibilitychange'));await tick();await tick();}
 
 describe('Deribit current-view file and lifecycle',()=>{
  it('keeps the matrix primary, distinct row units and a complete filter-independent stable Blob',async()=>{
@@ -89,7 +90,7 @@ describe('Deribit current-view file and lifecycle',()=>{
   const fetcher=vi.fn(async()=>Response.json(combinedOptionsReply()));vi.stubGlobal('fetch',fetcher);await start();const before=await exported(),original=link()!.getAttribute('href');
   fetcher.mockRejectedValue(new Error('offline'));await nextCheck();const retained=await exported();
   expect(retained.presentation.stale).toBe(true);expect(retained.native_snapshot).toEqual(before.native_snapshot);expect(retained.clocks).toEqual(before.clocks);expect(retained.rows).toEqual(before.rows);expect(revoke).toHaveBeenCalledWith(original);
-  const stale=link()!.getAttribute('href'),replacement=combinedOptionsReply(),fetched=new Date(at+1000).toISOString();vi.setSystemTime(at+1000);replacement.snapshot!.acquisition_started_at=replacement.snapshot!.fetched_at=replacement.status.fetched_at=fetched;
+  const stale=link()!.getAttribute('href'),replacement=combinedOptionsReply(),fetched=new Date(Date.now()+REFRESH_MS).toISOString();replacement.snapshot!.acquisition_started_at=replacement.snapshot!.fetched_at=replacement.status.fetched_at=replacement.snapshot!.source_as_of=fetched;replacement.snapshot!.rows.forEach(row=>{row.creation_timestamp=Date.parse(fetched);});
   fetcher.mockResolvedValue(Response.json(replacement));await nextCheck();expect((await exported()).clocks.fetched_at).toBe(fetched);expect((await exported()).presentation.stale).toBe(false);expect(revoke).toHaveBeenCalledWith(stale);expect(files.size).toBe(1);
  });
  it('offers no file for a future snapshot or an initial hidden tab',async()=>{

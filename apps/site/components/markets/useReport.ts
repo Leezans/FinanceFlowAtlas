@@ -4,7 +4,7 @@ import {untilAborted,timerDelay,retryAfterDeadline,absoluteRetryDeadline} from '
 const BROWSER_RETRY_MS=60_000;
 /** Browser lifecycle shared by independently validated official report views.
  * Browser recovery checks never reset or shorten the server's source gate. */
-export function useReport<T extends {status:{state:string;next_retry_at?:string|null}}>(url:string, parse:(value:unknown)=>T, refreshMs:number,timeoutMs=30_000) {
+export function useReport<T extends {status:{state:string;next_retry_at?:string|null}}>(url:string, parse:(value:unknown)=>T, refreshMs:number,timeoutMs=30_000,clockMs=30_000) {
   const [reply,setReply]=useState<T|null>(null),[loading,setLoading]=useState(false),[failure,setFailure]=useState<'network'|'permission'|'invalid'|null>(null),[now,setNow]=useState(0),[nextDeadline,setNextDeadline]=useState(0);
   const controller=useRef<AbortController|null>(null),mounted=useRef(false),blocked=useRef(false),retryAt=useRef(0);
   const poll=useRef<ReturnType<typeof setTimeout>|null>(null),refreshRef=useRef<()=>Promise<void>>(async()=>{});
@@ -46,10 +46,10 @@ export function useReport<T extends {status:{state:string;next_retry_at?:string|
   useEffect(()=>{
     mounted.current=true;refreshRef.current=refresh;
     const start=setTimeout(()=>{setNow(Date.now());void refresh();},0);
-    const tick=setInterval(()=>setNow(Date.now()),30_000);
+    const tick=setInterval(()=>setNow(Date.now()),clockMs);
     const visible=()=>{setNow(Date.now());if(poll.current)clearTimeout(poll.current);poll.current=null;if(document.visibilityState==='visible')void refresh();};
-    document.addEventListener('visibilitychange',visible);
-    return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);if(poll.current)clearTimeout(poll.current);poll.current=null;document.removeEventListener('visibilitychange',visible);controller.current?.abort();controller.current=null;};
-  },[refresh]);
+    document.addEventListener('visibilitychange',visible);window.addEventListener('focus',visible);
+    return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);if(poll.current)clearTimeout(poll.current);poll.current=null;document.removeEventListener('visibilitychange',visible);window.removeEventListener('focus',visible);controller.current?.abort();controller.current=null;};
+  },[refresh,clockMs]);
   return {reply,loading,failure,now,setNow,refresh,nextDeadline,coolingDown:now<nextDeadline};
 }
