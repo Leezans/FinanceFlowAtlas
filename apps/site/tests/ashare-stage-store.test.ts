@@ -2,6 +2,10 @@ import {test,expect} from 'vitest';
 import {DatabaseSync,type SQLInputValue} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {D1SourceGate,SQL,type D1Result} from '../lib/ashare/source-gate';
+import {createAshareHandler} from '../lib/ashare/ashare';
+import {consumeReply,emptyState} from '../components/ashare/client';
+import {createCollectionBatch} from '../lib/ashare/collection-batch';
+import {D1SnapshotStore} from '../lib/ashare/snapshot-store';
 import {D1StageStore,STAGE_SQL,type StageD1} from '../lib/ashare/stage-store';
 import {decodeStage,encodeStage,validateStage,STAGE_MAX_AGE_MS,STAGE_MAX_BYTES,STAGE_MAX_SCOPES,type Stage} from '../lib/ashare/stage';
 import {FIELDS,parseScope,type Row} from '../lib/ashare/snapshot';
@@ -258,4 +262,37 @@ test('save does not mark malformed persisted-stage reads as a save validation re
  const before=state(f),pending=f.store.save(lease.token,{...evidence('level1',2),started_at:stage.started_at});
  await expect(pending).rejects.toThrow('stage_invalid');await expect(pending).rejects.not.toHaveProperty('saveNotStarted');
  expect(state(f)).toEqual(before);expect(f.statements.filter(sql=>sql===STAGE_SQL.put)).toHaveLength(1);
+});
+
+
+test('successful staged recovery exposes continuation without resetting durable failures',async()=>{
+ const f=fixture(),stage=evidence();
+ f.sqlite.exec(readFileSync(new URL('../drizzle/0012_ashare_shared_snapshots.sql',import.meta.url),'utf8'));
+ let lease=await acquire(f);await f.gate.release(lease.token,{kind:'temporary_failure',reason:'deadline'});
+ await save(f,stage);
+ const store=new D1SnapshotStore(f.db,{staged:true});
+ const read=await store.read(stage.scope);
+ expect(read).toMatchObject({code:'collection_in_progress',canAcquire:true,durableBackoff:true});
+ expect(read.failureCode).toBeUndefined();expect(read.snapshot).toBeUndefined();
+ // Exercise the handler and browser continuation parser without waiting on or
+ // contacting a provider: this read-only view holds admission closed.
+ const handler=createAshareHandler({enabled:()=>true,isolatedForTests:true,sourceGate:f.gate,
+  snapshotStore:{read:async scope=>({...await store.read(scope),canAcquire:false}),commit:async()=>{throw new Error('unexpected commit');}},
+  fetcher:async()=>{throw new Error('unexpected source request');}});
+ const response=await handler(new Request('https://offline.invalid/api/v1/ashare/snapshot?scope=level1'));
+ expect(response.status).toBe(503);
+ const now=Date.now(),client=consumeReply(emptyState(),{status:response.status,payload:await response.json(),
+  errorCode:response.headers.get('x-ashare-error-code')??undefined,recoveryMode:response.headers.get('x-ashare-recovery')??undefined,
+  retryAfter:response.headers.get('retry-after')??undefined},stage.scope,now);
+ expect(client.continuationAt).toBeGreaterThan(now);expect(client.snapshot).toBeNull();
+ const batch=createCollectionBatch(now);expect(batch.start(now)).toBe(true);
+ expect(batch.next(client.continuationAt,now)).toBeGreaterThan(now);
+
+ expect(f.sqlite.prepare('SELECT failure_count,failure_code FROM ashare_source_gate').get()).toMatchObject({failure_count:1,failure_code:'deadline'});
+ // A later failure in another scope still owns the global cooldown. A partial
+ // prefix must never hide that cooldown or reset its exponential history.
+ lease=await acquire(f);await f.gate.release(lease.token,{kind:'temporary_failure',reason:'upstream_http'});
+ const blocked=await store.read(stage.scope);
+ expect(blocked).toMatchObject({code:'source_cooldown',canAcquire:false,failureCode:'upstream_http'});
+ expect(blocked.retryAfterMs).toBeGreaterThan(119000);
 });
