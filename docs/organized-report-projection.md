@@ -503,6 +503,13 @@ acquisition retention, not a validated market freshness or trading-date policy.
 Expiry is enforced by a timer, focus/pageshow/visibility resampling and a final
 click-time check; none triggers another request or changes the client's existing
 retained heatmap behavior. A 304 does not extend the original expiry.
+The visibility selector still runs on every render. The projection is memoized
+only by the visible snapshot identity and combined retained-stale flag. Unchanged
+304 responses, unrelated state updates and valid resume/click checks reuse the
+same local Blob; changed snapshots or stale flags replace it. File serialization
+is deferred and cancellable. Withdrawal and unmount revoke a prepared URL, and
+pending or failed preparation offers no download. JSON bytes, the native field
+allowlist and the full unfiltered table remain unchanged.
 
 TPEx shares keep the existing inclusive 24-hour fetched-cache and 14-day report
 age bounds, including the report's Asia/Taipei day boundary. The existing page
@@ -535,9 +542,9 @@ and position/date, with a stale file. Replacement and unmount revoke old URLs;
 unfinished preparation is canceled, and preparation failures show no download.
 No new request, polling, storage, auth, gate, parser or endpoint is introduced.
 
-Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
-shares, CVM, CFTC, Deribit, Kraken trades and independent Polymarket Gamma/OI; existing data URLs
-for the earlier sources); previously saved files
+Downloading saves a JSON file locally on the user's click (a Blob URL for A-share,
+TPEx shares, CVM, CFTC, Deribit, Kraken trades and independent Polymarket Gamma/OI;
+existing data URLs for Japan MOF and TPEx monetary reports); previously saved files
 cannot be revoked automatically. No observations enter source control.
 
 ## Limits
@@ -568,6 +575,12 @@ known quote units, validation and retention boundaries.
 fetches, timer and suspended-tab expiry, late click rejection, first-render scope
 changes, permission/source denial, invalid responses, temporary failure and 304
 retention, snapshot replacement, cleanup and workspace integration.
+It also checks Blob revocation, withdrawal before preparation, cancellation of
+superseded reports and stable URLs through repeated valid clicks.
+`tests/organized-ashare-performance.test.tsx` verifies no repeated projection,
+report serialization or URI encoding for unchanged evidence, and exact deferred
+JSON bytes. Existing frozen view/JSON digests remain unchanged; only the
+intentional A-share download transport is normalized in the DOM comparison.
 
 `tests/organized-tpex-projection.test.ts` verifies all participant/metric locators,
 company and dated industry identities, absent records versus zero, total

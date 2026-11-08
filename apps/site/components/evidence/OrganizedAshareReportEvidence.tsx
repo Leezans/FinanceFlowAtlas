@@ -5,6 +5,7 @@ import {
   ashareExportFilename,
   type OrganizedAshareReport,
 } from '@/lib/evidence/ashare-projection';
+import BlobEvidenceDownload from './BlobEvidenceDownload';
 import s from './evidence.module.css';
 
 type Props = {
@@ -64,14 +65,7 @@ export default function OrganizedAshareReportEvidence({
           </dd>
         </div>
       </dl>
-      <a
-        className={s.download}
-        href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(report, null, 2))}`}
-        download={filename}
-        onClick={onDownload}
-      >
-        下载整理后的 JSON
-      </a>
+      <BlobEvidenceDownload report={report} filename={filename} onDownload={onDownload}/>
       <p>
         下载仅保存到你的设备，不上传或分享。快照失效后本页入口会撤下，已下载文件不会自动撤回。包含当前来源范围的全部行，不受矩阵搜索或方向筛选影响。缺失标记与已报告零值分开保留；原生行仅保留已知字段，额外字段不导出。
       </p>

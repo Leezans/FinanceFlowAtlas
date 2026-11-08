@@ -23,7 +23,9 @@ import { reply, legacyReply } from './cftc-fixture';
 
 // Captured before the view extraction at 28b13ba. The digest covers all DOM
 // labels, cell order, attributes and filenames, plus exact exported JSON bytes.
-// Only layout whitespace and the synthetic Blob URL are normalized.
+// Only layout whitespace and the synthetic Blob URL are normally normalized.
+// A-share's later Blob migration also normalizes its download slot back to the
+// legacy link, after separately asserting the intentional pending/Blob behavior.
 const expectedViews: Record<string, unknown> = baseline;
 const files = new Map<string, Blob>();
 const hash = (value: string) =>
@@ -125,7 +127,7 @@ describe.each(cases)('$name view behavior', ({ name, make }) => {
       const { container } = render(
         <OrganizedEvidence report={report} onDownload={guard} />,
       );
-      const preparing = markup(container);
+      const preparingContainer = container.cloneNode(true) as HTMLElement;
       expect(container.querySelector('details')!.open).toBe(false);
       await act(() => vi.advanceTimersByTimeAsync(1));
       const link = container.querySelector<HTMLAnchorElement>('a[download]')!;
@@ -136,9 +138,24 @@ describe.each(cases)('$name view behavior', ({ name, make }) => {
       expect(json).toBe(JSON.stringify(report, null, 2));
       expect(fireEvent.click(link)).toBe(false);
       expect(guard).toHaveBeenCalledOnce();
+      const readyContainer = container.cloneNode(true) as HTMLElement;
+      if (report.source_id === 'eastmoney-ashare') {
+        expect(preparingContainer.querySelector('a[download]')).toBeNull();
+        const pending = [...preparingContainer.querySelectorAll('p')].find(
+          (element) => element.textContent === '正在准备本地 JSON…',
+        );
+        expect(pending).toBeDefined();
+        expect(href).toBe('blob:synthetic-evidence');
+        // Preserve every old digest. Only the reviewed transport change is
+        // normalized; filenames, labels, cells, native bytes and caveats are not.
+        const legacyLink = link.cloneNode(true) as HTMLAnchorElement;
+        legacyLink.setAttribute('href', `data:application/json;charset=utf-8,${encodeURIComponent(json)}`);
+        pending!.replaceWith(legacyLink);
+        readyContainer.querySelector('a[download]')!.setAttribute('href', legacyLink.getAttribute('href')!);
+      }
       const result = {
-        preparing,
-        ready: markup(container),
+        preparing: markup(preparingContainer),
+        ready: markup(readyContainer),
         json: hash(json),
         filename: link.download,
         previewRows: container.querySelectorAll('tbody tr').length,

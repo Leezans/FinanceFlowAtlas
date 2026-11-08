@@ -56,15 +56,40 @@ All names below are under `components/evidence/`:
 Preview-limit constants belong to their source views. The dispatcher re-exports
 existing constants so imports outside the component remain compatible. TPEx
 shares, CVM and CFTC still preview at most 120 rows while exporting every row.
-A-share and the original monetary pair retain their existing full previews and
-synchronous data URLs. Moving A-share to Blob downloads or memoizing its report
-is a separate lifecycle/performance change, not part of this extraction.
+A-share and the original monetary pair retain their existing full previews.
+The monetary pair still uses synchronous data URLs. A-share uses the shared
+Blob helper and a memoized projection, as described below.
 
 Some panel structure and wording deliberately repeats. Sharing local file
 mechanics is useful; hiding incompatible source meanings behind a configuration
 object or a table with optional source-dependent columns is not. Source views
 should be readable without following another source's branches or guessing a
 row's identity from property presence.
+
+## A-share report identity and visibility
+
+`components/ashare/OrganizedAshareEvidence.tsx` still checks current scope,
+permission and acquisition age on every render. Only the projection is memoized,
+by the resulting visible snapshot identity and the combined retained-stale flag
+(`status`, `retainedAfterFailure`, `retainedDuringCollection`). Clock samples,
+equivalent scope objects, successful unchanged 304 responses and unrelated state
+messages therefore reuse the report and local file. New snapshot identities or
+changes in the combined stale flag replace them; no deep comparison is used.
+
+The existing oldest-acquisition 24-hour boundary, focus/pageshow/visibility
+resampling and final click-time visibility check remain in the wrapper. A
+mismatched scope or denied/expired report becomes null before the view renders,
+so memoization cannot preserve its link. The shared Blob lifecycle cancels pending
+serialization or revokes the file on withdrawal and replacement. It does not
+extend retention or make another source request.
+
+The A-share view no longer serializes or URI-encodes the report during render.
+It shows the shared preparation/failure messages in the download slot, then
+offers a Blob containing exactly `JSON.stringify(report, null, 2)` as before.
+The native field allowlist, complete scope, zero/missing distinctions, full table,
+filename and financial wording are unchanged. Full-table rendering is not
+memoized or virtualized, and Blob serialization still runs on the main thread
+after the deferred timer. This does not introduce a background worker.
 
 ## Local Blob contract and lifecycle
 
@@ -102,12 +127,22 @@ replace its identity when the permitted report changes.
   ready/stale states, A-share industry/constituents, large TPEx/CVM previews and
   both CFTC schemas. DOM digests include labels, cell order, attributes and
   filenames, with layout whitespace normalized and a fixed synthetic Blob URL.
+  For A-share only, the later Blob migration's pending slot and ready href are
+  asserted separately, then mapped back to the legacy link for DOM comparison.
+  No original fixture digest was replaced for that migration.
   The JSON check uses exact exported bytes. These are not provider observations.
   A deliberate UI or export change requires reviewing the corresponding baseline,
   not blindly accepting a digest mismatch.
 - `tests/blob-evidence-download.test.tsx` isolates deferred preparation, identity
   stability, repeated replacement, cleanup, cancellation, StrictMode, failed
   serialization/URL creation, recovery and current click handlers.
+- `tests/organized-ashare-performance.test.tsx` checks operation counts rather
+  than timing thresholds. Before the migration, two ordinary rerenders and three
+  resume events caused five projections, five report serializations and five URI
+  encodings. The regression now requires zero of each for unchanged evidence,
+  while changed reports still rebuild. It also checks deferred serialization and
+  exact JSON bytes. The A-share lifecycle suite checks cancellation before file
+  preparation, repeated allowed clicks, replacement and all withdrawal paths.
 - Existing `organized-*-projection`, `organized-*-lifecycle` and
   `organized-report` suites remain the source semantics and page-integration
   checks. The architecture tests do not replace permission/expiry regressions.
