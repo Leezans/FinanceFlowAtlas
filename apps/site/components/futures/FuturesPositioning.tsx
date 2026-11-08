@@ -1,6 +1,8 @@
 'use client';
-import React,{useCallback,useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {CFTC_DATASET,CFTC_SCHEDULE,CONTRACTS,DAY_MS,REFRESH_MS,STALE_REPORT_DAYS,replySchema,visibleSnapshot,reportAge,net,type CftcReply} from '@/lib/futures/model';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
+import {projectCftcReport} from '@/lib/evidence/cftc-projection';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {futuresMatrixGroups,TRADER_GROUPS,type TraderGroup} from './matrix';
 import s from './futures.module.css';
@@ -32,6 +34,7 @@ export default function FuturesPositioning(){
  },[refresh]);
  const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
  const stale=!!snapshot&&(failure==='network'||data?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||days!>STALE_REPORT_DAYS);
+ const organized=useMemo(()=>projectCftcReport(snapshot,stale),[snapshot,stale]);
  const groupLabel=TRADER_GROUPS.find(g=>g.id===group)!.label;
  const matrixGroups=snapshot?futuresMatrixGroups(snapshot,group):[];
  const legacy=snapshot?.schema==='cftc-legacy-futures/1';
@@ -60,6 +63,12 @@ export default function FuturesPositioning(){
     </article>;
    })()}</section>
   </>:<MatrixHeatmap layout="readable-grid" groups={[]} title="精选美国期货品类矩阵" description="数据缺失时，不填入示例。" colorMeaning="有有效报告时以净持仓占 OI 比例着色，不表示资金流。" areaMeaning="每个已核验品种等面积，不合计不同合约。" emptyMessage="52 个市场的本期和前期记录全部通过合约、单位、共同报告日期和多空平衡校验后才发布新报告。旧版缓存只按原 4 市场范围展示。报告超过 35 天或获取缓存超过 24 小时后停止展示。"/>}
+  <OrganizedEvidence report={organized} onDownload={event=>{
+   const current=Date.now();
+   // Recheck the exact existing visibility selector if a suspended tab clicks
+   // before its clock has ticked. Permission stops also withdraw the Blob.
+   if(blocked.current||failure==='permission'||failure==='invalid'||visibleSnapshot(data,current)!==snapshot){event.preventDefault();setNow(current);}
+  }}/>
   <section className={s.sources}><h2>先理解口径，再看变化。</h2><ul><li>Legacy Futures Only 把持仓分为商业、非商业和非报告持仓。分类依据报告规则，不能直接称为“聪明钱”或买卖信号。</li><li>商业与非商业持仓用于不同目的，净多头不保证看涨或获利。持仓变化还可能受移仓、平仓、分类变化或数据修订影响。</li><li>单位是各市场的合约张数，合约规模不同，不相加、不换算名义美元，不把任何期货持仓扩展为全球资金流；股指、外汇和加密期货也不是股票现货、即期外汇或加密现货。</li><li>传统周度安排通常为周二持仓、周五 15:30 美东时间发布；假日会延后。CFTC 已宣布计划在 2026 年底前增加发布频率，本页始终显示实际日期和间隔，不猜测发布时间。</li><li>报告距观测日期超过 10 天提示陈旧，这是本应用的保守阈值，不是来源发布 SLA。官方 API 没有给每条记录的实际发布时间；获取时间与发布时间不同。</li></ul><div className={s.links}><a href={CFTC_DATASET} target="_blank" rel="noreferrer">CFTC 官方数据集 ↗</a><a href={CFTC_SCHEDULE} target="_blank" rel="noreferrer">官方发布日历 ↗</a><a href="https://www.cftc.gov/MarketReports/CommitmentsofTraders/ExplanatoryNotes/index.htm" target="_blank" rel="noreferrer">字段与分类说明 ↗</a><a href="https://www.cftc.gov/PressRoom/PressReleases/9316-26" target="_blank" rel="noreferrer">2026 年频率变更计划 ↗</a></div></section>
  </main></div>;
 }

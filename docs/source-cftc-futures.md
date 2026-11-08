@@ -171,3 +171,21 @@ changes no hosting/access policy. A repository commit alone does not deploy
 this page or verify production data. Cold workers use the same validated shared report. Missing, corrupt or expired
 shared cache remains unavailable during cooldown; no acquisition limit is bypassed.
 
+
+## Organized current evidence
+
+The secondary collapsed panel below the matrix organizes the exact currently
+visible validated snapshot, with a local Blob JSON download and 120-row preview.
+It preserves both source versions, all retained markets, original contract-unit
+text and each market's current/prior dates, without deriving net positions,
+changes or cross-market totals. Legacy snapshots with differing previous dates
+keep those dates per market. The file contains 832 position fields for version 2
+or 64 for version 1, plus the complete strict validated native snapshot.
+
+Position counts, two-sided OI relationships and spreading are not cash flows or
+volume, and category navigation is not CFTC industry classification. Source
+provenance, null actual release time and unknown license URL are explicit.
+Matrix selection does not narrow the file. The same visibility/permission policy
+and a final click-time check withdraw expired/denied exports; replaced and
+withdrawn Blob URLs are revoked. No API, gate, storage, request cadence or
+collection semantics change. See [the projection contract and tests](organized-report-projection.md).
