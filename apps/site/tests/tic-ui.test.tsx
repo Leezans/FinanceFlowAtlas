@@ -18,6 +18,25 @@ describe('separate TIC interface',()=>{
   expect(container.querySelector('.tic-month-note')?.textContent).not.toContain('2026-08');expect(screen.queryByText(/固定提供已核验/)).toBeNull();
  });
  it('uses a read-only source month and clears values when snapshot periods are inconsistent',async()=>{let invalid=false;vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/status')?response({state:'available'}):response(invalid?{...ticFixture,period:'2026-07'}:ticFixture)));const {container}=render(<TicLayer/>);fireEvent.click(screen.getByRole('tab',{name:'地理地图'}));await waitFor(()=>expect(container.querySelectorAll('.tic-arc')).toHaveLength(2));expect(container.querySelector('input[type="month"]')).toBeNull();expect(screen.getByText('来源表最新核验月，无手动切换')).toBeTruthy();invalid=true;fireEvent.click(screen.getByRole('button',{name:'Refresh TIC data'}));await screen.findByText('TIC 数据暂不可用。');expect(container.querySelectorAll('.tic-arc')).toHaveLength(0);expect(screen.queryByText('+9')).toBeNull()});
+ it.each(['geography', 'retrieved_at', 'source_id'])('hides all monetary evidence after invalid %s on refresh', async field => {
+  let invalid = false;
+  const changed = structuredClone(ticFixture);
+  if (field === 'geography') changed.country_flows[0].foreign_economy_iso3 = 'BRA';
+  if (field === 'retrieved_at') changed.retrieved_at = 'not-a-date';
+  if (field === 'source_id') Object.assign(changed, {source_id: 'unrelated-source'});
+  vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+    url.endsWith('/status') ? response({state: 'available'}) : response(invalid ? changed : ticFixture)));
+  const {container} = render(<TicLayer/>);
+  await waitFor(() => expect(container.querySelectorAll('.tic-matrix details [data-id]')).toHaveLength(3));
+  invalid = true;
+  fireEvent.click(screen.getByRole('button', {name: 'Refresh TIC data'}));
+  await screen.findByText('TIC 数据暂不可用。');
+  expect(container.querySelectorAll('.tic-matrix details [data-id]')).toHaveLength(0);
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
+  expect(screen.queryByText('+9')).toBeNull();
+  fireEvent.click(screen.getByRole('tab', {name: '地理地图'}));
+  expect(container.querySelectorAll('.tic-arc')).toHaveLength(0);
+ });
  it('reuses 304 and retains verified values on transient failure without IMF fallback',async()=>{let step=0;vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>{if(url.endsWith('/status'))return response({state:step===1?'stale':'available',error:step===1?'Upstream failed':null});if(step===2)return response({},503);if(step===1){expect(init?.headers).toEqual({'If-None-Match':'"test-only"'});return response(null,304)}return response(ticFixture)}));const {container}=render(<TicLayer/>);fireEvent.click(screen.getByRole('tab',{name:'地理地图'}));await waitFor(()=>expect(container.querySelectorAll('.tic-arc')).toHaveLength(2));step=1;fireEvent.click(screen.getByRole('button',{name:'Refresh TIC data'}));await screen.findByText('TIC 源检查逾期或失败。');await waitFor(()=>expect(container.querySelectorAll('.tic-arc')).toHaveLength(2));step=2;fireEvent.click(screen.getByRole('button',{name:'Refresh TIC data'}));await screen.findByText('TIC 数据暂不可用。');expect(container.querySelectorAll('.tic-arc')).toHaveLength(2);expect(container.querySelectorAll('tbody tr')).toHaveLength(3);expect(screen.queryByText('+9')).toBeTruthy()});
  it('starts map-first with filters and evidence collapsed but keeps both accessible',async()=>{mockTic();const {container}=render(<TicLayer/>);fireEvent.click(screen.getByRole('tab',{name:'地理地图'}));await waitFor(()=>expect(container.querySelectorAll('.tic-arc')).toHaveLength(2));const filters=container.querySelector('.tic-filters') as HTMLDetailsElement;const evidence=container.querySelector('.tic-evidence') as HTMLDetailsElement;expect(filters.open).toBe(false);expect(evidence.open).toBe(false);expect(screen.getByRole('img',{name:'TIC US equity net transactions by reported foreign residence'})).toBeTruthy();fireEvent.click(screen.getByText('筛选国家 / 地区'));expect(filters.open).toBe(true);fireEvent.click(screen.getByText('展开逐国交易明细与证据'));expect(evidence.open).toBe(true);expect(screen.getByRole('table')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'TIC Japan'}));expect(screen.getByRole('article',{name:'TIC country evidence'}).textContent).toContain('+5 USD millions')});
 

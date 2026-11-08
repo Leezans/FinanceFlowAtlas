@@ -1,13 +1,8 @@
-import {z} from 'zod';
 import {COUNTRIES} from './geography';
 import {readTable, latestPeriod, validateRetrievedAt} from './table';
-export const SOURCE_URL='https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table1.txt';
-export const SOURCE_ID='us-tic-slt-equity-transactions';
+import {SOURCE_ID, SOURCE_URL, snapshotSchema, type FlowSnapshot, type TicFlow} from './contract';
+export {SOURCE_ID, SOURCE_URL, snapshotSchema, type FlowSnapshot} from './contract';
 export const ADAPTER_VERSION='tic-equity-v1.1.0';
-const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
-const rowSchema=z.object({record_id:z.string(),foreign_economy_iso3:z.string().regex(/^[A-Z]{3}$/),foreign_economy_name:z.string(),treasury_country_code:z.string(),issuer_economy_iso3:z.literal('USA'),net_foreign_purchases_usd:z.number().int().safe(),period:month,source_id:z.literal(SOURCE_ID)}).strict();
-export const snapshotSchema=z.object({version:z.string(),concept:z.literal('reported_net_transactions'),asset_class:z.literal('equity'),frequency:z.literal('monthly'),is_live:z.literal(false),period:month,source_id:z.literal(SOURCE_ID),source_url:z.literal(SOURCE_URL),source_field:z.literal('for_lt_eqty_net'),source_unit:z.literal('USD millions'),output_unit:z.literal('USD'),observation_release_date:z.string().nullable(),release_url:z.string().url().nullable(),source_revision_published_at:z.string().datetime({offset:true}).nullable(),retrieved_at:z.string().datetime({offset:true}),raw_sha256:z.string().regex(/^[a-f0-9]{64}$/),adapter_version:z.string(),geography_version:z.string(),excluded_records:z.record(z.number().int().nonnegative()),country_flows:z.array(rowSchema).min(1),grand_total_net_foreign_purchases_usd:z.number().int().safe(),direction_note:z.string(),coverage_note:z.string(),license_note:z.string(),rights_url:z.string().url()}).strict().superRefine((s,ctx)=>{if(s.period<'2023-02'||(Number.isFinite(Date.parse(s.retrieved_at))&&s.period>=new Date(s.retrieved_at).toISOString().slice(0,7)))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Unsupported or incomplete TIC month'});const seen=new Set<string>();for(const r of s.country_flows){if(r.period!==s.period||seen.has(r.foreign_economy_iso3)||COUNTRIES[r.treasury_country_code]?.[1]!==r.foreign_economy_iso3)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Invalid geography, duplicate country, or inconsistent period'});seen.add(r.foreign_economy_iso3)}});
-export type FlowSnapshot=z.infer<typeof snapshotSchema>;
 export async function sha256(bytes:Uint8Array|string){const input=typeof bytes==='string'?new TextEncoder().encode(bytes):bytes;const digest=await crypto.subtle.digest('SHA-256',input as BufferSource);return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('')}
 /** Canonical encoding matches Python; identity includes this runtime's adapter version. */
 function canonical(value:unknown):string{if(Array.isArray(value))return '['+value.map(canonical).join(', ')+']';if(value&&typeof value==='object')return '{'+Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>JSON.stringify(k)+': '+canonical(v)).join(', ')+'}';return JSON.stringify(value)}
@@ -16,7 +11,7 @@ export async function normalize(raw:Uint8Array,period?:string,retrievedAt=new Da
  const table=readTable(raw);
  period??=latestPeriod(table,retrievedAt);
  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)||period<'2023-02'||period>=new Date(retrievedAt).toISOString().slice(0,7))throw new Error('Unsupported TIC observation month');
- const excluded:Record<string,number>={},records:z.infer<typeof rowSchema>[]=[],seen=new Set<string>();let total:number|null=null;
+ const excluded:Record<string,number>={},records:TicFlow[]=[],seen=new Set<string>();let total:number|null=null;
  const exclude=(reason:string)=>{excluded[reason]=(excluded[reason]||0)+1};
  for(const row of table){
   if(row.date!==period){exclude('other_period');continue}const code=row.country_code;if(seen.has(code))throw new Error('Duplicate country/month observation');seen.add(code);

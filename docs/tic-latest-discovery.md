@@ -68,3 +68,20 @@ cache rollback/recovery, schema drift, dynamic UI captions, and actual SQLite
 migration/lease publication. Live source verification is separate from synthetic
 unit tests. Existing provenance, resident-attribution caveats, equity/fund-share
 scope, integer USD conversion and non-real-time labels remain in place.
+
+## Shared hosted snapshot contract
+
+The browser model and ingestion adapter use the browser-safe
+`apps/site/lib/tic/contract.ts` schema for source identity, source units,
+timestamps, raw hash, signed safe-integer USD values, Treasury-code/ISO mapping,
+duplicate-country checks and consistent completed observation months. The UI
+does not import the source-table parser or server cache/runtime. Validation
+does not convert units; ingestion converts source millions to USD once and
+display formatting converts USD back to millions once.
+
+The one explicit compatibility exception is a legacy UI snapshot whose published
+grand total is `null`: it stays unavailable, never zero or a sum of country rows.
+New ingestion still requires a numeric published grand total. Synthetic
+cross-layer rejection, signed/zero-value, browser-bundle and UI refresh tests
+cover this boundary. These checks do not acquire provider data or change source
+gates, authentication, collection schedules or deployment.
