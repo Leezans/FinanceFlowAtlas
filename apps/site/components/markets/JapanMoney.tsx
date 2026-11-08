@@ -1,5 +1,7 @@
 'use client';
 import React,{useState} from 'react';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
+import {projectJapanReport} from '@/lib/evidence/report-projection';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {replySchema,visibleSnapshot,REFRESH_MS,STALE_REPORT_DAYS,reportAge} from '@/lib/japan/model';
 import {assetLabels,japanGroups,japanMoney,type JapanAsset} from '@/lib/japan/view';
@@ -44,5 +46,6 @@ export default function JapanMoney(){
       <p>统计按成交日（偿还按偿还日）计入。一般按周公布，节假日按<a href="https://www.mof.go.jp/english/policy/international_policy/reference/itn_transactions_in_securities/schedule.htm" target="_blank" rel="noreferrer">官方日程 ↗</a>调整；可能修订旧期。文件更新日期、统计期间和成功获取时间分别保留，不把计划发布时间当作实际发布证据。</p>
       <p>报告期末超过 14 天标记陈旧，超过 35 天或获取缓存超过 7 天后隐藏金额。页面关闭后没有后台采集。JPX 投资者分类是另一来源，目前未启用，不能与本表混称。</p>
     </details>
+    <OrganizedEvidence report={projectJapanReport(snapshot,stale)}/>
   </section>;
 }
