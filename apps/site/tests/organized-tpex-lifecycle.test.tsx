@@ -47,7 +47,7 @@ describe('TPEx share integration and local download lifecycle',()=>{
  it.each([401,403,302,'denied','invalid'] as const)('withdraws and revokes the local file after %s',async reason=>{
   const fetcher=vi.fn(async()=>Response.json(tpexShareReply()));vi.stubGlobal('fetch',fetcher);await start();const original=link()!.getAttribute('href');
   fetcher.mockImplementation(async()=>typeof reason==='number'?new Response(null,{status:reason}):reason==='invalid'?Response.json({snapshot:{}}):Response.json({snapshot:null,status:{...tpexShareReply().status,state:'denied',error_code:'source_denied'}},{status:503}));
-  fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await tick();
+  await tick(REFRESH_MS);await tick();
   expect(link()).toBeNull();expect(screen.queryByText('整理后的当前证据 · 统一字段与原值追溯')).toBeNull();
   expect(revoke).toHaveBeenCalledWith(original);expect(files.size).toBe(0);expect(fetcher).toHaveBeenCalledTimes(2);
   if(reason!=='invalid'){await tick(2*REFRESH_MS);expect(fetcher).toHaveBeenCalledTimes(2);}
@@ -72,11 +72,11 @@ describe('TPEx share integration and local download lifecycle',()=>{
  it('keeps original native clocks through a temporary failure and revokes replaced files',async()=>{
   const fetcher=vi.fn(async()=>Response.json(tpexShareReply()));vi.stubGlobal('fetch',fetcher);await start();
   const original=link()!.getAttribute('href'),before=await exported();
-  fetcher.mockRejectedValue(new Error('offline'));fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await tick();await tick();
+  fetcher.mockRejectedValue(new Error('offline'));await tick(REFRESH_MS);await tick();await tick();
   const retained=await exported();expect(retained.presentation.stale).toBe(true);expect(retained.native_snapshot).toEqual(before.native_snapshot);expect(retained.clocks).toEqual(before.clocks);
   expect(revoke).toHaveBeenCalledWith(original);const stale=link()!.getAttribute('href');
-  const next=tpexShareReply(),fetched=new Date(NOW+60_000).toISOString();next.snapshot.fetched_at=fetched;next.snapshot.acquisition_started_at=fetched;next.status.fetched_at=fetched;
-  vi.setSystemTime(NOW+60_000);fetcher.mockResolvedValue(Response.json(next));fireEvent.click(screen.getByRole('button',{name:'检查报告'}));await tick();await tick();
+  const next=tpexShareReply(),fetched=new Date(Date.now()).toISOString();next.snapshot.fetched_at=fetched;next.snapshot.acquisition_started_at=fetched;next.status.fetched_at=fetched;
+  fetcher.mockImplementation(async()=>Response.json(next));await tick(60_000);await tick();await tick();
   expect((await exported()).clocks.fetched_at).toBe(fetched);expect((await exported()).presentation.stale).toBe(false);expect(revoke).toHaveBeenCalledWith(stale);expect(files.size).toBe(1);expect(fetcher).toHaveBeenCalledTimes(3);
  });
  it('has no evidence export for a source unavailable from the first response',async()=>{
