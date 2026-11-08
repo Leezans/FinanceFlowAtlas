@@ -119,6 +119,15 @@ days are stale and older than 180 days hidden. Retrieval caches older than seven
 days are hidden independently. Browser expiry continues while a tab is hidden.
 A failed refresh never renews the last-success timestamp.
 
+The [organized evidence panel](organized-report-projection.md) below the existing
+heatmap offers a bounded preview and local JSON export of this same validated,
+still-visible snapshot. It preserves integer `BRL_cents`, exact security/industry
+identity, non-point-in-time classification, archive hashes and missing aggregates.
+Buy/sell are labeled as the original adapter's sums, net as its difference, and
+no new industry or market totals are added. The full export is independent of
+industry filters and uses the same seven-day/180-day visibility limits, including
+a final click-time check. It adds no acquisition, API, storage or private fields.
+
 ## Integration and verification
 
 Migration `0009_cvm_monthly_fund_gate.sql` and its generated journal/snapshot

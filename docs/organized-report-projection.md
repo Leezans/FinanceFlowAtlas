@@ -6,6 +6,8 @@ MOF and TPEx institutional monetary snapshot fields into one read-only envelope.
 A-share industry or constituent snapshot, using the same preview and download.
 `apps/site/lib/evidence/tpex-share-projection.ts` adds the current TPEx company,
 official industry and institutional-participant share snapshot.
+`apps/site/lib/evidence/cvm-projection.ts` adds the current Brazil CVM disclosed
+fund-equity transaction snapshot, preserving its native integer-cent amounts.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -22,6 +24,9 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
 - TPEx company institutional report: every company × all four participant
   categories × buy/sell/net. Native unit is `shares`, with currency and monetary
   multiplier both null. This is separate from the TPEx TWD report.
+- CVM: every catalog security × buy/sell/net from the existing display snapshot.
+  Native unit remains `BRL_cents`, with `currency: BRL` and multiplier `0.01`
+  declared only as metadata. No additional totals or currency conversion.
 - Every reported observation has its source-scoped dimension, metric ID, original
   value and actual native field path. The validated native snapshot is included
   alongside the organized rows for self-contained traceability, with the A-share
@@ -32,7 +37,53 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
 - Envelope preserves source schema, URLs, license and attribution, reporting
   period and calendar zone, country with role, acquisition/fetch clocks, source
   update date when retained, unknown publication time and absent raw hash as null.
+  CVM retains its two existing CDA/FCA archive SHA-256 hashes instead of null.
   It contains no industry/instrument classification where the source has none.
+
+### CVM disclosed fund equity transactions
+
+- The panel below the Brazil heatmap projects its exact `visibleSnapshot` result.
+  Industry drilldown and security selection do not narrow the file. Projection
+  is memoized by snapshot and stale state, not ordinary clock ticks or filters.
+- Security identity uses `CVM.FCA.Codigo_Negociacao`; industry identity uses the
+  exact Portuguese `CVM.FCA.Setor_Atividade` string. Display translations never
+  merge source identities. No company/fund identifier, contact record, raw
+  archive row, guessed exchange MIC or cross-source classification is added.
+- Observation month and its calendar start/end remain separate from acquisition
+  start, successful retrieval and classification acquisition date. The source
+  does not retain an observation timezone, so it remains null rather than being
+  inferred from the UTC retention clock. `classification_point_in_time: false`
+  is explicit both in report metadata and row industry metadata: FCA joins use
+  the version available at acquisition, not a historical classification snapshot.
+- Buy and sell are the original adapter's sums of eligible public CDA transaction
+  rows. Net is its buy-minus-sell difference, not a separate source-reported net
+  flow. `value_origin` and source field names distinguish these origins without
+  recalculating values. All amounts and their native paths retain integer cents;
+  the preview never presents `2001 BRL_cents` as `2001 BRL`.
+- A null flow produces three `source_aggregate_unavailable` rows. The native
+  locator points to the actual null `rows[i].flow`; `expected_metric_locator`
+  identifies the schema field that is not present. Null can mean no eligible
+  record, an incomplete amount or duplicate quarantine. The per-security cause
+  is not retained and is not invented. An aggregate zero remains `reported`.
+  Source-row counts and their native locators are preserved for each security.
+- No industry or market total is added, so exported rows are components only
+  and `total_overlaps_components` is false within this file. The existing
+  heatmap's industry subtotals overlap those securities and cannot be added to
+  them. Public and confidential fund counts can overlap as well; all original
+  matched/unmatched/ambiguous/null/duplicate/confidential counts stay separate.
+  Confidential amounts are never assigned to a security or industry. The scope
+  remains public disclosed fund transactions, with `net_capital_flow: null`,
+  not all institutions, new cash into companies or whole-market capital flow.
+- Provenance includes both retained deterministic archive URLs, their official
+  catalog pages, the two actual archive hashes, ODbL-1.0 and existing attribution.
+  Hash scope is explicitly source archives, not a hash of the organized JSON.
+  Strict native schema validation at every level rejects extra properties
+  instead of copying potentially private data into the file.
+- Preview is limited to 120 rows. The local Blob JSON retains all allowed 3,000
+  securities × 3 metrics = 9,000 rows and the validated native snapshot. It uses
+  the same preparation, replacement, failure and cleanup behavior as TPEx shares.
+  JSON generation still scales with the full snapshot even though DOM work is
+  bounded; it is not streaming acquisition or a new historical-data service.
 
 ### TPEx company, industry and participant share evidence
 
@@ -115,13 +166,13 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
 ## Privacy, access and lifecycle
 
 The feature executes inside the existing source pages and receives only their
-authenticated API results. MOF/TPEx use their existing `visibleSnapshot` /
+authenticated API results. MOF/TPEx/CVM use their existing `visibleSnapshot` /
 `visibleSummary` result; A-share uses the separate export selector described below.
 It never calls a new
 endpoint, retries a provider, reads a database, fetches `/snapshot` for export,
 creates credentials or uploads/shares any data. No new public API is introduced.
 The projection parses the source schema. MOF/TPEx and A-share top-level unknown
-fields are rejected; TPEx share nested unknown fields are also rejected. A-share
+fields are rejected; TPEx share and CVM nested unknown fields are also rejected. A-share
 unknown row properties are omitted via the allowlist.
 
 Permission denial, invalid payload and provider denial remove the preview and
@@ -148,15 +199,27 @@ not delivered its timer yet. No global lifecycle, gate, API or polling changes
 are introduced. A temporary network failure retains only eligible evidence,
 marks the export stale and does not renew its original clocks.
 
+CVM retains its inclusive seven-day fetched-cache and 180-day report-age limits,
+including the existing UTC report-age calculation and future-fetch rejection.
+The page's existing hidden-tab clock withdraws both matrix and export. A final
+download click resamples that same selector and withdraws expired evidence even
+if a suspended tab has not delivered the timer. No changes to the shared request
+hook, polling, source gates, API, parser, authentication or storage are made.
+Permission/source denial, invalid data and unavailable snapshots remove the
+preview and revoke the Blob. Temporary failure retains eligible evidence with
+its original clocks/hashes and stale flag. The existing CVM hook treats a 304
+as a redirect/permission stop; this feature does not change that policy.
+
 Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
-shares, existing data URLs for the earlier sources); previously saved files
+shares and CVM, existing data URLs for the earlier sources); previously saved files
 cannot be revoked automatically. No observations enter source control.
 
 ## Limits
 
 This release covers the two monetary reports, A-share current-scope f62 and TPEx
-company institutional shares, not other A-share normalized metrics,
-CVM fund transactions, all historical snapshots, global identity reconciliation,
+company institutional shares and CVM disclosed monthly fund-equity transactions,
+not other A-share normalized metrics, CVM daily fund subscriptions/redemptions,
+all historical snapshots, global identity reconciliation,
 or a common server database. Country/industry links do not imply compatible
 numeric measurements. The projection is a current evidence export, not a claim
 that every source has been normalized or a new live feed exists.
@@ -186,3 +249,15 @@ filter-independent complete Blob exports, bounded preview, stable URLs across
 ordinary rerenders, replacement/withdrawal/unmount revocation, canceled
 preparation, honest preparation failure, denial/invalid/unavailable states,
 hidden-tab expiry, both late-click age bounds and retained-failure clocks.
+
+`tests/organized-cvm-projection.test.ts` checks all native/identity/count locators,
+integer cents and metadata-only scale, negative/zero/null values, original
+adapter sums versus differences, non-point-in-time classification, observation
+month, archive provenance, count overlap, strict nested privacy validation,
+maximum 9,000-row export and unchanged inclusive age limits.
+`tests/organized-cvm-lifecycle.test.tsx` checks below-heatmap integration, complete
+filter-independent Blob export, bounded preview, stable ordinary rerenders,
+replacement/withdrawal/unmount revocation, canceled and failed preparation,
+permission/source denial, invalid/private-extra replies, unavailable/future
+snapshots, hidden-tab expiry, both late-click age bounds and retained-failure
+clocks. Existing MOF, TPEx and A-share regression tests remain applicable.
