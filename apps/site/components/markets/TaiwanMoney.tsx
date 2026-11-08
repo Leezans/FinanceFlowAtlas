@@ -13,7 +13,7 @@ const TpexInstitutional=lazy(()=>import('@/components/tpex/TpexInstitutional'));
 const parse=(value:unknown)=>summaryReplySchema.parse(value);
 const stamp=(value:string|null|undefined)=>value?value.replace('T',' ').replace('Z',' UTC'):'未取得';
 export default function TaiwanMoney(){
-  const {reply,loading,failure,now,refresh,nextDeadline,coolingDown}=useReport('/api/v1/taiwan/tpex/summary/snapshot',parse,SUMMARY_REFRESH_MS);
+  const {reply,loading,failure,now,setNow,refresh,nextDeadline,coolingDown}=useReport('/api/v1/taiwan/tpex/summary/snapshot',parse,SUMMARY_REFRESH_MS);
   const [participant,setParticipant]=useState<TpexSummaryParticipant|null>(null),[industryOpen,setIndustryOpen]=useState(false);
   const snapshot=visibleSummary(reply,now),denied=reply?.status.state==='denied'||failure==='permission';
   const stale=!!snapshot&&(failure==='network'||reply?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>SUMMARY_REFRESH_MS||summaryReportAge(snapshot,now)>TPEX_SUMMARY_STALE_DAYS);
@@ -30,6 +30,10 @@ export default function TaiwanMoney(){
     <p className={s.ownFootnote}>证券范围按 TPEx 官方三大法人汇总，不限于已匹配行业的上柜公司，不包含台湾全部市场。外资使用不含自营商的行，避免与自营商重复计算。来源没有行业金额，不将法人金额分摊成行业资金流。</p>
     <details className={s.ownDisclosure} open={industryOpen} onToggle={event=>setIndustryOpen(event.currentTarget.open)}><summary>行业 → 公司矩阵 · 独立股数指标，不是上述金额的下钻</summary>{industryOpen&&<Suspense fallback={<p role="status">正在打开独立行业股数报告…</p>}><TpexInstitutional embedded/></Suspense>}</details>
     <details className={s.ownDisclosure}><summary>官方来源、授权与时效</summary><p><a href={TPEX_SUMMARY_DATASET} target="_blank" rel="noreferrer">TPEx 上柜股票三大法人买卖金额汇总表 ↗</a> · <a href={TPEX_SUMMARY_LICENSE} target="_blank" rel="noreferrer">政府资料开放授权条款第 1 版 ↗</a></p><p>资料来源：证券柜台买卖中心（TPEx）。金额单位为新台币元，本应用仅整理参与者分类及绘图，来源不背书本应用。超过 4 天标记陈旧；报告超过 14 天或获取缓存超过 24 小时后隐藏金额。页面关闭后没有后台采集。</p></details>
-    <OrganizedEvidence report={projectTaiwanReport(snapshot,stale)}/>
+    <OrganizedEvidence report={projectTaiwanReport(snapshot,stale)} onDownload={event=>{
+      const current=Date.now();
+      // A suspended tab may deliver a click before its regular visibility tick.
+      if(denied||visibleSummary(reply,current)!==snapshot){event.preventDefault();setNow(current);}
+    }}/>
   </section>;
 }
