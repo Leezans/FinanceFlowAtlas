@@ -1,11 +1,13 @@
 'use client';
 import React,{useEffect,useState} from 'react';
 import type {OrganizedTpexShareReport} from '@/lib/evidence/tpex-share-projection';
+import type {OrganizedCvmReport} from '@/lib/evidence/cvm-projection';
 import s from './evidence.module.css';
+type BlobReport=OrganizedTpexShareReport|OrganizedCvmReport;
 
 /** A complete local file without a multi-megabyte data URI. No upload or request. */
-export default function BlobEvidenceDownload({report,filename,onDownload}:{report:OrganizedTpexShareReport;filename:string;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}) {
- const [resource,setResource]=useState<{report:OrganizedTpexShareReport;url:string|null}|null>(null);
+export default function BlobEvidenceDownload({report,filename,onDownload}:{report:BlobReport;filename:string;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}) {
+ const [resource,setResource]=useState<{report:BlobReport;url:string|null}|null>(null);
  useEffect(()=>{
   let url:string|null=null;
   const prepare=setTimeout(()=>{

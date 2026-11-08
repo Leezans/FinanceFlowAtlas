@@ -8,7 +8,7 @@ import {participantLabels} from '@/lib/national/tpex-summary-view';
 export type EvidenceRow={
  id:string;dimension:{namespace:string;kind:'asset_class'|'participant'|'report'|'industry'|'instrument';id:string;label:string};
  role:'component'|'reported_total'|'provider_scope_member'|'participant_total';metric_id:string;metric_label:string;
- value:number|null;state:'reported'|'not_in_retained_snapshot'|'source_missing_marker'|'source_record_missing';native_locator:string|null;
+ value:number|null;state:'reported'|'not_in_retained_snapshot'|'source_missing_marker'|'source_record_missing'|'source_aggregate_unavailable';native_locator:string|null;
 };
 export type OrganizedReport={
  schema:'organized-market-report/1';native_snapshot:JapanMofSnapshot|TpexSummarySnapshot;source_id:'japan-mof'|'tpex-money';native_schema:string;

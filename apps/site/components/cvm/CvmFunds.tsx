@@ -1,8 +1,10 @@
 'use client';
-import React,{useState} from 'react';
+import React,{useMemo,useState} from 'react';
 import {useReport} from '@/components/markets/useReport';
 import {REFRESH_MS,STALE_REPORT_DAYS,replySchema,visibleSnapshot,reportAge} from '@/lib/cvm/model';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
+import {projectCvmReport} from '@/lib/evidence/cvm-projection';
 import {industries,industryLabel,money,signedMoney,cvmMatrixGroups} from './matrix';
 import s from './cvm.module.css';
 const parse=(value:unknown)=>replySchema.parse(value);
@@ -10,9 +12,11 @@ const stamp=(t:string|null)=>t?t.replace('T',' ').replace('Z',' UTC'):'未提供
 export default function CvmFunds({embedded=false}:{embedded?:boolean}={}){
  const {reply:data,loading,failure,now,refresh,nextDeadline,coolingDown}=useReport('/api/v1/brazil/cvm/snapshot',parse,REFRESH_MS,65_000);
  const [industry,setIndustry]=useState<string|null>(null),[selectedCode,setSelectedCode]=useState<string|null>(null);
+ const [downloadCheckedAt,setDownloadCheckedAt]=useState(0);
  const nextCheck=nextDeadline>0?(Number.isFinite(nextDeadline)&&nextDeadline<=8.64e15?stamp(new Date(nextDeadline).toISOString()):'来源要求暂停，恢复时间超出可显示范围'):'未提供';
- const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
+ const snapshot=visibleSnapshot(data,Math.max(now,downloadCheckedAt)),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
  const stale=!!snapshot&&(failure==='network'||data?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||days!>STALE_REPORT_DAYS);
+ const organized=useMemo(()=>projectCvmReport(snapshot,stale),[snapshot,stale]);
  const groups=snapshot?industries(snapshot):[],group=groups.find(g=>g.industry===industry)??null;
  const selected=snapshot?.rows.find(r=>r.code===selectedCode&&r.industry===industry)??null;
  const known=snapshot?.rows.filter(r=>r.flow!==null).length??0;
@@ -28,6 +32,11 @@ export default function CvmFunds({embedded=false}:{embedded?:boolean}={}){
    <div className={s.filter}><button disabled={industry===null} onClick={()=>{setIndustry(null);setSelectedCode(null);}}>← 全部行业</button><label htmlFor="cvm-industry">行业</label><select id="cvm-industry" value={industry??''} onChange={e=>{setIndustry(e.target.value||null);setSelectedCode(null);}}><option value="">全部行业</option>{groups.map(g=><option key={g.industry} value={g.industry}>{industryLabel(g.industry)} · {g.known}/{g.rows.length}</option>)}</select></div>
   </>}
   <MatrixHeatmap layout="treemap" groups={snapshot?cvmMatrixGroups(snapshot,industry):[]} title={industry===null?'基金股票 · 行业净买卖矩阵':`${industryLabel(industry)} · 证券矩阵`} description={`${snapshot?.period??'等待月报'} · ${industry===null?'选行业下钻证券':'选证券查看买入、卖出和净额'} · BRL`} colorMeaning="净买卖金额 ÷（买入 + 卖出），固定 −100% 至 +100%；正值净买入，负值净卖出。零交易中性，未知灰色。" areaMeaning={industry===null?'行业面积为已报告证券净额绝对值之和（BRL），不以正负抵消；数字与颜色仍为行业净额。':'证券面积按同月净买卖金额绝对值（BRL）；仅公开有效记录，不是市值。'} colorMaxAbs={1} onSelect={item=>{if(industry===null){setIndustry(item.id);setSelectedCode(null);}else setSelectedCode(item.id);}} emptyMessage="只有官方 ZIP、股票交易类别、精确公司代码与行业连接均通过校验才显示。绝不从持仓估计买卖。报告超过 180 天或获取缓存超过 7 天后隐藏。"/>
+  <OrganizedEvidence report={organized} onDownload={event=>{
+   const current=Date.now();
+   // A suspended tab can deliver a click before the existing expiry clock ticks.
+   if(failure==='permission'||failure==='invalid'||denied||visibleSnapshot(data,current)!==snapshot){event.preventDefault();setDownloadCheckedAt(current);}
+  }}/>
   {group&&<p className={s.coverageNote}>{group.industry}：{group.known}/{group.rows.length} 只证券有有效公开交易记录。可用部分净买卖合计 {group.totals?signedMoney(group.totals.net):'未知'}。不代表完整行业总额。</p>}
   {selected&&<section className={s.card} aria-label="选中证券详情" aria-live="polite"><p>{selected.code} · {selected.industry}</p><h2>{selected.name}</h2><p>{snapshot?.period} · {selected.source_rows} 条公开披露交易记录</p>{selected.flow?<><div className={s.value}>{signedMoney(selected.flow.net)}</div><dl className={s.stats}><div><dt>买入金额</dt><dd>{money(selected.flow.buy)}</dd></div><div><dt>卖出金额</dt><dd>{money(selected.flow.sell)}</dd></div><div><dt>净买卖金额</dt><dd>{signedMoney(selected.flow.net)}</dd></div></dl></>:<p>没有完整可用的公开交易金额，不能把未知解释为零。保密交易不会被分配到该证券。</p>}</section>}
   {group&&<details className={s.table}><summary>完整证券明细（包括未知与零）</summary><table><thead><tr><th>证券</th><th>买入（BRL）</th><th>卖出（BRL）</th><th>净额（BRL）</th></tr></thead><tbody>{group.rows.map(r=><tr key={r.code}><td><button onClick={()=>setSelectedCode(r.code)}>{r.code} {r.name}</button></td><td>{r.flow?money(r.flow.buy):'未知'}</td><td>{r.flow?money(r.flow.sell):'未知'}</td><td>{r.flow?signedMoney(r.flow.net):'未知'}</td></tr>)}</tbody></table></details>}
