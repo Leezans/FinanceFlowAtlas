@@ -51,5 +51,5 @@ export function useReport<T extends {status:{state:string;next_retry_at?:string|
     document.addEventListener('visibilitychange',visible);
     return()=>{mounted.current=false;clearTimeout(start);clearInterval(tick);if(poll.current)clearTimeout(poll.current);poll.current=null;document.removeEventListener('visibilitychange',visible);controller.current?.abort();controller.current=null;};
   },[refresh]);
-  return {reply,loading,failure,now,refresh,nextDeadline,coolingDown:now<nextDeadline};
+  return {reply,loading,failure,now,setNow,refresh,nextDeadline,coolingDown:now<nextDeadline};
 }
