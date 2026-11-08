@@ -6,7 +6,7 @@ import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import KrakenSpot,{visibleSnapshot,validateKrakenReply} from '../components/crypto/KrakenSpot';
 import {MAX_CACHE_AGE_MS,type KrakenReply} from '../lib/crypto/kraken';
 const at=Date.parse('2026-11-05T03:00:00Z'),iso=new Date(at).toISOString();
-function reply():KrakenReply{return {snapshot:parseKrakenTicker({error:[],result:{XXBTZUSD:{c:['12.34567890','0.1'],v:['999','3.125'],p:['999','12.1'],t:[999,8]},XETHZUSD:{c:['2.5','1'],v:['999','0'],p:['999','2.4'],t:[999,0]}}},iso,iso),status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:new Date(at+60_000).toISOString()}};}
+function reply():KrakenReply{return {snapshot:parseKrakenTicker({error:[],result:{XXBTZUSD:{c:['12.34567890','0.1'],v:['999','3.125'],p:['999','12.1'],t:[999,8]},XETHZUSD:{c:['2.5','1'],v:['999','0'],p:['999','2.4'],t:[999,0]}}},iso,iso),status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:iso}};}
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(at);});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();});
 async function start(){render(<KrakenSpot/>);await act(()=>vi.advanceTimersByTimeAsync(1));}

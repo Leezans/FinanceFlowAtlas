@@ -9,7 +9,7 @@ export function krakenTradeReply({end=at,fetched=end,selected,timeframe='5m',mis
  const universe=parseKrakenUniverse({error:[],result:Object.fromEntries(names.map(base=>[base+'USD',pairMetadata(base)]))},endIso);
  const snapshot=parseKrakenTicker({error:[],result:Object.fromEntries(names.map(base=>[base+'USD',{c:['10','1'],v:['1','1'],p:['1','10'],t:[1,1]}]))},endIso,fetchIso,universe);
  const rows=universe.pairs.filter(pair=>(selected??['BTC/USD','ETH/USD','SOL/USD']).includes(pair.pair)).map(pair=>parseKrakenTrades({error:[],result:{[pair.source_pair]:[['10.000000000001','0.000000000001',(end-1000)/1000,'b','m','',1]],last:'1793847600000000001'}},pair,end-(timeframe==='1m'?60_000:300_000),end,fetched));
- return {snapshot,trade_snapshot:tradeSnapshot(rows,end,fetched,selected,timeframe),...(selected?{requested_pairs:selected}:{}),...(timeframe==='1m'?{requested_window:timeframe}:{}),status:{state:'available',error_code:null,last_attempt_at:endIso,fetched_at:fetchIso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:new Date(fetched+60_000).toISOString()}};
+ return {snapshot,trade_snapshot:tradeSnapshot(rows,end,fetched,selected,timeframe),...(selected?{requested_pairs:selected}:{}),...(timeframe==='1m'?{requested_window:timeframe}:{}),status:{state:'available',error_code:null,last_attempt_at:endIso,fetched_at:fetchIso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:fetchIso}};
 }
 export function legacyTrades():KrakenTradeSnapshot{
  const snapshot=krakenTradeReply().trade_snapshot!;

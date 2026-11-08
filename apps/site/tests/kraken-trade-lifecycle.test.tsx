@@ -10,7 +10,7 @@ const at=Date.parse('2026-11-05T03:00:00.000Z'),iso=new Date(at).toISOString();
 function reply():KrakenReply{
  const quotes=parseTicker({error:[],result:{XXBTZUSD:{c:['12.5','1'],v:['1','1'],p:['1','10'],t:[1,1]},XETHZUSD:{c:['2','1'],v:['1','1'],p:['1','2'],t:[1,1]}}},iso,iso);
  const rows=universe(iso).pairs.map(pair=>parseKrakenTrades({error:[],result:{[pair.source_pair]:[['10','2',(at-1000)/1000,'b','m','',1]],last:'123'}},pair,at-300_000,at,at));
- return {snapshot:quotes,trade_snapshot:tradeSnapshot(rows,at,at),status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:new Date(at+60_000).toISOString()}};
+ return {snapshot:quotes,trade_snapshot:tradeSnapshot(rows,at,at),status:{state:'available',error_code:null,last_attempt_at:iso,fetched_at:iso,cache_age_ms:0,refresh_ms:60_000,max_cache_age_ms:MAX_CACHE_AGE_MS,next_retry_at:iso}};
 }
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(at);});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
