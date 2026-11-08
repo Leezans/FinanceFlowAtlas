@@ -37,7 +37,8 @@ Raw CSVs, databases, snapshots, credentials and vendor observations stay outside
 ## Limits
 No comprehensive real-time global flows, executable FX/futures quotes, automatic trade execution or profit claims. The optional hosted app includes a separate daily ECB FX reference layer, not capital flows; see docs/source-ecb-fx.md. Half-yearly positions cannot prove where money is moving today. ISO registry coverage, actual source reporters/counterparties and polygon availability are different counts. The app must retain unknown/missing/confidential states rather than replace them with zero. See docs/architecture.md.
 
-The optional hosted `/futures` page adds four selected US CFTC futures markets.
+The optional hosted `/futures` page covers 52 selected US CFTC futures markets
+and retains valid legacy four-market snapshots with their original scope.
 It displays lagged positions and contract changes, never real-time money flows.
 See [official source scope and validation](docs/source-cftc-futures.md).
 

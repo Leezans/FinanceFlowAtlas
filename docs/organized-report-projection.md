@@ -8,6 +8,8 @@ A-share industry or constituent snapshot, using the same preview and download.
 official industry and institutional-participant share snapshot.
 `apps/site/lib/evidence/cvm-projection.ts` adds the current Brazil CVM disclosed
 fund-equity transaction snapshot, preserving its native integer-cent amounts.
+`apps/site/lib/evidence/cftc-projection.ts` adds retained CFTC Legacy Futures Only
+contract-market positions, preserving both report slots and contract specifications.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -27,6 +29,9 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
 - CVM: every catalog security × buy/sell/net from the existing display snapshot.
   Native unit remains `BRL_cents`, with `currency: BRL` and multiplier `0.01`
   declared only as metadata. No additional totals or currency conversion.
+- CFTC: every retained contract market × current/previous report × eight original
+  position fields. Native unit is each market's own `contracts`; currency and
+  monetary multiplier remain null. No calculated net, change or total is added.
 - Every reported observation has its source-scoped dimension, metric ID, original
   value and actual native field path. The validated native snapshot is included
   alongside the organized rows for self-contained traceability, with the A-share
@@ -39,6 +44,52 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   update date when retained, unknown publication time and absent raw hash as null.
   CVM retains its two existing CDA/FCA archive SHA-256 hashes instead of null.
   It contains no industry/instrument classification where the source has none.
+
+### CFTC Legacy Futures Only positions
+
+- The collapsed panel follows the existing `/futures` matrix and selected-market
+  detail. It receives only the page's exact `visibleSnapshot` result, memoized
+  by snapshot and stale state. Trader and selected-market controls do not narrow
+  the download or recreate its Blob. Preview is limited to the first 120 rows;
+  the file contains all 832 normalized fields for the 52-market schema, or all
+  64 fields for a retained legacy four-market schema.
+- Instrument identity is `CFTC.contract_market_code`. Source market name and
+  contract specification text remain verbatim, each with its own native path.
+  The Ether specification remains `(50 Index Points)`, not a guessed ETH size.
+  These are all-expiry contract markets, not individual delivery-month contracts.
+- Eight fields are retained: open interest, noncommercial long/short, spreading,
+  commercial long/short, and nonreportable long/short. Each row retains its slot
+  (`current` or `previous`), exact observation date and date locator, position
+  group and side, original value and field locator. Normalized row IDs include
+  contract code, slot, date and field. Zero stays `reported`; strict missing or
+  invalid fields reject the snapshot rather than becoming null or zero.
+- `period.start` and `period.end` both identify the common current observation
+  date, with explicit `point_in_time_positions` semantics. These are not cash
+  transactions spanning the prior/current interval. `previous_report_dates`
+  lists the exact retained prior dates, while each row supplies its own date.
+  Legacy `/1` requires a common current date but can retain different prior
+  dates across markets. `/2` requires both common dates. Neither is relabeled
+  with the other version's coverage, and no absent markets are manufactured.
+- Customary weekly frequency is descriptive, not a promise of seven-day spacing
+  or current publication cadence. Actual release time, observation timezone,
+  source update date and raw hash are unknown/null. Acquisition-start and fetch
+  clocks are unchanged, not substituted for observation or publication dates.
+- Categories use `FinanceFlowAtlas.futures_navigation` and explicitly identify
+  the application manifest as their origin. They are not CFTC industries or
+  additive totals. No industry taxonomy, crosswalk, underlying domicile or
+  exchange MIC is inferred. USA is the `reporting_market`, not the country of
+  every currency, commodity or index underlying and not global-market coverage.
+- Every row is a `position_measure`. Long and short sides describe the same open
+  contracts; each side separately reconciles to OI. Noncommercial spreading
+  enters both sides. OI, spreading and directional position fields cannot all
+  be added together. No cross-market total, net position, position change,
+  trading volume, currency conversion, monetary notional or cash flow is added.
+  Existing matrix-derived net/OI colors remain solely the matrix's own measure.
+- The entire validated native snapshot is included. Existing schemas are strict
+  at top level, contract and position levels, rejecting unknown extras; this is
+  not a raw provider payload. Source metadata links the exact CFTC `6dca-aqww`
+  Legacy Futures Only dataset and official release schedule. License URL is
+  null and attribution does not assert unrestricted redistribution permission.
 
 ### CVM disclosed fund equity transactions
 
@@ -166,13 +217,13 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
 ## Privacy, access and lifecycle
 
 The feature executes inside the existing source pages and receives only their
-authenticated API results. MOF/TPEx/CVM use their existing `visibleSnapshot` /
+authenticated API results. MOF/TPEx/CVM/CFTC use their existing `visibleSnapshot` /
 `visibleSummary` result; A-share uses the separate export selector described below.
 It never calls a new
 endpoint, retries a provider, reads a database, fetches `/snapshot` for export,
 creates credentials or uploads/shares any data. No new public API is introduced.
 The projection parses the source schema. MOF/TPEx and A-share top-level unknown
-fields are rejected; TPEx share and CVM nested unknown fields are also rejected. A-share
+fields are rejected; TPEx share, CVM and CFTC nested unknown fields are also rejected. A-share
 unknown row properties are omitted via the allowlist.
 
 Permission denial, invalid payload and provider denial remove the preview and
@@ -210,14 +261,26 @@ preview and revoke the Blob. Temporary failure retains eligible evidence with
 its original clocks/hashes and stale flag. The existing CVM hook treats a 304
 as a redirect/permission stop; this feature does not change that policy.
 
+CFTC retains the exact inclusive 24-hour fetched-cache and 35-day current-report
+age limits, with the existing UTC date-based age convention and future-fetch
+rejection. Existing timer/visibility handling removes both matrix and export.
+The download click resamples `visibleSnapshot` using the current clock and
+checks the permission-stop flag, preventing a suspended tab's expired download.
+Source/display denial, invalid and unavailable evidence withdraw the preview and
+revoke its Blob. Eligible temporary-failure evidence keeps every original clock
+and position/date, with a stale file. Replacement and unmount revoke old URLs;
+unfinished preparation is canceled, and preparation failures show no download.
+No new request, polling, storage, auth, gate, parser or endpoint is introduced.
+
 Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
-shares and CVM, existing data URLs for the earlier sources); previously saved files
+shares, CVM and CFTC, existing data URLs for the earlier sources); previously saved files
 cannot be revoked automatically. No observations enter source control.
 
 ## Limits
 
 This release covers the two monetary reports, A-share current-scope f62 and TPEx
-company institutional shares and CVM disclosed monthly fund-equity transactions,
+company institutional shares, CVM disclosed monthly fund-equity transactions
+and CFTC selected-market position fields,
 not other A-share normalized metrics, CVM daily fund subscriptions/redemptions,
 all historical snapshots, global identity reconciliation,
 or a common server database. Country/industry links do not imply compatible
@@ -261,3 +324,16 @@ replacement/withdrawal/unmount revocation, canceled and failed preparation,
 permission/source denial, invalid/private-extra replies, unavailable/future
 snapshots, hidden-tab expiry, both late-click age bounds and retained-failure
 clocks. Existing MOF, TPEx and A-share regression tests remain applicable.
+
+`tests/organized-cftc-projection.test.ts` checks all retained numeric, identity,
+specification and date locators, four-versus-52-market coverage, legacy differing
+prior dates, two-day intervals, source/cadence metadata, app categories versus
+source classifications, zero values, overlap/non-additivity, no derived net or
+flows, strict nested rejection and unchanged inclusive visibility bounds.
+`tests/organized-cftc-lifecycle.test.tsx` checks matrix-first collapsed integration,
+complete filter-independent Blob exports, 120-row preview, old/new replacement,
+normal-rerender stability, temporary failure, permission and source denial,
+invalid/private-extra/unavailable/future data, hidden-tab and late-click expiry,
+revocation/canceled preparation, unmount and honest local preparation failure.
+Existing CFTC UI assertions verify the new details panel is collapsed below the
+matrix rather than assuming there can be no secondary table anywhere in the DOM.
