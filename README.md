@@ -49,3 +49,8 @@ redemptions are distinct from the hosted Brazil page's monthly stock transaction
 An optional [SSE offline margin-financing parser](docs/source-sse-margin-offline.md)
 reads already-acquired daily XLS files. Financing buys minus repayments are a
 separate metric, not equity-market net flow. No production feed or panel is enabled.
+
+The hosted heatmaps share an [evidence relationship registry](docs/data-organization.md)
+for asset navigation, country-related views and source-specific metric context.
+Relationships aid discovery; they never combine incompatible observations or
+claim a globally complete, comparable capital-flow total.
