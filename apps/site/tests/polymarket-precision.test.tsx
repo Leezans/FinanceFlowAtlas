@@ -9,7 +9,7 @@ import {snapshot} from './polymarket-fixture';
 const base=snapshot().rows[0];
 const withPrice=(price:string|null):PolymarketMarket=>marketSchema.parse({...base,outcomes:[{name:'No',price:'0.5'},{name:'Yes',price}]});
 const state=vi.hoisted(()=>({snapshot:null as unknown}));
-vi.mock('../components/polymarket/useSnapshot',()=>({useSnapshot:()=>({snapshot:state.snapshot,age:0,loading:false,error:null,refresh:vi.fn(),coolingDown:false,denied:false,stale:false})}));
+vi.mock('../components/polymarket/useSnapshot',()=>({useSnapshot:()=>({snapshot:state.snapshot,age:0,loading:false,error:null,refresh:vi.fn(),coolingDown:false,denied:false,stale:false,validateDownload:vi.fn(()=>true)})}));
 afterEach(()=>{cleanup();state.snapshot=null;});
 describe('Polymarket source precision is preserved in presentation',()=>{
  it.each([
@@ -31,7 +31,7 @@ describe('Polymarket source precision is preserved in presentation',()=>{
   expect(marketItem(row,'volume').amount).toBeUndefined();
  });
  it('uses the same exact probabilities in market cards, accessible labels and all outcome details',()=>{
-  const value=snapshot();value.rows=[{...withPrice('0.999999999999'),outcomes:[{name:'No',price:'0.000000000001'},{name:'Yes',price:'0.999999999999'}]}];state.snapshot=value;
+  const value=snapshot();value.rows=[{...withPrice('0.999999999999'),outcomes:[{name:'No',price:'0.000000000001'},{name:'Yes',price:'0.999999999999'}]}];value.source_market_count=1;value.source_page_sizes=[1];state.snapshot=value;
   render(<Polymarket/>);
   expect(screen.getByRole('img',{name:/99\.9999999999%/})).toBeTruthy();
   expect(screen.getByText('99.9999999999%')).toBeTruthy();

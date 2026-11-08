@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {untilAborted,timerDelay,retryAfterDeadline,absoluteRetryDeadline} from '@/lib/browser-request';
-import {replySchema,REFRESH_MS,refreshInterval,snapshotView,snapshotCacheTime,visibleSnapshot,type PolymarketReply,type PolymarketView} from '@/lib/polymarket/model';
+import {replySchema,REFRESH_MS,refreshInterval,snapshotView,snapshotCacheTime,visibleSnapshot,type PolymarketReply,type PolymarketView,type PolymarketSnapshot} from '@/lib/polymarket/model';
 type SnapshotError='network'|'invalid'|'permission'|'gate'|'cooldown'|null;
 const emptyReplies=():Record<PolymarketView,PolymarketReply|null>=>({hot:null,newest:null,interest:null});
 /** One browser request/cooldown across modes; evidence and controls never cross modes. */
@@ -53,5 +53,18 @@ export function useSnapshot(view:PolymarketView='hot'){
  },[refresh]);
  useEffect(()=>{selected.current=view;const start=setTimeout(()=>void refresh(),0);return()=>clearTimeout(start);},[view,refresh]);
  const reply=replies[view],error=globalError??errors[view],snapshot=visibleSnapshot(reply,now),age=snapshot?now-snapshotCacheTime(snapshot):null;
- return {reply,snapshot,age,loading,error,refresh,coolingDown:now<Math.max(retryDeadline,viewDeadlines[view]),denied,stale:!!snapshot&&(error==='network'||reply?.status.state==='stale'||age!>refreshInterval(view))};
+ const stale=!!snapshot&&(error==='network'||reply?.status.state==='stale'||age!>refreshInterval(view));
+ // Validate against the latest committed mode and permission state, not a retained
+ // old anchor closure. Suspended timers cannot extend the existing age boundary.
+ const latest=useRef({replies,errors,globalError,view});
+ useEffect(()=>{latest.current={replies,errors,globalError,view};},[replies,errors,globalError,view]);
+ const validateDownload=(expected:PolymarketSnapshot,expectedStale:boolean)=>{
+  const current=Date.now(),state=latest.current,currentReply=state.replies[state.view],visible=visibleSnapshot(currentReply,current);
+  const currentError=state.globalError??state.errors[state.view];
+  const currentStale=!!visible&&(currentError==='network'||currentReply?.status.state==='stale'||current-snapshotCacheTime(visible)>refreshInterval(state.view));
+  const allowed=mounted.current&&!blocked.current&&state.view===selected.current&&!!visible&&visible===expected&&snapshotView(visible)===state.view&&currentStale===expectedStale;
+  if(!allowed&&mounted.current)setNow(current);
+  return allowed;
+ };
+ return {reply,snapshot,age,loading,error,refresh,coolingDown:now<Math.max(retryDeadline,viewDeadlines[view]),denied,stale,validateDownload};
 }
