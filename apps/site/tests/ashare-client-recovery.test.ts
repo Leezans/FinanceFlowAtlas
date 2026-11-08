@@ -99,3 +99,26 @@ describe('relative healthy-cache check hints',()=>{
   }
  });
 });
+
+
+describe('rate limits and conflicting recovery diagnostics',()=>{
+ it.each(['900','Thu, 05 Nov 2026 00:15:00 GMT'])('honors 429 Retry-After %s without retaining evidence',async retryAfter=>{
+  let now=Date.parse('2026-11-05T00:00:00Z');
+  const transport=vi.fn().mockResolvedValueOnce({status:429,retryAfter,payload:'private gateway response'}).mockResolvedValue({status:200,payload:snapshot});
+  const client=createEvidenceClient(transport,()=>now);await client.load(scope);
+  expect(client.getState()).toMatchObject({snapshot:null,etag:null,recovery:{mode:'retry',code:'browser_rate_limited',retryAt:now+900000}});
+  now+=899999;await client.load(scope);expect(transport).toHaveBeenCalledOnce();
+  now++;await client.load(scope);expect(transport).toHaveBeenCalledTimes(2);
+ });
+ it.each([undefined,'invalid'])('uses an ordinary minute wait for 429 with %s Retry-After',retryAfter=>{
+  expect(consumeReply(ready(),{status:429,retryAfter},scope,1000)).toMatchObject({snapshot:null,etag:null,recovery:{mode:'retry',retryAt:61000}});
+ });
+ it.each([200,429,503])('a stopped body wins over a retry header on HTTP %i',status=>{
+  const result=consumeReply(ready(),{status,errorCode:'source_cooldown',retryAfter:'1',payload:{...snapshot,error_code:'source_outcome_unconfirmed'}},scope,0);
+  expect(result).toMatchObject({snapshot:null,etag:null,status:'blocked',recovery:{mode:'stopped',code:'source_outcome_unconfirmed',retryAt:null}});
+  expect(result.continuationAt).toBeUndefined();
+ });
+ it('retains a stopped header over a retryable body',()=>{
+  expect(consumeReply(ready(),{status:429,errorCode:'source_access_denied',payload:{error_code:'source_cooldown'}},scope,0)).toMatchObject({snapshot:null,recovery:{mode:'stopped',code:'source_access_denied'}});
+ });
+});

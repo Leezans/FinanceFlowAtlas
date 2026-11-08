@@ -23,7 +23,9 @@ function checkTime(reply:WireReply,now:number):{nextCheckAt?:number} {
 function recoveryFor(reply:WireReply,now:number,fallback?:string):Recovery|undefined {
  const payload=reply.payload;
  const bodyCode=payload&&typeof payload==='object'&&'error_code'in payload?payload.error_code:undefined;
- const code=safeSourceCode(reply.errorCode)??safeSourceCode(bodyCode)??(reply.recoveryMode==='stopped'?'collection_failed':fallback);
+ const headerCode=safeSourceCode(reply.errorCode),payloadCode=safeSourceCode(bodyCode);
+ // Either explicit stop must win, even when the other diagnostic says retry.
+ const code=[headerCode,payloadCode].find(value=>value!==null&&isSourceStopped(value))??headerCode??payloadCode??(reply.recoveryMode==='stopped'?'collection_failed':fallback);
  if(!code)return;
  const stopped=reply.recoveryMode==='stopped'||isSourceStopped(code);
  return {code,mode:stopped?'stopped':'retry',retryAt:stopped?null:retryAt(reply.retryAfter,now),httpStatus:reply.status||null};
@@ -48,6 +50,9 @@ export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,
   const issue=recovery??(snapshot.has_error?recoveryFor(reply,now,'collection_failed'):undefined);
   return {snapshot,etag:reply.etag||previous.etag,status:snapshot.stale||issue?'stale':'ready',message:snapshot.stale?'明确标记的陈旧快照；不是最新行情':'',...(issue?{recovery:issue,...continuation()}:checkTime(reply,now))};
  }
+ // A gateway/application rate limit is not evidence of a provider outcome.
+ // Preserve the existing clear-on-429 behavior, but never discard its cooldown.
+ if(reply.status===429)return {...clear('error','应用请求限速，已清空缓存数据'),recovery:recovery??recoveryFor(reply,now,'browser_rate_limited')!};
  if(reply.status>=500&&reply.status<=599)return {...failure(previous,scope,recovery??recoveryFor(reply,now,'collection_failed')!),...continuation()};
  if(reply.status!==200)return clear('error',`来源响应失败（HTTP ${reply.status}），已清空缓存数据`);
  try {

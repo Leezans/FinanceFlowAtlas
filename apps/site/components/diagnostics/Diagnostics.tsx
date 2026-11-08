@@ -1,6 +1,7 @@
 'use client';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {cacheSummary, failureCategoryLabels, diagnosticsPresentationSchema, diagnosticViews, formatDiagnosticTime, stateLabels, type DiagnosticReport, type DiagnosticSource} from '@/lib/diagnostics/presentation';
+import {untilAborted} from '@/lib/browser-request';
 import s from './diagnostics.module.css';
 
 const endpoint = '/api/v1/diagnostics';
@@ -62,7 +63,8 @@ export default function Diagnostics() {
     const controller = new AbortController(); active.current = controller;
     let timedOut = false;
     const timer = setTimeout(() => {timedOut = true; controller.abort();}, timeoutMs);
-    void fetchReport(controller.signal).then(result => {
+    // Bound browser waiting even when fetch or body reading does not settle on abort.
+    void untilAborted(fetchReport(controller.signal), controller.signal).then(result => {
       if (active.current !== controller) return;
       if (controller.signal.aborted) throw new Error('Diagnostic read aborted');
       if ('report' in result) setReport(result.report); else setError(result.error);

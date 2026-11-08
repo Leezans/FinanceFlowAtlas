@@ -148,6 +148,31 @@ describe('read-only source status page', () => {
     expect(screen.getByRole('status').textContent).toContain('读取超时'); expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
     await act(() => vi.advanceTimersByTimeAsync(300_000)); expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it.each(['fetch', 'body'])('releases a hung %s after the deadline even when abort is ignored, and ignores its late result', async stage => {
+    vi.useFakeTimers();
+    let finish: (value: Response | string) => void = () => {};
+    const pending = new Promise<Response | string>(resolve => {finish = resolve;});
+    const fetcher = vi.fn().mockImplementationOnce(() => stage === 'fetch' ? pending : Promise.resolve({
+      status: 200, headers: new Headers({'content-type': 'application/json'}), text: () => pending,
+    })).mockResolvedValueOnce(response());
+    vi.stubGlobal('fetch', fetcher); render(<Diagnostics/>);
+    await act(() => vi.advanceTimersByTimeAsync(9_999));
+    expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(screen.getByRole('status').textContent).toContain('读取超时');
+    expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
+    expect((screen.getByRole('button', {name: '重新读取状态'}) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole('article')).toBeNull();
+    await act(() => vi.advanceTimersByTimeAsync(300_000));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await act(async () => {fireEvent.click(screen.getByRole('button', {name: '重新读取状态'}));});
+    expect(screen.getAllByRole('article')).toHaveLength(19);
+    const stale = report(); stale.sources[0].coordination = 'stopped';
+    await act(async () => {finish(stage === 'fetch' ? response(stale) : JSON.stringify(stale));});
+    expect(getCard('A 股 · Eastmoney').getByText('空闲，不代表可用')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).not.toContain('读取超时');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it('aborts on leave, ignores late results and reads anew after a return', async () => {
     let finish: (response: Response) => void = () => {};
     const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => {finish = resolve;})).mockResolvedValueOnce(response());
