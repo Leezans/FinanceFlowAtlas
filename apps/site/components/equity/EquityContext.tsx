@@ -10,7 +10,12 @@ import s from './equity.module.css';
 
 const time = (value: string | null) => value ? value.replace('T', ' ').replace('Z', ' UTC') : '未提供';
 export default function EquityContext() {
-  const {data, snapshot, loading, failure, stale, denied, refresh} = useEquitySnapshot();
+  const {data, snapshot, loading, failure, stale, denied, refresh, nextDeadline, coolingDown} = useEquitySnapshot();
+  const nextCheck = nextDeadline > 0
+    ? Number.isFinite(nextDeadline) && nextDeadline <= 8.64e15
+      ? time(new Date(nextDeadline).toISOString())
+      : '来源要求暂停，恢复时间超出可显示范围'
+    : '未提供';
   const [selected, setSelected] = useState('USA');
   useEffect(() => {
     const sync = () => {
@@ -35,9 +40,10 @@ export default function EquityContext() {
     </section>
     <section className={s.status} aria-live="polite">
       <div><strong>{failure === 'permission' ? '展示权限已失效' : denied ? '来源访问已停止' : loading && !snapshot ? '正在读取世界银行数据' : snapshot ? stale ? '已保留数据 · 获取状态陈旧' : '已取得可核验的年度数据' : '暂无可核验的年度数据'}</strong>
-        <p>{failure === 'permission' ? '已清空浏览器数据并停止检查。' : failure === 'invalid' ? '响应未通过校验，已清空浏览器数据。' : denied ? '来源拒绝后停止请求，不切换其他路径。' : failure === 'network' ? '连接失败。仅保留七天以内已校验的获取缓存。' : '每天最多获取一次。获取时间不等于观测年份或数据发布时间。'}</p>
+        <p>{failure === 'permission' ? '已清空浏览器数据并停止检查。' : failure === 'invalid' ? '响应未通过校验，已清空浏览器数据。' : denied ? '来源拒绝后停止请求，不切换其他路径。' : failure === 'network' ? '连接失败。仅保留七天以内已校验的获取缓存。' : '页面可见时按来源许可检查，正常获取间隔一天；临时故障后至少等一分钟，更长暂停会保留。获取时间不等于观测年份或数据发布时间。'}</p>
+        <p>下次可检查：{denied || failure === 'permission' ? '已停止' : nextCheck}</p>
         {data?.status.error_code && <small>{data.status.error_code}</small>}
-      </div><button disabled={loading || denied || failure === 'permission'} onClick={() => void refresh()}>{loading ? '正在检查…' : '检查数据'}</button>
+      </div><button disabled={loading || denied || failure === 'permission' || coolingDown} onClick={() => void refresh()}>{loading ? '正在检查…' : '检查数据'}</button>
     </section>
     <EquityMatrix snapshot={snapshot} loading={loading} onSelect={select}/>
     <section className={s.countrySelect}>

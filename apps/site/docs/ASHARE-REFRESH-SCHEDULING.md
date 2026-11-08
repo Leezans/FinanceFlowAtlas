@@ -188,3 +188,17 @@ and read-only gap checks. It has no installed trigger, account binding or public
 endpoint. The current Site remains request-driven. Enabling a separate same-D1
 deployment and verifying real no-visitor executions remain operator steps, not
 accomplishments of this source change. No Node/VPS cookie-based caller is provided.
+
+
+## Application rate limits and conflicting diagnostics
+
+HTTP 429 clears browser evidence as before, but now retains the full Retry-After
+wait for both automatic and manual checks. Numeric seconds and HTTP dates use
+the existing parser; missing or malformed values use the ordinary one-minute
+fallback. A headerless gateway response is labeled an application rate limit,
+not proof of a provider failure. It cannot authorize fast collection continuation.
+Known stopped diagnostics in either the header or JSON body take precedence over
+a retryable diagnostic in the other location. The page clears evidence and stops
+rather than silently replacing an unconfirmed or denied outcome with a cooldown.
+Synthetic client and browser tests cover these paths without accessing a source.
+No server admission, persistence, lease, scheduled job or provider policy changes.

@@ -9,6 +9,26 @@ const response=()=>new Response(JSON.stringify(root),{headers:{etag:'"complete"'
 async function advance(ms:number){await act(async()=>{await vi.advanceTimersByTimeAsync(ms);});}
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.useRealTimers();});
 describe('bounded A-share browser requests',()=>{
+ it('keeps 429 retry disabled and blocks timer/focus checks for its full wait',async()=>{
+  vi.useFakeTimers();
+  const fetcher=vi.fn().mockResolvedValueOnce(new Response('not JSON',{status:429,headers:{'retry-after':'900'}})).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
+  const view=render(<Page/>);await advance(1);
+  expect(screen.getByText(/应用请求限速，请等待后再检查。/)).toBeTruthy();
+  const retry=screen.getByRole('button',{name:'重试当前来源'}) as HTMLButtonElement;
+  expect(retry.disabled).toBe(true);fireEvent.click(retry);
+  await advance(899998);fireEvent.focus(window);fireEvent(window,new Event('pageshow'));await advance(0);
+  expect(fetcher).toHaveBeenCalledOnce();expect(retry.disabled).toBe(true);
+  await advance(2);expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('button',{name:/合成行业.*BK0001/})).toBeTruthy();
+  view.unmount();await advance(120000);expect(fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('stops when a retryable header conflicts with a stopped body',async()=>{
+  vi.useFakeTimers();const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({error_code:'source_outcome_unconfirmed'}),{status:503,headers:{'x-ashare-error-code':'source_cooldown','retry-after':'1'}}));vi.stubGlobal('fetch',fetcher);
+  render(<Page/>);await advance(1);expect(screen.getByText('上次采集未能确认结果，已停止自动重试。')).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'重试当前来源'})).toBeNull();
+  await advance(180000);fireEvent.focus(window);await advance(1);expect(fetcher).toHaveBeenCalledOnce();
+ });
+
  it('ends a hung initial connection and uses ordinary cooldown before trying the application again',async()=>{
   vi.useFakeTimers();const fetcher=vi.fn().mockImplementationOnce(()=>new Promise(()=>{})).mockResolvedValue(response());vi.stubGlobal('fetch',fetcher);
   render(<Page/>);await advance(1);await advance(34998);expect(screen.queryByLabelText('来源连接与恢复')).toBeNull();
