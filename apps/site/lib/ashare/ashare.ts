@@ -122,6 +122,7 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
     try {
       for(let page=firstPage;page<=MAX_PAGES;page++){
         if(staged&&clock()-Date.parse(startedAt)>=STAGE_MAX_AGE_MS)throw new Error('acquisition_expired');
+        const pageStarted=now();
         const query=params(scope,page);let url=`${endpoint}${PATH}?${query}`;let response:Response;let raw:Uint8Array;
         while(true){
           abortCheck(signal);if(state.denied)throw new SourceDenied('source_denial_latched');if(!enabled())throw new Error('disabled');if(!routingAllowed())throw new Error('runtime_routing_unverified');
@@ -171,7 +172,13 @@ export function createAshareHandler(options:{enabled?:()=>boolean;fetcher?:Fetch
         // Yield only after validating a whole page. Durable partial rows never
         // enter a public snapshot or its denominator. The next normal request
         // must acquire the same gate again, respecting its shared pacing.
-        if(staged&&(page-firstPage+1>=3||now()>=deadline-6000))return {stage:{rows,source_total:total,scope,page_count:page,started_at:startedAt,updated_at:timestamp(),endpoint:endpoint===DELAY?'official_redirect':'primary',redirect_count:redirects as 0|1,bytes}};
+        // A fixed 6s margin loses already validated pages when a source page
+        // takes longer (for example 11s + 11s cannot fit the 20s budget).
+        // Yield conservatively using this page's measured duration, including
+        // pacing/redirects, plus the existing bounded-disposal reserve. This
+        // estimate only stops work earlier; it never extends source permission.
+        const nextPageBudget=Math.max(6000,now()-pageStarted+DISPOSAL_MS);
+        if(staged&&(page-firstPage+1>=3||now()>=deadline-nextPageBudget))return {stage:{rows,source_total:total,scope,page_count:page,started_at:startedAt,updated_at:timestamp(),endpoint:endpoint===DELAY?'official_redirect':'primary',redirect_count:redirects as 0|1,bytes}};
       }
       throw new Error('incomplete_snapshot');
     }finally{requestSignal.removeEventListener('abort',abort);controller.abort();}

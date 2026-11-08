@@ -117,7 +117,7 @@ it('a bare once-per-minute caller cannot publish 901 rows before stage expiry',a
  }
  expect(r.attempts.map(a=>a.page)).toEqual([1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9,1,2,3]);expect(r.store.commit).not.toHaveBeenCalled();
 });
-it.each([[901,0,4],[2000,0,7],[901,14000,10]])('finite continuation publishes %s rows with %s ms page latency in %s invocations',async(total,latency,requests)=>{
+it.each([[901,0,4],[2000,0,7],[901,14000,10],[901,11000,10],[901,6500,5]])('finite continuation publishes %s rows with %s ms page latency in %s invocations',async(total,latency,requests)=>{
  const r=rig(total,false,true,latency),scope=parseScope(new URL('https://offline.invalid/?scope=BK1216'));
  let state:EvidenceState=emptyState();
  const pending=runCollectionBatch({request:async signal=>{
