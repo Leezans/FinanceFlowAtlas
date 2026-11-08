@@ -39,7 +39,10 @@ invalidate older completions.
 - At least 3 seconds between source request starts, including redirects.
 - The same shared lease, successful quiet interval, and failure cooldown.
 - A 20-second invocation acquisition budget and at most three validated pages
-  per staged invocation.
+  per staged invocation. A staged invocation yields earlier when its remaining
+  budget cannot fit the last validated page's measured duration plus a 1-second
+  disposal reserve (with the existing 6-second minimum margin). This is a
+  conservative local estimate, not a source latency guarantee or extra timeout.
 - Serial page collection, stable provider-code order, full-count validation,
   bounded total acquisition age, and atomic complete publication.
 - Denials stop acquisition; uncertain storage outcomes do not release ownership
@@ -202,3 +205,16 @@ a retryable diagnostic in the other location. The page clears evidence and stops
 rather than silently replacing an unconfirmed or denied outcome with a cooldown.
 Synthetic client and browser tests cover these paths without accessing a source.
 No server admission, persistence, lease, scheduled job or provider policy changes.
+
+## Slow-page deadline regression
+
+A fixed 6-second yield margin could start a second 11-second page with only
+9 seconds remaining, then lose the first validated page when the 20-second
+acquisition deadline fired. The conservative page-duration check saves that
+validated stage before starting another source request. Offline finite-driver
+tests now cover 901 rows at 11-second page latency (10 invocations) and
+6.5-second page latency (5 invocations), alongside existing zero/14-second
+fixtures. All retain strict complete publication, pacing, stage expiry and
+shared admission. A later page can still be slower than the estimate, and
+stalled first pages still stop at the original deadline. These synthetic
+results do not establish live provider availability.
