@@ -36,7 +36,7 @@ export default function Markets() {
         <label htmlFor="country-filter">搜索国家<input id="country-filter" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="中国、日本、France、US…"/></label>
         <label htmlFor="country-selection">国家 / 地区<select id="country-selection" value={options.some(market => market.iso3 === selected?.iso3) ? selected?.iso3 : ''} onChange={event => {const market = markets.find(value => value.iso3 === event.target.value); if (market) navigateToMarket(market);}}>
           {!options.some(market => market.iso3 === selected?.iso3) && <option value="">{options.length ? '选择搜索结果' : '未找到匹配国家'}</option>}
-          {options.map(market => <option key={market.iso3} value={market.iso3}>{marketName(market)} · {market.iso3}{marketRoutes[market.iso3] ? '' : ' · 未接入'}</option>)}
+          {options.map(market => <option key={market.iso3} value={market.iso3}>{marketName(market)} · {market.iso3}{marketRoutes[market.iso3] ? '' : ' · 未接入本地净买卖'}</option>)}
         </select></label>
       </div>
       <p>{markets.length} 个地理索引，{Object.keys(marketRoutes).length} 个已有独立来源入口。入口存在不代表当前数据可用；实际覆盖、时点与访问状态见下方。</p>

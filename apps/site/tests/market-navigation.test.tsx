@@ -15,10 +15,10 @@ describe('market navigation',()=>{
  it('links only implemented pages including Polymarket and the bounded venue FX and optional daily reference',()=>{
   render(<MarketNavigation/>);
   const nav=screen.getByRole('navigation',{name:'市场导航'});
-  expect(within(nav).getAllByRole('link').map(a=>a.getAttribute('href'))).toEqual(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/futures/taiwan','/options','/options/taiwan','/forex','/diagnostics','/']);
-  expect(within(nav).getByRole('link',{name:'外汇行情'}).getAttribute('href')).toBe('/forex');
+  expect(within(nav).getAllByRole('link',{hidden:true}).map(a=>a.getAttribute('href')).sort()).toEqual(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/futures/taiwan','/options','/options/taiwan','/forex','/diagnostics','/','/markets?country=TWN','/markets?country=JPN','/markets?country=USA#us-tic-supplement'].sort());
+  expect(within(nav).getByRole('link',{name:'外汇行情',hidden:true}).getAttribute('href')).toBe('/forex');
   expect(within(nav).queryByText('即将接入')).toBeNull();
-  for(const link of marketLinks)expect(existsSync(resolve(process.cwd(),`app${link.href==='/'?'':link.href}/page.tsx`))).toBe(true);
+  for(const link of marketLinks)expect(existsSync(resolve(process.cwd(),`app${link.href==='/'?'':link.href.split(/[?#]/)[0]}/page.tsx`))).toBe(true);
  });
  it.each(['/ashare','/taiwan','/brazil','/markets','/europe','/equities','/asean','/crypto','/polymarket','/futures','/futures/taiwan','/options','/options/taiwan','/forex','/diagnostics','/'])('marks the exact current page %s',route=>{
   pathname=route;const {container}=render(<MarketNavigation/>);

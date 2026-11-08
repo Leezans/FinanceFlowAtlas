@@ -61,7 +61,7 @@ describe('country-owned global matrix',()=>{
  it('keeps country search/navigation distinct from observations',async()=>{
   render(<Markets/>);await screen.findByRole('region',{name:'中国行业测试工作区'});
   fireEvent.change(screen.getByLabelText('搜索国家'),{target:{value:'France'}});
-  expect(within(screen.getByLabelText('国家 / 地区')).getByRole('option',{name:'法国 · FRA · 未接入'})).toBeTruthy();
+  expect(within(screen.getByLabelText('国家 / 地区')).getByRole('option',{name:'法国 · FRA · 未接入本地净买卖'})).toBeTruthy();
   fireEvent.change(screen.getByLabelText('国家 / 地区'),{target:{value:'FRA'}});
   await screen.findByText('该市场资金流尚未接入');
   fireEvent.click(screen.getByText('地理导航与市场入口'));
