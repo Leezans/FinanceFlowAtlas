@@ -52,10 +52,14 @@ export class D1SnapshotStore implements SnapshotStore {
     const failedCooldown=gateCode==='source_cooldown'&&
       (typeof row!.finished_ms!=='number'||Number(row!.not_before_ms)-row!.finished_ms>SUCCESS_QUIET_MS);
     const durableBackoff=Number.isSafeInteger(row!.failure_count)&&Number(row!.failure_count)>=0;
-    const failureCode=durableBackoff&&Number(row!.failure_count)>0?retainedFailureCode(row!.failure_code):undefined;
+    // Partial progress preserves the durable failure counter until full commit.
+    // Do not let that historical error hide a confirmed continuation, but an
+    // active global failure cooldown still takes priority over any prefix.
+    const continuing=row!.stage_pending===1&&!failedCooldown;
+    const failureCode=!continuing&&durableBackoff&&Number(row!.failure_count)>0?retainedFailureCode(row!.failure_code):undefined;
     const base:SnapshotRead={canAcquire:!failedCooldown,...(gateCode?{code:gateCode}:{}),
       durableBackoff,failureCode,retryAfterMs:Math.max(0,Number(row!.not_before_ms)-Number(row!.now_ms)),
-      ...(row!.stage_pending===1&&!failureCode?{code:'collection_in_progress' as const}:{})};
+      ...(continuing?{code:'collection_in_progress' as const}:{})};
     if(row!.payload===null||row!.payload===undefined)return base;
     const {committed_ms:committed,expires_ms:expires,now_ms:now}=row!;
     if(row!.format_version!==1||typeof committed!=='number'||!Number.isSafeInteger(committed)||committed<0||
