@@ -1,11 +1,14 @@
 'use client';
-import React,{useState} from 'react';
+import React,{useMemo,useState} from 'react';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
+import {projectPolymarketInterestReport} from '@/lib/evidence/polymarket-interest-projection';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {HOT_MARKETS,INTEREST_MARKETS,INTEREST_BATCH_SIZE,INTEREST_SOURCE_DOCS,SOURCE_TERMS,type PolymarketInterestSnapshot} from '@/lib/polymarket/model';
 import {filterMarkets,formatSourceVolume,interestMatrix} from './matrix';
 import s from './polymarket.module.css';
 const time=(value:string)=>value.replace('T',' ').replace('Z',' UTC');
-export default function OpenInterest({snapshot}:{snapshot:PolymarketInterestSnapshot|null}){
+export default function OpenInterest({snapshot,stale=false,onDownload}:{snapshot:PolymarketInterestSnapshot|null;stale?:boolean;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}){
+ const organized=useMemo(()=>projectPolymarketInterestReport(snapshot,stale),[snapshot,stale]);
  const [query,setQuery]=useState('');
  const rows=filterMarkets(snapshot?.rows??[],query),values=new Map(snapshot?.values.map(row=>[row.condition_id,row.value])??[]);
  const zero=rows.filter(row=>values.get(row.condition_id!)===0).length,missing=rows.filter(row=>!values.has(row.condition_id!)).length;
@@ -31,6 +34,7 @@ export default function OpenInterest({snapshot}:{snapshot:PolymarketInterestSnap
   <div className={s.controls}><label>搜索持仓金额样本<input value={query} onChange={event=>setQuery(event.target.value)} placeholder="完整问题、分类或结果"/></label></div>
   {snapshot&&<p className={s.availability} aria-label="当前持仓金额字段可用性">当前筛选 {rows.length} 个市场：持仓金额正值 {rows.length-zero-missing} 个、零 {zero} 个、缺失 {missing} 个。只有正值占面积；零值与缺失保留在数值明细中。</p>}
   <MatrixHeatmap groups={interestMatrix(rows,values)} title="样本持仓金额矩阵" description="按 USDC 金额分配面积，可用鼠标滚轮放大、拖动查看；完整问题和精确数值见明细。" colorMode="sequential" colorMeaning="当前可见样本的持仓金额相对大小，不表示资金流向" areaMeaning="本次已完成采集样本的未平仓持仓金额（USDC），不是全站占比，也不代表同一估值时点" scopeKey="polymarket-open-interest" emptyTitle="暂无可核验的持仓金额" emptyMessage={snapshot?'当前搜索没有匹配市场。':'等待完整取得热门样本与持仓金额；不拿成交量替代。'} emptyNote="缺失不是零，不使用示例数据。"/>
+  <OrganizedEvidence report={organized} onDownload={onDownload}/>
   {snapshot&&<details className={s.sources}><summary>持仓金额与条件 ID</summary>{rows.map(row=><section key={row.id}><h3>{row.question}</h3><p>持仓金额：{values.has(row.condition_id!)?`${formatSourceVolume(values.get(row.condition_id!)!)} USDC`:'来源未返回'}</p><p>条件 ID：{row.condition_id}</p></section>)}</details>}
   <section className={s.sources}><h2>来源与使用边界</h2><ul><li>金额来自 Polymarket Data API v2 的 priced gross open interest，官方定义单位为 USDC。不把 USDC 换算成法币美元，不将它解释为抵押品净存入。</li><li>持仓金额检查至少间隔 5 分钟，普通模式仍按 30 秒检查；来源拒绝会停止所有模式。超过 5 分钟标记陈旧，超过 10 分钟隐藏。页面隐藏时停止检查。</li><li>仅供个人信息参考，保持现有私人访问边界。公开接口和代码开源不代表取得商业使用或数据再分发许可。来源拒绝时停止，不绕过访问限制。</li></ul><p><a href={INTEREST_SOURCE_DOCS} target="_blank" rel="noreferrer">官方 OI 单位与说明 ↗</a> · <a href={SOURCE_TERMS} target="_blank" rel="noreferrer">Polymarket 使用条款 ↗</a></p></section>
  </>;

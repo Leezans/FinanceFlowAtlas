@@ -6,8 +6,9 @@ import type {OrganizedCftcReport} from '@/lib/evidence/cftc-projection';
 import type {OrganizedDeribitReport} from '@/lib/evidence/deribit-projection';
 import type {OrganizedKrakenTradeReport} from '@/lib/evidence/kraken-trade-projection';
 import type {OrganizedPolymarketReport} from '@/lib/evidence/polymarket-projection';
+import type {OrganizedPolymarketInterestReport} from '@/lib/evidence/polymarket-interest-projection';
 import s from './evidence.module.css';
-type BlobReport=OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport|OrganizedKrakenTradeReport|OrganizedPolymarketReport;
+type BlobReport=OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport|OrganizedKrakenTradeReport|OrganizedPolymarketReport|OrganizedPolymarketInterestReport;
 
 /** A complete local file without a multi-megabyte data URI. No upload or request. */
 export default function BlobEvidenceDownload({report,filename,onDownload}:{report:BlobReport;filename:string;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}) {

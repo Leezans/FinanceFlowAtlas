@@ -11,12 +11,15 @@ import type {OrganizedKrakenTradeReport} from '@/lib/evidence/kraken-trade-proje
 import OrganizedKrakenTradeEvidence from './OrganizedKrakenTradeEvidence';
 import type {OrganizedPolymarketReport} from '@/lib/evidence/polymarket-projection';
 import OrganizedPolymarketEvidence from './OrganizedPolymarketEvidence';
+import type {OrganizedPolymarketInterestReport} from '@/lib/evidence/polymarket-interest-projection';
+import OrganizedPolymarketInterestEvidence from './OrganizedPolymarketInterestEvidence';
+export {POLYMARKET_INTEREST_PREVIEW_LIMIT} from './OrganizedPolymarketInterestEvidence';
 export {POLYMARKET_PREVIEW_LIMIT} from './OrganizedPolymarketEvidence';
 export {KRAKEN_TRADE_PREVIEW_LIMIT} from './OrganizedKrakenTradeEvidence';
 export {DERIBIT_PREVIEW_LIMIT} from './OrganizedDeribitEvidence';
 import BlobEvidenceDownload from './BlobEvidenceDownload';
 import s from './evidence.module.css';
-export type OrganizedEvidenceReport=OrganizedReport|OrganizedAshareReport|OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport|OrganizedKrakenTradeReport|OrganizedPolymarketReport;
+export type OrganizedEvidenceReport=OrganizedReport|OrganizedAshareReport|OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport|OrganizedKrakenTradeReport|OrganizedPolymarketReport|OrganizedPolymarketInterestReport;
 export const TPEX_SHARE_PREVIEW_LIMIT=120;
 export const CVM_PREVIEW_LIMIT=120;
 export const CFTC_PREVIEW_LIMIT=120;
@@ -26,6 +29,7 @@ function isCftcRow(row:EvidenceRow):row is OrganizedCftcRow{return 'contract' in
 /** Existing authenticated page data only. No request, public endpoint, persistence or credential. */
 export default function OrganizedEvidence({report,onDownload}:{report:OrganizedEvidenceReport|null;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}) {
  if(!report) return null;
+ if(report.source_id==='polymarket-open-interest')return <OrganizedPolymarketInterestEvidence report={report} onDownload={onDownload}/>;
  if(report.source_id==='polymarket-gamma')return <OrganizedPolymarketEvidence report={report} onDownload={onDownload}/>;
  if(report.source_id==='kraken-trades')return <OrganizedKrakenTradeEvidence report={report} onDownload={onDownload}/>;
  if(report.source_id==='deribit-options')return <OrganizedDeribitEvidence report={report} onDownload={onDownload}/>;
