@@ -38,6 +38,24 @@ describe('annual equity context UI', () => {
     expect(screen.getByRole('link', {name: /美国真实月度跨境股票净买入/}).getAttribute('href')).toBe('/');
     expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByText(/前 15 名/)).toBeNull();
   });
+  it('opens the requested country with separate actual observation years and restores history',async()=>{
+    window.history.replaceState({},'', '/equities?country=JPN#country-equity');
+    const fetcher=vi.fn(async()=>Response.json(reply()));vi.stubGlobal('fetch',fetcher);await start();
+    expect(screen.getByRole('heading',{name:'日本'})).toBeTruthy();
+    expect(screen.getByLabelText('各指标观察年份').textContent).toContain('年末市值：2025 年末；全年成交额：2024 全年');
+    expect(focus().id).toBe('country-equity');
+    act(()=>{window.history.replaceState({},'', '/equities?country=FRA#country-equity');window.dispatchEvent(new PopStateEvent('popstate'))});
+    expect(screen.getByRole('heading',{name:'法国'})).toBeTruthy();
+    expect(screen.getByLabelText('各指标观察年份').textContent).toContain('年末市值：未取得该项观测；全年成交额：未取得该项观测');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('makes invalid country fallback explicit',async()=>{
+    window.history.replaceState({},'', '/equities?country=INVALID');
+    vi.stubGlobal('fetch',vi.fn(async()=>Response.json(reply())));await start();
+    expect(screen.getByText(/国家参数无效，已选择美国作为默认查询/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('选择国家 / 地区'),{target:{value:'JPN'}});
+    expect(screen.queryByText(/国家参数无效/)).toBeNull();
+  });
   it('shows the next allowed check and disables early manual refreshes', async () => {
     const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
     const button = screen.getByRole('button', {name: '检查数据'}) as HTMLButtonElement;
@@ -50,7 +68,7 @@ describe('annual equity context UI', () => {
     const fetcher = vi.fn(async () => Response.json(reply())); vi.stubGlobal('fetch', fetcher); await start();
     fireEvent.click(globalMatrix().querySelector('[data-id=JPN]')!);
     expect(screen.getByRole('heading', {name: '日本'})).toBeTruthy();
-    expect(within(focus()).getByText(/2024 全年/)).toBeTruthy();
+    expect(within(focus()).getByLabelText('各指标观察年份').textContent).toContain('2024 全年');
     fireEvent.change(screen.getByLabelText('比较指标'), {target: {value: 'traded_value'}});
     expect(globalMatrix().querySelector('[data-id=JPN]')?.getAttribute('data-color')).toBe('missing');
     expect(screen.getByText(/2025 年 · 1 个国家/)).toBeTruthy();

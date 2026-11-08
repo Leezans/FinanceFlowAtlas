@@ -5,7 +5,7 @@ import {act,cleanup,fireEvent,render,screen,within} from '@testing-library/react
 import AseanFdi from '../components/asean/AseanFdi';
 import {MAX_CACHE_AGE_MS,REFRESH_MS} from '../lib/asean/model';
 import {reply,NOW} from './asean-fixture';
-beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(NOW);});
+beforeEach(()=>{window.history.replaceState({},'','/asean');vi.useFakeTimers();vi.setSystemTime(NOW);});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});});
 async function start(){render(<AseanFdi/>);await act(()=>vi.advanceTimersByTimeAsync(1));}
 describe('ASEAN annual country × economic-sector heatmap',()=>{
