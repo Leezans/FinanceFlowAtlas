@@ -1,9 +1,11 @@
  'use client';
-import React,{useCallback,useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {FLOW_DATASET,COMPANY_DATASET,LICENSE,PARTICIPANTS,REFRESH_MS,STALE_REPORT_DAYS,replySchema,visibleSnapshot,reportAge,type TpexReply,type Participant} from '@/lib/tpex/model';
 import MatrixHeatmap from '@/components/matrix/MatrixHeatmap';
 import {industries,industryLabel,signed,tpexMatrixGroups} from './matrix';
 import {INDUSTRY_REFERENCE} from '@/lib/tpex/industries';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
+import {projectTpexShareReport} from '@/lib/evidence/tpex-share-projection';
 import s from './tpex.module.css';
 const timestamp=(t:string|null)=>t?t.replace('T',' ').replace('Z',' UTC'):'未提供';
 export default function TpexInstitutional({embedded=false}:{embedded?:boolean}={}){
@@ -31,6 +33,7 @@ export default function TpexInstitutional({embedded=false}:{embedded?:boolean}={
  },[refresh]);
 const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):null,denied=data?.status.state==='denied';
  const stale=!!snapshot&&(failure==='network'||data?.status.state==='stale'||now-Date.parse(snapshot.fetched_at)>REFRESH_MS||days!>STALE_REPORT_DAYS);
+ const organized=useMemo(()=>projectTpexShareReport(snapshot,stale),[snapshot,stale]);
  const allIndustries=snapshot?industries(snapshot,participant):[];
  const activeIndustry=allIndustries.find(g=>g.code===industry)??null;
  const selected=snapshot?.rows.find(r=>r.code===selectedCode&&r.industry_code===industry)??null;
@@ -48,6 +51,11 @@ const snapshot=visibleSnapshot(data,now),days=snapshot?reportAge(snapshot,now):n
    <div className={s.filter}><button disabled={industry===null} onClick={()=>{setIndustry(null);setSelectedCode(null);}}>← 全部行业</button><label htmlFor="tpex-industry">行业</label><select id="tpex-industry" value={industry??''} onChange={e=>{setIndustry(e.target.value||null);setSelectedCode(null);}}><option value="">全部行业</option>{allIndustries.map(g=><option key={g.code} value={g.code}>{g.label} · {g.known}/{g.rows.length} 家</option>)}</select></div>
   </>}
   <MatrixHeatmap layout="readable-grid" groups={snapshot?tpexMatrixGroups(snapshot,participant,industry):[]} title={industry===null?'上柜法人行业矩阵':`${industryLabel(industry)} · 公司矩阵`} description={`${participantLabel} · ${snapshot?.report_date??'等待报告'} · ${industry===null?'点击行业下钻公司':'点击公司查看买进、卖出与净股数'}`} colorMeaning="净买卖超 ÷（买进股数 + 卖出股数），固定 −100% 至 +100%；正值净买入，负值净卖出。已报告零成交为中性，缺失为灰色。" areaMeaning={industry===null?'无可比较金额：来源只有股数，每个行业等面积。行业股数是已报告公司的简单加总。':'无可比较金额：来源只有股数，每家公司等面积。'} colorMaxAbs={1} onSelect={item=>{if(industry===null){setIndustry(item.id);setSelectedCode(null);}else setSelectedCode(item.id);}} emptyMessage="仅在两份官方报告的日期一致、代码唯一、股数平衡、公司行业连接通过验证后展示。报告超过 14 天或获取缓存超过 24 小时后停止展示。"/>
+  <OrganizedEvidence report={organized} onDownload={event=>{
+   const current=Date.now();
+   // A suspended tab may deliver a click before its regular visibility tick.
+   if(blocked.current||visibleSnapshot(data,current)!==snapshot){event.preventDefault();setNow(current);}
+  }}/>
   {activeIndustry&&<p className={s.coverageNote}>{activeIndustry.label}：已报告 {activeIndustry.known}/{activeIndustry.rows.length} 家；{activeIndustry.missing} 家缺失。已报告净股数合计 {activeIndustry.totals?signed(activeIndustry.totals.net):'未知'} 股，非完整行业资金总额。</p>}
   {selected&&<section className={s.detailSection} aria-label="选中公司详情" aria-live="polite"><article className={s.card}><div className={s.cardTitle}><div><p>{selected.code} · {industryLabel(selected.industry_code)}</p><h3>{selected.name}</h3></div><span>{snapshot?.report_date}</span></div><p>{participantLabel}</p>{selected.flow?<><div className={s.value}>{signed(selected.flow[participant].net)}<small>股</small></div><dl className={s.stats}><div><dt>买进</dt><dd>{selected.flow[participant].buy.toLocaleString('zh-CN')} 股</dd></div><div><dt>卖出</dt><dd>{selected.flow[participant].sell.toLocaleString('zh-CN')} 股</dd></div><div><dt>买卖超</dt><dd>{signed(selected.flow[participant].net)} 股</dd></div></dl></>:<p>公司在官方行业名册中，但当天法人报告没有匹配记录。数值未知，不视为零。</p>}</article></section>}
   {activeIndustry&&<details className={s.table}><summary>完整公司明细（包括缺失与零）</summary><table><thead><tr><th>公司</th><th>买进（股）</th><th>卖出（股）</th><th>净买卖超（股）</th></tr></thead><tbody>{activeIndustry.rows.map(r=><tr key={r.code}><td><button onClick={()=>setSelectedCode(r.code)}>{r.code} {r.name}</button></td><td>{r.flow?.[participant].buy.toLocaleString('zh-CN')??'缺失'}</td><td>{r.flow?.[participant].sell.toLocaleString('zh-CN')??'缺失'}</td><td>{r.flow?signed(r.flow[participant].net):'缺失'}</td></tr>)}</tbody></table></details>}
