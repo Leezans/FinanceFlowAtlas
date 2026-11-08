@@ -7,10 +7,13 @@ import type {OrganizedCvmReport,OrganizedCvmRow} from '@/lib/evidence/cvm-projec
 import type {OrganizedCftcReport,OrganizedCftcRow} from '@/lib/evidence/cftc-projection';
 import type {OrganizedDeribitReport} from '@/lib/evidence/deribit-projection';
 import OrganizedDeribitEvidence from './OrganizedDeribitEvidence';
+import type {OrganizedKrakenTradeReport} from '@/lib/evidence/kraken-trade-projection';
+import OrganizedKrakenTradeEvidence from './OrganizedKrakenTradeEvidence';
+export {KRAKEN_TRADE_PREVIEW_LIMIT} from './OrganizedKrakenTradeEvidence';
 export {DERIBIT_PREVIEW_LIMIT} from './OrganizedDeribitEvidence';
 import BlobEvidenceDownload from './BlobEvidenceDownload';
 import s from './evidence.module.css';
-export type OrganizedEvidenceReport=OrganizedReport|OrganizedAshareReport|OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport;
+export type OrganizedEvidenceReport=OrganizedReport|OrganizedAshareReport|OrganizedTpexShareReport|OrganizedCvmReport|OrganizedCftcReport|OrganizedDeribitReport|OrganizedKrakenTradeReport;
 export const TPEX_SHARE_PREVIEW_LIMIT=120;
 export const CVM_PREVIEW_LIMIT=120;
 export const CFTC_PREVIEW_LIMIT=120;
@@ -20,6 +23,7 @@ function isCftcRow(row:EvidenceRow):row is OrganizedCftcRow{return 'contract' in
 /** Existing authenticated page data only. No request, public endpoint, persistence or credential. */
 export default function OrganizedEvidence({report,onDownload}:{report:OrganizedEvidenceReport|null;onDownload?:React.MouseEventHandler<HTMLAnchorElement>}) {
  if(!report) return null;
+ if(report.source_id==='kraken-trades')return <OrganizedKrakenTradeEvidence report={report} onDownload={onDownload}/>;
  if(report.source_id==='deribit-options')return <OrganizedDeribitEvidence report={report} onDownload={onDownload}/>;
  const ashare=report.source_id==='eastmoney-ashare'?report:null;
  const shares=report.source_id==='tpex-shares'?report:null;

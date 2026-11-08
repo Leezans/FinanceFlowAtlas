@@ -158,3 +158,17 @@ trades (469 inside the fixed interval); the saved selection window ending at
 bounded-source limitation, not a claimed failure observed in those snapshots.
 No new provider call was made for implementation or local tests. Deployment-time
 checks must use the normal source gate and preserve any busy/blocked/cooling state.
+
+## Organized current-view export (iteration 89)
+
+The `/crypto` page now provides a collapsed, read-only evidence panel and a local
+JSON file after its existing trade heatmap. It exports only the current validated,
+permission- and age-safe selected trade snapshot. Exact native USD decimal strings,
+numeric truncated percentage, pair identity, fixed window, coverage/counts and
+per-pair/final fetch clocks remain unchanged. Missing catalog pairs get no invented
+metadata; capped nulls, empty-window zero strings and null ratios stay distinct.
+Every execution has buyer and seller counterparties, and b/s marked imbalance is
+not net capital inflow. The existing source contracts, request budget, endpoints,
+store, gates and permissions do not change. See
+[organized current-report evidence](organized-report-projection.md#kraken-usd-trade-direction-evidence)
+for field provenance, schema-1 defaults, click guards and Blob lifecycle details.

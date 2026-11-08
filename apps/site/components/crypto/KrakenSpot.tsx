@@ -1,18 +1,20 @@
 'use client';
-import React from 'react';
+import React,{useMemo} from 'react';
 import {KRAKEN_DOCS,KRAKEN_PAIRS_DOCS} from '@/lib/crypto/kraken';
 import s from './crypto.module.css';
 import KrakenMatrix from './KrakenMatrix';
 import KrakenRefreshNotice from './KrakenRefreshNotice';
 import KrakenTradeMatrix from './KrakenTradeMatrix';
 import KrakenPairSelector from './KrakenPairSelector';
-import {visibleTradeSnapshot} from './trade-matrix';
+import {projectKrakenTradeReport} from '@/lib/evidence/kraken-trade-projection';
+import OrganizedEvidence from '@/components/evidence/OrganizedEvidence';
 import {useKrakenEvidence} from './useKrakenEvidence';
 export {validateKrakenReply,visibleSnapshot} from './client';
 
 function timestamp(value:string|null){return value?value.replace('T',' ').replace('Z',' UTC'):'未提供';}
 export default function KrakenSpot(){
- const {data,loading,networkError,permissionLost,invalidResponse,now,selected,timeframe,catalogPairs,snapshot,age,stale,denied,refresh,applyScope}=useKrakenEvidence();
+ const {data,loading,networkError,permissionLost,invalidResponse,selected,timeframe,catalogPairs,snapshot,age,stale,denied,refresh,applyScope,tradeSnapshot,validateTradeDownload}=useKrakenEvidence();
+ const organized=useMemo(()=>projectKrakenTradeReport(tradeSnapshot,stale),[tradeSnapshot,stale]);
  return <main className={s.root}>
   <header className={s.header}><a href="/markets">◉ Finance Flow Atlas</a><nav aria-label="资产导航"><a href="/ashare">A 股优先入口</a><a href="/markets">全球市场</a></nav></header>
   <section className={s.intro}><p className={s.eyebrow}>CRYPTO / KRAKEN SPOT</p><h1>虚拟货币，先看清数据。</h1><p>Kraken · USD 报价现货交易对矩阵</p><p className={s.notice}>价格和成交量是交易活动，不是资金净流入。这里不是全球虚拟货币市场总量，也不接入账户或交易功能。</p></section>
@@ -24,7 +26,8 @@ export default function KrakenSpot(){
   <KrakenPairSelector catalog={catalogPairs} selected={selected} disabled={!!denied||permissionLost} onApply={pairs=>applyScope(pairs,timeframe)}/>
   <fieldset className={s.windowControls} disabled={!!denied||permissionLost}><legend>成交统计区间</legend>{(['1m','5m'] as const).map(window=><label key={window}><input type="radio" name="trade-window" value={window} checked={timeframe===window} onChange={()=>applyScope(selected,window)}/>{window==='1m'?'1 分钟':'5 分钟'}</label>)}<p>仅切换所选交易对的固定成交区间；不改变 USD 报价目录。每 60 秒检查，共享来源冷却。</p></fieldset>
   {snapshot&&!data?.trade_snapshot&&<p className={s.matrixNote} role="status">所选交易对成交证据尚未取得；当前选择 {timeframe==='1m'?'1':'5'} 分钟；报价目录仍可使用。共享冷却不能绕过，下一次允许检查时间：{timestamp(data?.status.next_retry_at??null)}。缺失不代表零成交。</p>}
-  <KrakenTradeMatrix selected={selected} timeframe={timeframe} snapshot={visibleTradeSnapshot(data?.trade_snapshot,!!snapshot,now)}/>
+  <KrakenTradeMatrix selected={selected} timeframe={timeframe} snapshot={tradeSnapshot}/>
+  <OrganizedEvidence report={organized} onDownload={event=>{if(!tradeSnapshot||!validateTradeDownload(tradeSnapshot,stale))event.preventDefault();}}/>
   <section className={s.sources}><details><summary>来源、指标与使用边界</summary><ul><li>价格以 USD 报价，成交量以各自基础币种的数量计量。不能把不同币种的数量直接相加。</li><li>24 小时字段使用来源的滚动窗口，不使用“今天 UTC 零点以来”字段。不推算跨境流向、交易所充值提现或买卖资金净额。</li><li>快照获取成功仅说明接口返回通过校验；接口没有提供这组行情的观测时间。超过 60 秒标记陈旧，超过 15 分钟停止展示。</li><li>公开接口不需要 Kraken 账户或 API 密钥。代码开源不等于行情数据获得再分发许可；本页保留现有个人访问边界。</li></ul></details><p><a href={KRAKEN_PAIRS_DOCS} target="_blank" rel="noreferrer">Kraken 官方交易对目录 ↗</a><a href={KRAKEN_DOCS} target="_blank" rel="noreferrer">Kraken 官方字段说明 ↗</a><a href="https://support.kraken.com/articles/360000919986-public-endpoint-examples-you-can-try-them-directly-in-a-web-browser-" target="_blank" rel="noreferrer">公开接口与账户要求 ↗</a><a href="https://docs-legacy.kraken.com/api/docs/guides/global-intro/" target="_blank" rel="noreferrer">API 使用条件 ↗</a></p></section>
  </main>;
 }
