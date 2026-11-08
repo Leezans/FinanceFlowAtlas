@@ -18,8 +18,10 @@ trade-direction snapshot with exact decimal strings and fixed-window coverage.
 hot/newest snapshot, with every retained outcome price and source 24h volume.
 `apps/site/lib/evidence/polymarket-interest-projection.ts` independently organizes
 priced gross OI in USDC from the current permitted open-interest snapshot.
-`OrganizedEvidence` consumes that envelope for both a collapsed preview table and
-an actual local JSON download. It is not an unused schema or a source directory.
+`OrganizedEvidence` routes each source envelope to its typed collapsed preview
+and local JSON view. The [evidence architecture guide](evidence-architecture.md)
+describes the dispatcher, source views, neutral row types and local file lifecycle.
+This is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
 
 ## Included data

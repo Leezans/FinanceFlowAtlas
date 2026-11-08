@@ -1,6 +1,6 @@
 /** Organize the already visible CVM display snapshot. No acquisition or new aggregates. */
 import {COMPANY_DATASET,FLOW_DATASET,LICENSE,snapshotSchema,type CvmSnapshot} from '@/lib/cvm/model';
-import type {EvidenceRow} from './report-projection';
+import type {EvidenceRow} from './types';
 
 export type OrganizedCvmRow=EvidenceRow&{
  dimension:{namespace:'CVM.FCA.Codigo_Negociacao';kind:'instrument';id:string;label:string;native_locator:string};

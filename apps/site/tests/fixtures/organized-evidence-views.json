@@ -1,0 +1,142 @@
+{
+  "japan:ready": {
+    "preparing": "2ddc46a6ea996673048e2c8cfdc21b46957e4616d38a2a607d189ab9efd310b7",
+    "ready": "2ddc46a6ea996673048e2c8cfdc21b46957e4616d38a2a607d189ab9efd310b7",
+    "json": "8eab2856a68c9977b3ecd4fecf386fa3f3197b7367eff3ec65524b017a350e64",
+    "filename": "japan-mof-2026-10-31-organized.json",
+    "previewRows": 12
+  },
+  "japan:stale": {
+    "preparing": "dbbca96d10b77db2d9ec3f7d7514dd0b1657067dca74a0f8f1f370e47c92d97f",
+    "ready": "dbbca96d10b77db2d9ec3f7d7514dd0b1657067dca74a0f8f1f370e47c92d97f",
+    "json": "f88734df807f796070bc8779ad2f1552434c97130f3752d126975011f4550c0b",
+    "filename": "japan-mof-2026-10-31-organized.json",
+    "previewRows": 12
+  },
+  "tpex-money:ready": {
+    "preparing": "57376d6b3a26406f7f2525a5da929523e7311a7c60d711fc44258b865e381b7f",
+    "ready": "57376d6b3a26406f7f2525a5da929523e7311a7c60d711fc44258b865e381b7f",
+    "json": "193750b9fac2e72c654e093cf6222f6694999407e1a6c62ac8c43328308b3370",
+    "filename": "tpex-money-2026-11-05-organized.json",
+    "previewRows": 12
+  },
+  "tpex-money:stale": {
+    "preparing": "e4c4055f1f1a0a92830219a84b72ef53b25b55896a632ac1c59b139b75a64e85",
+    "ready": "e4c4055f1f1a0a92830219a84b72ef53b25b55896a632ac1c59b139b75a64e85",
+    "json": "b622c298d6fd659ad9f835d8e1e3d0019c869a43c2595c6a6b71be576421b97c",
+    "filename": "tpex-money-2026-11-05-organized.json",
+    "previewRows": 12
+  },
+  "ashare-industry:ready": {
+    "preparing": "a277ab095af5b68d3f92b668bf2442470b928f792c416a7c5510c1e22052e118",
+    "ready": "a277ab095af5b68d3f92b668bf2442470b928f792c416a7c5510c1e22052e118",
+    "json": "dd54dfa3bdc0508b9083277bebb09c0f7e8e8ef36a5cf5857b6b7be8590477d4",
+    "filename": "eastmoney-ashare-eastmoney_level_1-acquired-20261108T080000000Z-organized.json",
+    "previewRows": 7
+  },
+  "ashare-industry:stale": {
+    "preparing": "149f5d090ed6aff9340dc690c42eaba71a147795decc9e38d30ad43cced8a513",
+    "ready": "149f5d090ed6aff9340dc690c42eaba71a147795decc9e38d30ad43cced8a513",
+    "json": "27a76e2b33c1f89b82bdb2631b44db8e597f83ab7a2b098dfcb9891515cdd68f",
+    "filename": "eastmoney-ashare-eastmoney_level_1-acquired-20261108T080000000Z-organized.json",
+    "previewRows": 7
+  },
+  "ashare-constituents:ready": {
+    "preparing": "70ca10527f6d53739db3bf341ea27cd067fca0da762c078809d84c8a8a3c3aa0",
+    "ready": "70ca10527f6d53739db3bf341ea27cd067fca0da762c078809d84c8a8a3c3aa0",
+    "json": "59b2530215500098b30d707d16e4ab5d8604169f284c3adb2f8e750bed8b64b9",
+    "filename": "eastmoney-ashare-BK9000-acquired-20261108T080000000Z-organized.json",
+    "previewRows": 7
+  },
+  "ashare-constituents:stale": {
+    "preparing": "f8c040e4c0f2b082d2ff7caab9d0f6b1825d8e70733b71dc2c81399b2020e3f6",
+    "ready": "f8c040e4c0f2b082d2ff7caab9d0f6b1825d8e70733b71dc2c81399b2020e3f6",
+    "json": "329b55115bbd9bfc5266737aefeafadb5a95e4bfd933c930c6792e641ffda458",
+    "filename": "eastmoney-ashare-BK9000-acquired-20261108T080000000Z-organized.json",
+    "previewRows": 7
+  },
+  "tpex-shares:ready": {
+    "preparing": "f0a100132c08fd2416d9d5019435b4671798ca5cbc6541d546b6e8069cd510de",
+    "ready": "4b4a828699e8203227cb7ac96750af0739c90fd0b4cf7b6214ddacb7a438467d",
+    "json": "529d4851e0a4a1c7141be3ca6f20ef3d583ec0de2b30e924f69349e01e222fa0",
+    "filename": "tpex-shares-2026-11-04-organized.json",
+    "previewRows": 48
+  },
+  "tpex-shares:stale": {
+    "preparing": "3ef2f7e70b0517326f7c2cbed62ae0d9333ba3febe0a15604f245e86a860de64",
+    "ready": "e864cfaca5a2199fd21a5a67cdc3904d6f324dffba2f33bc717375d29a2fe8d5",
+    "json": "c59e0e8cc6160b9caba5c2b41c09f85134e8ac758ef3938c8f8e168ce89b2207",
+    "filename": "tpex-shares-2026-11-04-organized.json",
+    "previewRows": 48
+  },
+  "tpex-shares-bounded:ready": {
+    "preparing": "bba5713593b123ca747f825fc4dad0f27b05e7801e4c88da96673d64f855573c",
+    "ready": "37b9ceead2fd93f312560f34389f5508948d9ed6ae41b9016e558efe5051e004",
+    "json": "c4d71ff2af1c6d8d3c991f3c02f1c872b08697c1e8262fe2ba216408c1e13adf",
+    "filename": "tpex-shares-2026-11-04-organized.json",
+    "previewRows": 120
+  },
+  "tpex-shares-bounded:stale": {
+    "preparing": "8db454ada50bed45206899a69e06e118d0b50f6341f5e972115cda10085b3b5d",
+    "ready": "1e3dbd18c86e7b95f2e2ffec7df0645bb19f2ba27e3894cd80925dcb71bf667b",
+    "json": "97dbc10ffaeb5cca3c3a72274b7210a4eab25f841187c6dd36a5dd5ece32cafc",
+    "filename": "tpex-shares-2026-11-04-organized.json",
+    "previewRows": 120
+  },
+  "cvm:ready": {
+    "preparing": "07a848754d27bf305733c0f5619bfd602264e7ab226b0c82af2c17cfeb1b4acb",
+    "ready": "aeaa624ebed8f1cf83652f7cb40ec2dc42895a6e4892a719a71471ee7eee5260",
+    "json": "8614d6906897bc46cc69718d8520ed770b8d3569b87e38e68e017b99a6adba0c",
+    "filename": "cvm-fund-equity-2026-09-30-organized.json",
+    "previewRows": 15
+  },
+  "cvm:stale": {
+    "preparing": "210c3bc0ec001253d90bd61b23403d7bc8e51030b8bce4e67ef95d42dc65e6c3",
+    "ready": "052af445341fb78ffa08774b9e379b47382abc296025e3aeb100a499bcbdd1bf",
+    "json": "94f342094662941f7c3062ca2f352697d3a07af130ce8b9292f28365aeb329ad",
+    "filename": "cvm-fund-equity-2026-09-30-organized.json",
+    "previewRows": 15
+  },
+  "cvm-bounded:ready": {
+    "preparing": "c1b6f8bfac7c9887601e0194f8d8236202e95480a473511004c319d7a5f6c44d",
+    "ready": "97aa7265f9488ea338a0dda57857a9723c13a76aeec40260525d8e1a52b1e534",
+    "json": "c508df08bbdd1cfaefbde87f95c74f29522723119230b1b50b96683acaf60656",
+    "filename": "cvm-fund-equity-2026-09-30-organized.json",
+    "previewRows": 120
+  },
+  "cvm-bounded:stale": {
+    "preparing": "cb11fd0f1da0a985395c7b16f2d78bc3f7f18f2664837674fca6717080ff7ce7",
+    "ready": "8717a2bbb2aacafb26dac0f192b3f26567e8afa63da98d040358247339b35bf2",
+    "json": "83d90c54d5086665f66540054502baf2d83b9d76070525abcf5948ebef4da179",
+    "filename": "cvm-fund-equity-2026-09-30-organized.json",
+    "previewRows": 120
+  },
+  "cftc-current-bounded:ready": {
+    "preparing": "89cfb7dc8092512be0f49e27d4b92b642bd0ed2758c34dab0b2d4069309a296d",
+    "ready": "337d4a70ff5850b5cc14763b6b6dbaab835e28d66924747434454caa40d5d189",
+    "json": "6d13c36695d16ec8747e6512cb372857b578cf498eac5cf3d03d8b1689ca0e90",
+    "filename": "cftc-2026-10-27-organized.json",
+    "previewRows": 120
+  },
+  "cftc-current-bounded:stale": {
+    "preparing": "a0300f2b4c875a25b3dfe6dd9a171ef987704efdc6345c87d67c0c954130af14",
+    "ready": "b8bf396178267b15e45cc20b1bdc1318adbda686fb06cbd892baf1a34d115bca",
+    "json": "b80d0e79027b5941920c9eb0640de2871bb453e9c9dd2105c8da8cb9ad7b42fe",
+    "filename": "cftc-2026-10-27-organized.json",
+    "previewRows": 120
+  },
+  "cftc-legacy:ready": {
+    "preparing": "0c58f652dc330c50fd34fa423a9fde9fed98427a93bf29a4c2c0ec35490e2956",
+    "ready": "b9854408337bab6407df33fc8cad7b9f59e8e1bc227b468030604f3eb5e205a7",
+    "json": "4f44adfa9d52171b9930bbef15f6b126d9cdf9670d3fdb6e43ba1337797c2073",
+    "filename": "cftc-2026-10-27-organized.json",
+    "previewRows": 64
+  },
+  "cftc-legacy:stale": {
+    "preparing": "a24e07323950dfa65fe0e3a590612cbcfea5368918e90b4369ccbbcadeea7d38",
+    "ready": "255b82c26c161a9c1686999135c812f0283ad2d77815b275aa2b3723d274912a",
+    "json": "15fdd58b9986872b2a2c8111bb3c5f5e59a360d7299341e20f4d49a42d7f6fae",
+    "filename": "cftc-2026-10-27-organized.json",
+    "previewRows": 64
+  }
+}

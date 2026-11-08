@@ -1,6 +1,6 @@
 /** Read-only retained CFTC position fields. No new source calls or derived positions. */
 import {CFTC_DATASET,CFTC_SCHEDULE,CONTRACTS,FUTURES_CATEGORIES,snapshotSchema,type CftcSnapshot,type Position} from '@/lib/futures/model';
-import type {EvidenceRow} from './report-projection';
+import type {EvidenceRow} from './types';
 
 type PositionField=Exclude<keyof Position,'date'>;
 const fields=[

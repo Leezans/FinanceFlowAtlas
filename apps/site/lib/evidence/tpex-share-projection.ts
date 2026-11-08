@@ -2,7 +2,7 @@
 import {COMPANY_DATASET,FLOW_DATASET,LICENSE,PARTICIPANTS,snapshotSchema,type Participant,type TpexSnapshot} from '@/lib/tpex/model';
 import {COMPANY_URL,FLOW_URL} from '@/lib/tpex/adapter';
 import {INDUSTRY_REFERENCE,industryLabel} from '@/lib/tpex/industries';
-import type {EvidenceRow} from './report-projection';
+import type {EvidenceRow} from './types';
 
 export type OrganizedTpexShareRow=EvidenceRow&{
  dimension:{namespace:'TPEx.security_code';kind:'instrument';id:string;label:string;native_locator:string};

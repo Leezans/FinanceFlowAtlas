@@ -1,7 +1,7 @@
 /** Read-only organization of the existing, permission/age-filtered option view. */
 import {z} from 'zod';
 import {MAX_ROWS,METADATA_MAX_AGE_MS,OPTION_CURRENCIES,coverageForCurrencies,optionRowSchema,type OptionCurrency,type OptionsSnapshot} from '@/lib/options/model';
-import type {EvidenceRow} from './report-projection';
+import type {EvidenceRow} from './types';
 
 export type DeribitInputSchema='deribit-options/2'|'deribit-btc-options/1';
 export type DeribitProvenance={input_schema:DeribitInputSchema|null;source_instrument_count:number|null};

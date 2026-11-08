@@ -1,7 +1,7 @@
 /** Read-only organization of the exact validated, age/permission-filtered trade view. */
 import {tradeSnapshotSchema} from '@/lib/crypto/trade-validation';
 import {KRAKEN_TRADES_DOCS,TRADE_PAIRS,type KrakenTradeSnapshot} from '@/lib/crypto/trades';
-import type {EvidenceRow} from './report-projection';
+import type {EvidenceRow} from './types';
 
 const fields=[
  {id:'buy_notional_usd',label:'来源买标记成交额',origin:'adapter_sum_of_returned_buy_marked_trades'},
