@@ -4,6 +4,8 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {REFRESH_MS,MAX_CACHE_AGE_MS,type KrakenReply} from '@/lib/crypto/kraken';
 import {DEFAULT_TRADE_PAIRS as TRADE_PAIRS,tradeSelectionKey as selectionKey,DEFAULT_TRADE_TIMEFRAME,tradeWindowMilliseconds,type TradeTimeframe} from '@/lib/crypto/selection';
 import {validateKrakenReply,visibleSnapshot} from './client';
+import {visibleTradeSnapshot} from './trade-matrix';
+import type {KrakenTradeSnapshot} from '@/lib/crypto/trades';
 
 export function useKrakenEvidence(initialPairs:readonly string[]=TRADE_PAIRS){
  const [data,setData]=useState<KrakenReply|null>(null),[loading,setLoading]=useState(false),[networkError,setNetworkError]=useState(false),[permissionLost,setPermissionLost]=useState(false),[invalidResponse,setInvalidResponse]=useState(false),[now,setNow]=useState(0);
@@ -83,5 +85,18 @@ export function useKrakenEvidence(initialPairs:readonly string[]=TRADE_PAIRS){
  const snapshot=visibleSnapshot(data,now),age=snapshot?Math.max(0,now-Date.parse(snapshot.fetched_at)):null;
  const stale=!!snapshot&&(networkError||data?.status.state==='stale'||age!>REFRESH_MS);
  const denied=data?.status.state==='denied';
- return {data,loading,networkError,permissionLost,invalidResponse,now,selected,timeframe,catalogPairs,snapshot,age,stale,denied,refresh,applyScope};
+ const tradeSnapshot=visibleTradeSnapshot(data?.trade_snapshot,!!snapshot,now);
+ // Read the latest committed view even if a retained old click handler is invoked.
+ const latest=useRef({data,networkError});
+ useEffect(()=>{latest.current={data,networkError};},[data,networkError]);
+ const validateTradeDownload=(expected:KrakenTradeSnapshot,expectedStale:boolean)=>{
+  const current=Date.now(),state=latest.current,quotes=visibleSnapshot(state.data,current);
+  const trades=visibleTradeSnapshot(state.data?.trade_snapshot,!!quotes,current);
+  const currentStale=!!quotes&&(state.networkError||state.data?.status.state==='stale'||current-Date.parse(quotes.fetched_at)>REFRESH_MS);
+  const allowed=mounted.current&&!blocked.current&&!!trades&&trades===expected&&
+   selectionKey(trades.selected_pairs??TRADE_PAIRS)===selectionKey(scope.current.pairs)&&trades.window_ms===tradeWindowMilliseconds(scope.current.timeframe)&&currentStale===expectedStale;
+  if(!allowed&&mounted.current)setNow(current);
+  return allowed;
+ };
+ return {data,loading,networkError,permissionLost,invalidResponse,now,selected,timeframe,catalogPairs,snapshot,age,stale,denied,refresh,applyScope,tradeSnapshot,validateTradeDownload};
 }

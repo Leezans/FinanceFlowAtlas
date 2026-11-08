@@ -12,6 +12,8 @@ fund-equity transaction snapshot, preserving its native integer-cent amounts.
 contract-market positions, preserving both report slots and contract specifications.
 `apps/site/lib/evidence/deribit-projection.ts` adds the current Deribit option
 view, retaining per-row native units, contract identity and source row clocks.
+`apps/site/lib/evidence/kraken-trade-projection.ts` adds the current Kraken
+trade-direction snapshot with exact decimal strings and fixed-window coverage.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -50,6 +52,76 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   update date when retained, unknown publication time and absent raw hash as null.
   CVM retains its two existing CDA/FCA archive SHA-256 hashes instead of null.
   It contains no industry/instrument classification where the source has none.
+
+### Kraken USD trade-direction evidence
+
+- The collapsed panel follows the existing `/crypto` quote and trade heatmaps.
+  It receives the exact validated trade snapshot after the existing quote and
+  trade visibility gates. It is not an account balance or ledger export. Pair
+  search and unapplied drafts do not narrow the file. Applying pairs or the
+  one/five-minute interval immediately withdraws previous-scope evidence while
+  the existing quote matrix remains independent. No requests are added.
+- Four retained fields per present pair are organized: buy_notional_usd,
+  sell_notional_usd, imbalance_usd and imbalance_pct. The first three stay exact
+  decimal **strings**, including all 24 available fractional digits and values
+  beyond safe-integer precision. The original numeric percentage is retained
+  even when truncation to 0.0001% yielded zero for a nonzero exact difference.
+  The matrix's separate display/color conversions are not exported. Value origin
+  identifies the existing adapter sums, difference and truncated ratio; this
+  projection performs no new monetary or ratio calculation.
+- Each metric has an exact native locator. Source pair ID, display pair, base,
+  USD quote, common fixed window, inclusive start/exclusive end, row first/last
+  returned execution, row fetch, coverage and response counts retain their own
+  native paths. The continuation cursor stays text and is not a trade timestamp.
+  Common final fetch remains separate from earlier per-pair fetches. The native
+  trade snapshot has no separate acquisition_started_at: that field is null,
+  with an explicit note that full-reply validation ties window_ended_at to the
+  accompanying quote acquisition-start clock. No quote rows or account data are
+  copied into the trade export, and source release/delay remain unknown.
+- Existing strict `tradeSnapshotSchema` is reused unchanged. Unlike Deribit,
+  trade visibility returns the whole original snapshot or null, without filtering
+  rows or transforming schema. `/1` means default pair selection, not evidence
+  of an old cache: current default requests also use `/1`. `/2` retains the
+  explicit selected_pairs. The `/1` default interpretation is labeled outside
+  native_snapshot. Missing page_limit/page_count/last_page_count fields remain
+  absent natively and null with null locators in organized metadata. Original
+  reader defaults (one page, last page equals returned count) are disclosed,
+  never written back as supposedly reported fields.
+- Capped terminal pages retain all four null fields as coverage_unavailable.
+  An uncapped window without returned in-window executions retains three exact
+  zero strings as reported and a null ratio as no_trades_in_window. An uncapped
+  short terminal page is not proof of complete-window or market coverage.
+  Missing catalog pairs retain only their native missing_pairs names; no source
+  pair/base/quote metadata or metric rows are invented for them. A valid snapshot
+  whose entire requested selection is absent can have an empty organized table.
+- Every execution has both buyer and seller counterparties. The linked REST
+  documentation does not prove b/s aggressor semantics, so these remain
+  buy/sell-marked amounts, not a taker-flow claim. Even known taker imbalance
+  would not establish net capital inflow, exchange deposits/withdrawals or
+  cross-border flow. No cross-pair, asset, unit, metric, overlapping-window or
+  source sums or conversions are offered. Venue is not underlying domicile;
+  industry and country assignment are null. USD amounts and percentages have
+  distinct per-row units. Redistribution permission is not claimed.
+- DOM preview uses a 120-row ceiling and the Blob includes the entire eligible
+  snapshot. The current three-pair schema permits at most 12 metric rows; tests
+  do not relax that limit just to manufacture a larger fixture. Memoization by
+  actual snapshot/stale flag avoids rebuilding on ordinary clock ticks, search
+  or drafts. The shared Blob component revokes replaced, withdrawn and unmounted
+  files, cancels pending preparation, and exposes no link after local failure.
+- Download-time validation reads the latest committed reply, mounted/blocked
+  state, current applied pair/window, exact snapshot identity, original quote
+  gate and every trade row/final fetch age, and the current stale flag. A missed
+  clock tick cancels an expired or newly-stale file before saving and rebuilds
+  only eligible current evidence. A retained old callback cannot export a
+  replacement or prior selection. Existing inclusive 15-minute limits, visible-
+  only refresh cadence, denial/invalid-response behavior, stale temporary-error
+  retention and shared source gates remain unchanged. Acquisitions and all
+  original clocks are never renewed by exporting.
+- Synthetic tests cover exact values and locators, zero/null/cap states, legacy
+  omissions, one/five-minute selection, private extras and malformed schemas,
+  current UI/Blob stability, blocked/expired/replaced clicks, hidden-tab expiry,
+  stale recovery, late prior-scope replies, missing-only evidence and cleanup.
+  No live provider request or credentials are used for implementation checks.
 
 ### Deribit BTC / ETH option evidence
 
