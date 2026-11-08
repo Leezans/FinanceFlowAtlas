@@ -4,6 +4,8 @@
 MOF and TPEx institutional monetary snapshot fields into one read-only envelope.
 `apps/site/lib/evidence/ashare-projection.ts` extends that envelope to the current
 A-share industry or constituent snapshot, using the same preview and download.
+`apps/site/lib/evidence/tpex-share-projection.ts` adds the current TPEx company,
+official industry and institutional-participant share snapshot.
 `OrganizedEvidence` consumes that envelope for both a collapsed preview table and
 an actual local JSON download. It is not an unused schema or a source directory.
 The original heatmaps, adapters, stored payloads, APIs and source gates are unchanged.
@@ -17,6 +19,9 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   `not_in_retained_snapshot` state and no invented native locator.
 - TPEx monetary institutional report: foreign investors excluding dealers,
   investment trusts, dealers and reported total × buy/sell/net. Native unit TWD.
+- TPEx company institutional report: every company × all four participant
+  categories × buy/sell/net. Native unit is `shares`, with currency and monetary
+  multiplier both null. This is separate from the TPEx TWD report.
 - Every reported observation has its source-scoped dimension, metric ID, original
   value and actual native field path. The validated native snapshot is included
   alongside the organized rows for self-contained traceability, with the A-share
@@ -28,6 +33,51 @@ The original heatmaps, adapters, stored payloads, APIs and source gates are unch
   period and calendar zone, country with role, acquisition/fetch clocks, source
   update date when retained, unknown publication time and absent raw hash as null.
   It contains no industry/instrument classification where the source has none.
+
+### TPEx company, industry and participant share evidence
+
+- `source_id: tpex-shares` remains distinct from `tpex-money`. The panel is below
+  the existing company/industry heatmap and projects its exact `visibleSnapshot`
+  result. Industry drilldown, company selection and participant filters never
+  remove records from the export. The projection is memoized by snapshot and
+  stale state, so filters and unchanged clock ticks do not rebuild the file.
+- Each row's primary `dimension` identifies the company in `TPEx.security_code`.
+  `industry` preserves its `TPEx.industry_code`, official classification date,
+  label and native code locator. `participant` identifies total, foreign, trust
+  or dealer in `TPEx.institutional_participant`. Identical labels never merge
+  codes. Unknown industry names stay explicitly unverified. No global taxonomy,
+  exchange MIC, historical classification or industry aggregate is invented.
+- The source's matched company count, missing company count, total company
+  roster count, source security count and excluded unmatched security count stay
+  separate. The source market is TPEx OTC listed companies, not TWSE or a whole
+  Taiwan equity-market total. Both official datasets, their endpoints, the
+  government open-data license and the industry-code reference are linked in
+  the export. The code-table reference is not a license for a separate quote feed.
+- `participant_total` overlaps the three components for the same company and
+  metric. The existing adapter computes total buy/sell from the three participant
+  values, while total net is source-reported. `value_origin` distinguishes
+  `adapter_sum_of_participants` from `source_reported`; the projection never
+  recalculates them. Foreign excludes foreign dealers, who are included in dealer.
+  The UI does not call these share totals amounts or label calculated buys/sells
+  as officially reported totals.
+- A missing company flow produces twelve null metric rows with
+  `state: source_record_missing`, distinct from a reported zero. `native_locator`
+  points to the actual `rows[i].flow` null. `expected_metric_locator` is the schema
+  path for that participant/metric; for missing flow it does not claim that a
+  nested field exists. Every reported metric's native locator resolves exactly
+  to the value in the native snapshot. Identity locators resolve to source codes.
+- The native snapshot is parsed through the existing strict schema, including
+  each company, participant collection and buy/sell/net object. Unknown fields
+  are rejected rather than exported. This is a validated snapshot copy, not raw
+  upstream JSON or a raw hash. Report and classification dates, null publication
+  time, acquisition start and fetch time are preserved without substitutions.
+- A maximum of 120 rows is previewed, explicitly labeled against the full count.
+  The local JSON file contains all validated rows, up to 3,000 companies × 12
+  metrics = 36,000 rows, plus the native snapshot. A Blob URL avoids embedding a
+  very large data URI. File preparation is local; the link is not offered until
+  that exact report is ready. Old URLs are revoked on replacement, withdrawal
+  and unmount, and pending preparation is canceled. Downloaded copies cannot be
+  recalled. JSON generation still scales with the complete source snapshot.
 
 ### A-share industry and constituent evidence
 
@@ -71,7 +121,8 @@ It never calls a new
 endpoint, retries a provider, reads a database, fetches `/snapshot` for export,
 creates credentials or uploads/shares any data. No new public API is introduced.
 The projection parses the source schema. MOF/TPEx and A-share top-level unknown
-fields are rejected; A-share unknown row properties are omitted via the allowlist.
+fields are rejected; TPEx share nested unknown fields are also rejected. A-share
+unknown row properties are omitted via the allowlist.
 
 Permission denial, invalid payload and provider denial remove the preview and
 download. MOF/TPEx expiry follows the matrix visibility policy; A-share expiry
@@ -88,13 +139,23 @@ Expiry is enforced by a timer, focus/pageshow/visibility resampling and a final
 click-time check; none triggers another request or changes the client's existing
 retained heatmap behavior. A 304 does not extend the original expiry.
 
-Downloading saves a data URL JSON file locally on the user's click; previously
-saved files cannot be revoked automatically. No observations enter source control.
+TPEx shares keep the existing inclusive 24-hour fetched-cache and 14-day report
+age bounds, including the report's Asia/Taipei day boundary. The existing page
+timer/visibility handling withdraws both the matrix and its export. A final
+download click rechecks that same `visibleSnapshot` policy and the existing
+permission-stop flag, preventing an expired download when a suspended tab has
+not delivered its timer yet. No global lifecycle, gate, API or polling changes
+are introduced. A temporary network failure retains only eligible evidence,
+marks the export stale and does not renew its original clocks.
+
+Downloading saves a JSON file locally on the user's click (a Blob URL for TPEx
+shares, existing data URLs for the earlier sources); previously saved files
+cannot be revoked automatically. No observations enter source control.
 
 ## Limits
 
-This release covers the two monetary reports and A-share current-scope f62, not
-other A-share normalized metrics, TPEx security shares,
+This release covers the two monetary reports, A-share current-scope f62 and TPEx
+company institutional shares, not other A-share normalized metrics,
 CVM fund transactions, all historical snapshots, global identity reconciliation,
 or a common server database. Country/industry links do not imply compatible
 numeric measurements. The projection is a current evidence export, not a claim
@@ -115,3 +176,13 @@ known quote units, validation and retention boundaries.
 fetches, timer and suspended-tab expiry, late click rejection, first-render scope
 changes, permission/source denial, invalid responses, temporary failure and 304
 retention, snapshot replacement, cleanup and workspace integration.
+
+`tests/organized-tpex-projection.test.ts` verifies all participant/metric locators,
+company and dated industry identities, absent records versus zero, total
+provenance and overlap, source/coverage metadata, strict nested validation,
+maximum source size and unchanged inclusive visibility bounds.
+`tests/organized-tpex-lifecycle.test.tsx` checks integration below the heatmap,
+filter-independent complete Blob exports, bounded preview, stable URLs across
+ordinary rerenders, replacement/withdrawal/unmount revocation, canceled
+preparation, honest preparation failure, denial/invalid/unavailable states,
+hidden-tab expiry, both late-click age bounds and retained-failure clocks.

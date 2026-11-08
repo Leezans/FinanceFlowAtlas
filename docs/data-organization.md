@@ -74,7 +74,8 @@ are unchanged. Relationships remain navigation, not numeric reconciliation.
 Query-backed MOF/TPEx/TIC context follows country selection and history; TIC is
 selected only at its explicit US supplement anchor, not from USA selection alone.
 
-The first actual data projection is now consumed by Japan MOF and TPEx monetary
-pages: see [organized current-report evidence](organized-report-projection.md).
+Actual data projections are now consumed by Japan MOF, TPEx monetary, A-share
+current-scope and TPEx company-share pages: see
+[organized current-report evidence](organized-report-projection.md).
 It supplies source-preserving normalized rows and local JSON export from each
 current visible snapshot, without changing storage or acquisition.
