@@ -4,7 +4,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {render,screen,fireEvent,waitFor,cleanup,act} from '@testing-library/react';
 import Page from '../app/ashare/page';
 const row={f12:'BK0001',f14:'合成行业',f2:1,f3:1,f62:-10,f184:1,f66:1,f69:1,f72:1,f75:1,f78:1,f81:1,f84:1,f87:1};
-const root={schema:'ashare-provider-evidence/1',rows:[row],source_total:1,fetched_at:'2024-01-02T08:00:00Z',scope:{kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:'index_points'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'合成订单分类测试，非真实资金',stale:false,has_error:false};
+const root={schema:'ashare-provider-evidence/1',rows:[row],source_total:1,fetched_at:new Date().toISOString(),scope:{kind:'industry_rank',fs:'m:90+s:2+f:!50',classification_level:'eastmoney_level_1'},page_count:1,source_observed_at:null,trade_date:null,metric_kind:'provider_order_flow_proxy',metric_field:'f62',unit:'CNY',field_units:{f62:'CNY',f3:'percent',f2:'index_points'},delay_status:'not_provided',classification_exclusivity:'not_established',notice:'合成订单分类测试，非真实资金',stale:false,has_error:false};
 const stock={...root,field_units:{...root.field_units,f2:'CNY'},rows:[{...row,f12:'000001',f14:'合成股票'}],scope:{kind:'industry_stocks',fs:'b:BK0001',classification_level:'unknown_may_mix_levels'}};
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.useRealTimers()});
 describe('private A-share page integration',()=>{

@@ -1,3 +1,4 @@
+import {ashareSnapshotExpired} from '@/lib/ashare/retention';
 import {type Scope,type ValidEvidence,scopeKey,validateEvidence} from './model';
 import {safeSourceCode,isSourceStopped,describeRecovery} from '@/lib/ashare/recovery';
 import {collectionContinuationAt} from '@/lib/ashare/collection-batch';
@@ -30,20 +31,30 @@ function recoveryFor(reply:WireReply,now:number,fallback?:string):Recovery|undef
  const stopped=reply.recoveryMode==='stopped'||isSourceStopped(code);
  return {code,mode:stopped?'stopped':'retry',retryAt:stopped?null:retryAt(reply.retryAfter,now),httpStatus:reply.status||null};
 }
-function failure(previous:EvidenceState,scope:Scope,recovery:Recovery):EvidenceState {
+function failure(previous:EvidenceState,scope:Scope,recovery:Recovery,now:number):EvidenceState {
+ previous=expireEvidenceState(previous,now);
  const message=describeRecovery(recovery.code).message;
  if(recovery.mode==='stopped')return {snapshot:null,etag:null,status:'blocked',message,recovery};
  if(previous.snapshot&&scopeKey(previous.snapshot.scope)===scopeKey(scope))return {...previous,continuationAt:undefined,status:'stale',message,recovery,retainedAfterFailure:recovery.code!=='collection_in_progress',retainedDuringCollection:recovery.code==='collection_in_progress'};
  return {snapshot:null,etag:null,status:'error',message,recovery};
 }
+/** Evict bytes only. Recovery and scheduling remain independent of retention. */
+export function expireEvidenceState(state:EvidenceState,now=Date.now()):EvidenceState {
+ if(!state.snapshot||!ashareSnapshotExpired(state.snapshot,now))return state;
+ return {...state,snapshot:null,etag:null,status:state.status==='blocked'?'blocked':'error',
+  message:'快照已超过24小时保留期限，已清空缓存数据。',retainedAfterFailure:undefined,retainedDuringCollection:undefined};
+}
 export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,now=Date.now()):EvidenceState {
+ return expireEvidenceState(consumeCurrentReply(previous,reply,scope,now),now);
+}
+function consumeCurrentReply(previous:EvidenceState,reply:WireReply,scope:Scope,now:number):EvidenceState {
  const clear=(status:EvidenceState['status'],message:string):EvidenceState=>({snapshot:null,etag:null,status,message});
  if(reply.status===401||reply.status===403)return {...clear('blocked',reply.status===401?'当前登录已失效，已清空缓存数据；请重新登录。':'来源展示权限未建立，已清空缓存数据'),recovery:{code:'disabled',mode:'stopped',retryAt:null,httpStatus:reply.status}};
  const recovery=recoveryFor(reply,now);
- if(recovery?.mode==='stopped')return failure(previous,scope,recovery);
+ if(recovery?.mode==='stopped')return failure(previous,scope,recovery,now);
  const continuation=()=>{const at=collectionContinuationAt(reply,now);return at===undefined?{}:{continuationAt:at};};
  if(reply.status===304){
-  if(!previous.snapshot||scopeKey(previous.snapshot.scope)!==scopeKey(scope))return clear('error','304没有匹配scope的已验证缓存');
+  if(!previous.snapshot||scopeKey(previous.snapshot.scope)!==scopeKey(scope))return {...clear('error','304没有匹配scope的已验证缓存'),...(recovery?{recovery}:{})};
   // Retained browser bytes remain unchanged under their ETag. A successful
   // revalidation removes only the browser's temporary failure marker.
   const snapshot=previous.snapshot;
@@ -53,7 +64,7 @@ export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,
  // A gateway/application rate limit is not evidence of a provider outcome.
  // Preserve the existing clear-on-429 behavior, but never discard its cooldown.
  if(reply.status===429)return {...clear('error','应用请求限速，已清空缓存数据'),recovery:recovery??recoveryFor(reply,now,'browser_rate_limited')!};
- if(reply.status>=500&&reply.status<=599)return {...failure(previous,scope,recovery??recoveryFor(reply,now,'collection_failed')!),...continuation()};
+ if(reply.status>=500&&reply.status<=599)return {...failure(previous,scope,recovery??recoveryFor(reply,now,'collection_failed')!,now),...continuation()};
  if(reply.status!==200)return clear('error',`来源响应失败（HTTP ${reply.status}），已清空缓存数据`);
  try {
   const snapshot=validateEvidence(reply.payload,scope);
@@ -65,17 +76,18 @@ export function consumeReply(previous:EvidenceState,reply:WireReply,scope:Scope,
 /** Memory-only, same-scope retention. No local storage or new source access. */
 export function createEvidenceClient(transport:Transport,now=()=>Date.now()) {
  let state=emptyState(),generation=0,currentScope:string|null=null;
+ const getState=()=>{state=expireEvidenceState(state,now());return state;};
  const canLoad=(scope:Scope)=>scopeKey(scope)!==currentScope||(!state.recovery||state.recovery.mode==='retry'&&now()>=state.recovery.retryAt!);
  return {
-  getState:()=>state,canLoad,
+  getState,canLoad,
   clear(){generation++;currentScope=null;state=emptyState();},
   async load(scope:Scope){
+   getState();
    if(!canLoad(scope))return state;
    const id=++generation,key=scopeKey(scope);
    if(key!==currentScope){currentScope=key;state=emptyState();}
-   const prior=state;
-   try{const reply=await transport({scope,...(prior.etag?{ifNoneMatch:prior.etag}:{})});if(id===generation)state=consumeReply(prior,reply,scope,now());}
-   catch(error){if(id===generation)state=failure(prior,scope,{code:error instanceof BrowserTimeoutError?'browser_timeout':'browser_network',mode:'retry',retryAt:Math.max(now()+60_000,error instanceof BrowserTimeoutError?error.retryNotBefore??0:0),httpStatus:null});}
+   try{const reply=await transport({scope,...(state.etag?{ifNoneMatch:state.etag}:{})});if(id===generation)state=consumeReply(state,reply,scope,now());}
+   catch(error){if(id===generation)state=failure(state,scope,{code:error instanceof BrowserTimeoutError?'browser_timeout':'browser_network',mode:'retry',retryAt:Math.max(now()+60_000,error instanceof BrowserTimeoutError?error.retryNotBefore??0:0),httpStatus:null},now());}
    return state;
   },
  };
