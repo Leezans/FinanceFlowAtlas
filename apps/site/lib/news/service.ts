@@ -7,7 +7,11 @@ import { D1NewsGate, NEWS_REFRESH_MS, NEWS_MAX_STALE_MS as MAX_STALE_MS, type Ne
 
 export const NEWS_CACHE_TTL_MS = NEWS_REFRESH_MS;
 export const NEWS_MAX_STALE_MS = MAX_STALE_MS;
+// Response latency is independent from the retained, original operation lifetime.
 export const NEWS_FETCH_TIMEOUT_MS = 8000;
+// Leaves room for gate writes after the normal 8s response. Early disconnect or
+// host termination can still interrupt cleanup: an unconfirmed lease stays busy.
+export const NEWS_OPERATION_TIMEOUT_MS = 20000;
 const NEWS_LOOKBACK_MS = 30 * 86400000;
 const EVENT_HORIZON_MS = 90 * 86400000;
 const MAX_ITEMS_PER_SOURCE = 60;
@@ -67,7 +71,8 @@ async function readBounded(response: Response, signal: AbortSignal): Promise<str
 export class NewsService {
   private readonly inflight = new Map<string, Promise<SourceCache>>();
   constructor(private readonly fetcher: typeof fetch = fetch, private readonly clock: () => Date = () => new Date(),
-    private readonly gate: NewsGate = new D1NewsGate(undefined)) {}
+    private readonly gate: NewsGate = new D1NewsGate(undefined),
+    private readonly waitUntil?: (operation: Promise<unknown>) => void) {}
 
   private unavailable(now: number, error: string, halted = false, attemptedAt: number | null = null): SourceCache {
     return { observedAt: now, news: [], events: [], warnings: [], fetchedAt: null, lastAttemptAt: attemptedAt, nextAttemptAt: null, error, halted };
@@ -86,11 +91,29 @@ export class NewsService {
     assertAllowedSource(source);
     const pending = this.inflight.get(source.id);
     if (pending) return pending;
-    const operation = this.acquireShared(source, now);
-    this.inflight.set(source.id, operation);
-    try { return await operation; }
-    finally { this.inflight.delete(source.id); }
+    // Register the complete lifetime before admission, not the soft response race.
+    // A registration failure must not start any database write or provider request.
+    let retained = false;
+    const operation = Promise.resolve().then(() => {
+      if (this.waitUntil && !retained) return this.unavailable(now, '来源请求未获得后台执行许可；未请求上游。');
+      return this.acquireShared(source, now);
+    });
+    if (this.waitUntil) {
+      try { this.waitUntil(operation); retained = true; } catch { /* fail closed */ }
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const response = retained ? Promise.race([operation, new Promise<SourceCache>(resolve => {
+      timer = setTimeout(() => resolve(this.unavailable(now, '来源请求超时；原共享请求仍在校验，不自动接管或重试。')), NEWS_FETCH_TIMEOUT_MS);
+    })]) : operation;
+    this.inflight.set(source.id, response);
+    // Keep coalescing until the original lifetime ends, even after the caller leaves.
+    void operation.finally(() => {
+      if (timer) clearTimeout(timer);
+      this.inflight.delete(source.id);
+    });
+    return response;
   }
+
   private async acquireShared(source: NewsSource, now: number): Promise<SourceCache> {
     try {
       // Always inspect shared state, even when a previous request populated cache.
@@ -123,7 +146,7 @@ export class NewsService {
         timedOut = true;
         controller.abort();
         reject(new SourceFailure('来源请求超时；未获取新的证据。'));
-      }, NEWS_FETCH_TIMEOUT_MS);
+      }, this.waitUntil ? NEWS_OPERATION_TIMEOUT_MS : NEWS_FETCH_TIMEOUT_MS);
     });
     let outcome: NewsOutcome;
     try {
