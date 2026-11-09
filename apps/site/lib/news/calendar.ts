@@ -122,7 +122,8 @@ export function parseCalendar(ics: string, source: NewsSource): { events: Schedu
     const endProp = record.get('DTEND');
     const end = parseCalendarDate(endProp);
     const rawUrl = record.get('URL')?.value;
-    const url = rawUrl ? canonicalUrl(decode(rawUrl), source) : source.websiteUrl;
+    // These calendars have absent or diverse external event links. Use only the reviewed landing page.
+    const url = source.calendar ? source.websiteUrl : rawUrl ? canonicalUrl(decode(rawUrl), source) : source.websiteUrl;
     if (!title || !start || !url || (endProp && !end) ||
       (end && (end.allDay !== start.allDay || (start.allDay ? end.date <= start.date : !end.instant || !start.instant || end.instant <= start.instant)))) { skipped++; continue; }
     const rawStatus = record.get('STATUS')?.value.toUpperCase();
@@ -133,10 +134,13 @@ export function parseCalendar(ics: string, source: NewsSource): { events: Schedu
     const uid = record.get('UID')?.value || `${url}|${title}|${start.instant ?? start.date}`;
     const event: ScheduledEvent = {
       id: stableId(source.id, uid), title, url, sourceId: source.id, sourceName: source.name,
-      category: source.category, ...contextTags(title, source),
-      startsAt: start.instant, startDate: start.date, timeZone: start.zone, allDay: start.allDay,
-      endsAt: end?.instant ?? null, endDate: end?.date ?? null,
-      status: rawStatus === 'CANCELLED' ? 'cancelled' : rawStatus === 'TENTATIVE' ? 'tentative' : 'scheduled',
+      category: source.category, ...(source.calendar ? { regions: [...source.regions], relatedMarkets: [...source.relatedMarkets] } : contextTags(title, source)),
+      startsAt: start.instant, startDate: start.date,
+      timeZone: start.allDay ? source.calendar?.dateZone ?? start.zone : start.zone,
+      allDay: start.allDay,
+      endsAt: end?.instant ?? null,
+      endDate: end?.date ?? null,
+      status: rawStatus === 'CANCELLED' ? 'cancelled' : rawStatus === 'TENTATIVE' || (!rawStatus && source.calendar?.tentativeByDefault) ? 'tentative' : 'scheduled',
       // DTSTAMP is a transport/revision timestamp, not proof of original publication.
       publishedAt: null,
     };

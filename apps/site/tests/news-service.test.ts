@@ -35,7 +35,7 @@ describe('bounded official-source acquisition and freshness', () => {
     expect(original.events).toEqual([]);
     expect(original.sources.every(source => source.halted)).toBe(true);
     expect(original.sources.map(source => source.lastAttemptAt)).toEqual(denied.sources.map(source => source.lastAttemptAt));
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
   });
   it('does not take over an old busy source or serve its previous evidence', async () => {
     const { fetcher, service, gate, advance } = setup();
@@ -49,33 +49,34 @@ describe('bounded official-source acquisition and freshness', () => {
     expect(snapshot.news).toEqual([]);
     expect(snapshot.events).toEqual([]);
     expect(snapshot.sources[0].lastAttemptAt).toBe(new Date(attemptedAt).toISOString());
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
   });
-  it('makes six allowlisted requests and serves cache without claiming live publication', async () => {
+  it('makes nine allowlisted requests and serves cache without claiming live publication', async () => {
     const { fetcher, service } = setup();
     const first = await service.snapshot();
     expect(first.status).toBe('ok');
     expect(first.news).toHaveLength(5);
-    expect(first.events).toHaveLength(1);
-    expect(first.sources).toHaveLength(6);
+    expect(first.events).toHaveLength(4);
+    expect(first.sources).toHaveLength(9);
     expect(first.events[0].publishedAt).toBeNull();
     expect(first.sources[0].fetchedAt).toBe(NEWS_NOW);
     await service.snapshot();
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
     expect(fetcher.mock.calls.map((call) => call[0])).toEqual(NEWS_SOURCES.map((source) => source.url));
     for (const call of fetcher.mock.calls) expect(call[1]).toMatchObject({ redirect: 'manual', cache: 'no-store' });
   });
   it('coalesces concurrent requests for each source', async () => {
     const { fetcher, service } = setup();
     await Promise.all(Array.from({ length: 8 }, () => service.snapshot()));
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
   });
   it('isolates a failing source without returning invented records', async () => {
     const { fetcher, service } = setup();
     fetcher.mockImplementation(async (url) => String(url) === NEWS_SOURCES[3].url ? new Response('busy', { status: 503 }) : new Response(sourceBody(String(url))));
     const snapshot = await service.snapshot();
     expect(snapshot.status).toBe('partial');
-    expect(snapshot.events).toEqual([]);
+    expect(snapshot.events).toHaveLength(3);
+    expect(snapshot.events.some(event => event.sourceId === 'bls-calendar')).toBe(false);
     expect(snapshot.sources[3]).toMatchObject({ status: 'error', fetchedAt: null, itemCount: 0, halted: false });
   });
   it('retains timestamped last-good evidence for transient failure then expires it', async () => {
@@ -104,7 +105,7 @@ describe('bounded official-source acquisition and freshness', () => {
     expect(denied.sources.every((source) => source.halted && source.nextRefreshAt === null)).toBe(true);
     advance(2 * NEWS_MAX_STALE_MS);
     await service.snapshot();
-    expect(fetcher).toHaveBeenCalledTimes(12);
+    expect(fetcher).toHaveBeenCalledTimes(18);
   });
   it.each(['reject', 'hang'])('never converts known denial to transient failure if cancellation %s', async (mode) => {
     const { fetcher, service } = setup();
@@ -127,10 +128,10 @@ describe('bounded official-source acquisition and freshness', () => {
     expect(snapshot.sources[0].nextRefreshAt).toBe('2026-11-09T11:00:00.000Z');
     advance(NEWS_CACHE_TTL_MS + 1);
     await service.snapshot();
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
     advance(3600000);
     await service.snapshot();
-    expect(fetcher).toHaveBeenCalledTimes(12);
+    expect(fetcher).toHaveBeenCalledTimes(18);
   });
   it('honors Retry-After HTTP-date and cannot leak expired last-good on long cooldown', async () => {
     const { fetcher, service, advance } = setup();
@@ -140,7 +141,7 @@ describe('bounded official-source acquisition and freshness', () => {
     await service.snapshot();
     advance(NEWS_MAX_STALE_MS);
     const expired = await service.snapshot();
-    expect(fetcher).toHaveBeenCalledTimes(12);
+    expect(fetcher).toHaveBeenCalledTimes(18);
     expect(expired.news).toHaveLength(0);
     expect(expired.status).toBe('unavailable');
     expect(expired.sources[0].nextRefreshAt).toBe('2026-11-11T12:00:00.000Z');
@@ -155,7 +156,7 @@ describe('bounded official-source acquisition and freshness', () => {
     const snapshot = await service.snapshot();
     expect(snapshot.sources.every(source => source.nextRefreshAt === '2026-11-09T12:00:00.000Z')).toBe(true);
     await service.snapshot();
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
   });
   it.each(['declared', 'streamed'])('rejects %s oversized payloads', async (mode) => {
     const { fetcher, service } = setup();
@@ -190,7 +191,7 @@ describe('bounded official-source acquisition and freshness', () => {
     const second = await service.snapshot();
     expect(second.news).toEqual([]);
     expect(second.events).toEqual([]);
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
     expect([...gate.rows.values()].every(row => row.state === 'busy')).toBe(true);
   });
   it('keeps a late body completion quarantined after timeout', async () => {
@@ -209,7 +210,7 @@ describe('bounded official-source acquisition and freshness', () => {
     await vi.advanceTimersByTimeAsync(0);
     advance(30 * 86400000);
     expect((await service.snapshot()).status).toBe('unavailable');
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(9);
     expect([...gate.rows.values()].every(row => row.state === 'busy')).toBe(true);
   });
   it('deduplicates only canonical news URLs, not equal headlines or calendar URLs', async () => {
@@ -222,7 +223,7 @@ describe('bounded official-source acquisition and freshness', () => {
     const snapshot = await service.snapshot();
     expect(snapshot.dedup.newsRemoved).toBe(1);
     expect(snapshot.news.filter((item) => item.sourceId === NEWS_SOURCES[0].id)).toHaveLength(2);
-    expect(snapshot.events).toHaveLength(2);
+    expect(snapshot.events.filter(event => event.sourceId === 'bls-calendar')).toHaveLength(2);
   });
   it('filters old/future-dated news and past/distant events again on cached requests', async () => {
     const { fetcher, service, advance } = setup();
@@ -233,10 +234,37 @@ describe('bounded official-source acquisition and freshness', () => {
     });
     const first = await service.snapshot();
     expect(first.news.some((item) => item.sourceId === NEWS_SOURCES[0].id)).toBe(false);
-    expect(first.events).toHaveLength(1);
+    expect(first.events).toHaveLength(4);
     advance(120000);
-    expect((await service.snapshot()).events).toHaveLength(0);
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect((await service.snapshot()).events.filter(event => event.sourceId === 'bls-calendar')).toHaveLength(0);
+    expect(fetcher).toHaveBeenCalledTimes(9);
+  });
+  it('keeps a multi-day EU source range until its exclusive end and separates notices from errors', async () => {
+    const {fetcher, service, advance} = setup();
+    const source = NEWS_SOURCES.find(source => source.id === 'eu-events')!;
+    fetcher.mockImplementation(async url => new Response(String(url) === source.url
+      ? calendar(vevent('range', 'DTSTART:20261108T230000Z', 'DTEND:20261109T110000Z'))
+      : sourceBody(String(url))));
+    const snapshot = await service.snapshot();
+    expect(snapshot.status).toBe('ok');
+    expect(snapshot.events.filter(event => event.sourceId === source.id)).toHaveLength(1);
+    expect(snapshot.sources.find(item => item.id === source.id)).toMatchObject({status: 'ok', warnings: [], calendarNotice: source.calendar!.notice});
+    advance(3600000);
+    expect((await service.snapshot()).events.filter(event => event.sourceId === source.id)).toHaveLength(0);
+  });
+  it('keeps DATE ranges until their exclusive end in the calendar filtering context', async () => {
+    const {fetcher, service, advance} = setup();
+    const source = NEWS_SOURCES.find(source => source.id === 'eurostat-euroindicators')!;
+    fetcher.mockImplementation(async url => new Response(String(url) === source.url
+      ? calendar(vevent('dates', 'DTSTART;VALUE=DATE:20261108', 'DTEND;VALUE=DATE:20261110'))
+      : sourceBody(String(url))));
+    const snapshot = await service.snapshot();
+    expect(snapshot.events.find(event => event.sourceId === source.id)).toMatchObject({startsAt: null, endsAt: null, startDate: '2026-11-08', endDate: '2026-11-10'});
+    expect(snapshot.disclaimer).toContain('九个精选官方来源（五个新闻来源、四个日历）');
+    advance(13 * 3600000 - 1);
+    expect((await service.snapshot()).events.filter(event => event.sourceId === source.id)).toHaveLength(1);
+    advance(1);
+    expect((await service.snapshot()).events.filter(event => event.sourceId === source.id)).toHaveLength(0);
   });
   it('limits output per source while sorting before truncation', async () => {
     const { fetcher, service } = setup();

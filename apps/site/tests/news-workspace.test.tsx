@@ -14,6 +14,16 @@ async function start() { const view = render(<NewsWorkspace/>); await tick(); re
 function mockSuccess() { const fetcher = vi.fn(async () => Response.json(newsUiSnapshot())); vi.stubGlobal('fetch', fetcher); return fetcher; }
 
 describe('global news reading workspace', () => {
+  it('labels DATE timezone as filtering context and displays the exclusive end date', async () => {
+    const snapshot = newsUiSnapshot();
+    snapshot.events = [{...snapshot.events[0], startsAt: null, endsAt: null, allDay: true, startDate: '2026-11-08', endDate: '2026-11-11', timeZone: 'Europe/Luxembourg'}];
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(snapshot)));
+    await start();
+    fireEvent.click(screen.getByRole('button', {name: /未来日程/}));
+    expect(screen.getByText(/日历日期筛选时区上下文：Europe\/Luxembourg；仅日期本身不携带时区/)).toBeTruthy();
+    expect(screen.queryByText(/原始时区：Europe\/Luxembourg/)).toBeNull();
+    expect(screen.getByText('来源日程结束日期：2026-11-11（不含该日；仅日期）')).toBeTruthy();
+  });
   it('filters Hong Kong government and ECB coverage without relabeling it as global corroboration', async () => {
     const snapshot = expandedNewsUiSnapshot();
     const fetcher = vi.fn(async () => Response.json(snapshot)); vi.stubGlobal('fetch', fetcher); await start();
@@ -70,8 +80,8 @@ describe('global news reading workspace', () => {
     fireEvent.click(screen.getByRole('button', {name: /未来日程/}));
     expect(screen.getAllByRole('article')).toHaveLength(3);
     expect(screen.getAllByText('2026/11/10 21:30（北京时间）')).toHaveLength(2);
-    expect(screen.getByText('2026-11-12（来源日期 · 全天）')).toBeTruthy();
-    expect(screen.getByText(/原始时区：未提供；未换算为北京时间/)).toBeTruthy();
+    expect(screen.getByText('2026-11-12（来源日期 · 具体时刻未提供）')).toBeTruthy();
+    expect(screen.getByText(/日历日期筛选时区上下文：UTC（默认筛选）；仅日期本身不携带时区，未换算为北京时间/)).toBeTruthy();
     fireEvent.change(screen.getByRole('combobox', {name: '日程状态'}), {target: {value: 'cancelled'}});
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByText('来源标记此日程已取消。')).toBeTruthy();

@@ -34,7 +34,7 @@ describe('honest news and schedule time presentation', () => {
     expect(formatTime(null)).toBe('未知');
     expect(publicationLabel(newsUiItem({publishedAt: null, publishedDate: '2026-11-08'}))).toBe('来源发布时间：2026-11-08（仅日期，时刻 / 时区未提供）');
     expect(publicationLabel(newsUiItem({publicationTimeKind: 'updated'}))).toContain('来源更新时间');
-    expect(eventTimeLabel(newsUiEvent({startsAt: null, startDate: '2026-11-10', allDay: true}))).toBe('2026-11-10（来源日期 · 全天）');
+    expect(eventTimeLabel(newsUiEvent({startsAt: null, startDate: '2026-11-10', allDay: true}))).toBe('2026-11-10（来源日期 · 具体时刻未提供）');
   });
   it('filters instants and day-only schedules using the source timezone, not guessed Shanghai dates', () => {
     const midnightShanghai = Date.parse('2026-11-09T17:00:00Z');

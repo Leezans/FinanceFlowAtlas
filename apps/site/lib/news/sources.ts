@@ -19,6 +19,8 @@ export interface NewsSource {
   /** Metadata-only sources never reproduce feed descriptions. */
   includeSummary?: boolean;
   attribution: string;
+  /** Reviewed calendar semantics, never inferred from titles. */
+  calendar?: { dateZone: string; tentativeByDefault?: boolean; notice: string };
 }
 
 /**
@@ -86,6 +88,39 @@ export const NEWS_SOURCES: readonly NewsSource[] = [
     category: 'finance', regions: ['EU'], relatedMarkets: ['fx'],
     articleHosts: ['www.ecb.europa.eu'], articlePathPrefixes: ['/press/pr/'], includeSummary: false,
     attribution: 'Source: European Central Bank. ECB information is available free of charge on its website. Headlines may be shortened and formatting is removed by FinanceFlowAtlas (2026-11-09); feed descriptions are not reproduced. No endorsement implied.',
+  },
+  {
+    id: 'eurostat-euroindicators', name: 'Eurostat Euro indicators', kind: 'events', format: 'ics',
+    url: 'https://ec.europa.eu/eurostat/o/calendars/eventsIcal?theme=0&category=2',
+    websiteUrl: 'https://ec.europa.eu/eurostat/web/products-eurostat-news/w/wdn-20260105-1',
+    termsUrl: 'https://ec.europa.eu/eurostat/help/copyright-notice',
+    license: 'European Commission reuse policy; attribution required, third-party material excluded',
+    category: 'finance', regions: ['EU'], relatedMarkets: [],
+    articleHosts: ['ec.europa.eu'], includeSummary: false,
+    calendar: { dateZone: 'Europe/Luxembourg', tentativeByDefault: true, notice: 'Eurostat 仅提供日期，不推断发布时间。日程可能调整；下周日程通常于周五确认，本页未独立核实确认状态，按暂定展示。科技日程为统计发布，不是产品发布会。' },
+    attribution: 'Source: Eurostat / European Commission. Calendar titles and dates only; formatting removed and titles may be shortened by FinanceFlowAtlas. Dates are provisional and subject to change. No endorsement implied.',
+  },
+  {
+    id: 'eurostat-technology', name: 'Eurostat science, technology and digital society', kind: 'events', format: 'ics',
+    url: 'https://ec.europa.eu/eurostat/o/calendars/eventsIcal?theme=9&category=0',
+    websiteUrl: 'https://ec.europa.eu/eurostat/web/products-eurostat-news/w/wdn-20260105-1',
+    termsUrl: 'https://ec.europa.eu/eurostat/help/copyright-notice',
+    license: 'European Commission reuse policy; attribution required, third-party material excluded',
+    category: 'technology', regions: ['EU'], relatedMarkets: [],
+    articleHosts: ['ec.europa.eu'], includeSummary: false,
+    calendar: { dateZone: 'Europe/Luxembourg', tentativeByDefault: true, notice: 'Eurostat 仅提供日期，不推断发布时间。日程可能调整；下周日程通常于周五确认，本页未独立核实确认状态，按暂定展示。科技日程为统计发布，不是产品发布会。' },
+    attribution: 'Source: Eurostat / European Commission. Calendar titles and dates only; formatting removed and titles may be shortened by FinanceFlowAtlas. Dates are provisional and subject to change. No endorsement implied.',
+  },
+  {
+    id: 'eu-events', name: 'European Union events calendar', kind: 'events', format: 'ics',
+    url: 'https://european-union.europa.eu/node/406/ical_en',
+    websiteUrl: 'https://european-union.europa.eu/news-and-events/events_en',
+    termsUrl: 'https://european-union.europa.eu/legal-notice_en',
+    license: 'CC BY 4.0, except separately credited third-party material',
+    category: 'official', regions: ['EU'], relatedMarkets: [],
+    articleHosts: ['european-union.europa.eu'], includeSummary: false,
+    calendar: { dateZone: 'UTC', notice: '欧盟机构活动日历并非政治峰会全量。保留来源 UTC 时间并换算显示；日程边界不视为实际开场时间，具体时刻及活动详情请查官方日历。' },
+    attribution: 'Source: European Union. Reused under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Titles may be shortened, formatting removed and UTC timestamps converted for display by FinanceFlowAtlas. No endorsement implied.',
   },
 ] as const;
 

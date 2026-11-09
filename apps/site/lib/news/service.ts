@@ -207,8 +207,9 @@ export class NewsService {
         return !item.publishedDate || (item.publishedDate >= new Date(nowMs - NEWS_LOOKBACK_MS).toISOString().slice(0, 10) && item.publishedDate <= now.toISOString().slice(0, 10));
       }).sort((a, b) => (b.publishedAt ?? b.publishedDate ?? '').localeCompare(a.publishedAt ?? a.publishedDate ?? '')) : [];
       const sourceEvents = usable ? state.events.filter((event) => {
-        if (event.startsAt) return Date.parse(event.startsAt) >= nowMs && Date.parse(event.startsAt) <= horizon.getTime();
-        return event.allDay && event.startDate >= dateInZone(now, event.timeZone) && event.startDate <= dateInZone(horizon, event.timeZone);
+        if (event.startsAt) return (Date.parse(event.startsAt) >= nowMs || (!!event.endsAt && Date.parse(event.endsAt) > nowMs)) && Date.parse(event.startsAt) <= horizon.getTime();
+        const today = dateInZone(now, event.timeZone);
+        return event.allDay && (event.startDate >= today || (!!event.endDate && event.endDate > today)) && event.startDate <= dateInZone(horizon, event.timeZone);
       }).sort((a, b) => (a.startsAt ?? a.startDate).localeCompare(b.startsAt ?? b.startDate)) : [];
       let accepted = 0;
       for (const item of sourceNews) {
@@ -230,6 +231,7 @@ export class NewsService {
         lastAttemptAt: state.lastAttemptAt === null ? null : new Date(state.lastAttemptAt).toISOString(),
         nextRefreshAt: state.nextAttemptAt === null ? null : new Date(state.nextAttemptAt).toISOString(),
         error: state.error ?? (usable ? null : '缓存已过期，等待下一次允许的来源请求。'),
+        calendarNotice: source.calendar?.notice,
         halted: state.halted, warnings: state.warnings, itemCount: accepted,
       });
     }
@@ -240,7 +242,7 @@ export class NewsService {
       status: sources.every((source) => source.status === 'error') ? 'unavailable' : sources.some((source) => source.status !== 'ok' || source.warnings.length) ? 'partial' : 'ok',
       news, events, sources, cacheTtlSeconds: NEWS_CACHE_TTL_MS / 1000, maxStaleSeconds: NEWS_MAX_STALE_MS / 1000,
       dedup: { newsRemoved, eventsRemoved, method: 'canonical-url; events additionally use identity and start' },
-      disclaimer: '仅接入美国、英国、中国香港及欧洲央行的六个精选官方来源，非全球全面报道。香港政务综合含日常发布，不代表中国内地或亚洲全面覆盖，也不自动判断事件重要性。官方表述不等于独立核实；同链接去重不等于多源证实。分类、地区及市场关联仅为检索导航，不构成因果判断、价格预测或投资建议。新闻时间是发布/更新日期，事件发生时间未知；日程来自官方日历并可能调整，不代表事件已发生。按请求更新，无后台采集或提醒。',
+      disclaimer: '仅接入美国、英国、中国香港及欧洲机构的九个精选官方来源（五个新闻来源、四个日历），非全球全面报道。香港政务综合含日常发布，不代表中国内地或亚洲全面覆盖，也不自动判断事件重要性。官方表述不等于独立核实；同链接去重不等于多源证实。分类、地区及市场关联仅为检索导航，不构成因果判断、价格预测或投资建议。新闻时间是发布/更新日期，事件发生时间未知；日程来自官方日历并可能调整，不代表事件已发生。按请求更新，无后台采集或提醒。',
     };
   }
 }
