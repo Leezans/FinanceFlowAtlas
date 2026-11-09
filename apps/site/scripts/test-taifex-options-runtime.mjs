@@ -66,9 +66,10 @@ const {outputFiles} = await build({stdin: {contents: `
  }};`, resolveDir: root, sourcefile: 'offline-taifex-host.ts'}, bundle: true, format: 'esm', platform: 'neutral', target: 'es2022', external: ['cloudflare:workers'], write: false});
 
 const migrations = (await readdir(new URL('../drizzle/', import.meta.url))).filter(name => /^\d{4}.*\.sql$/.test(name)).sort();
-assert.equal(migrations.length, 25, 'only the isolated news gate is appended to the existing migration set');
+assert.equal(migrations.length, 26, 'only the isolated news gate and its allowlist extension are appended');
 assert.equal(migrations[23], '0023_taifex_options_gate.sql');
-assert.equal(migrations.at(-1), '0024_news_source_gate.sql');
+assert.equal(migrations[24], '0024_news_source_gate.sql');
+assert.equal(migrations.at(-1), '0025_news_europe_calendars.sql');
 const migrationSQL = await Promise.all(migrations.map(name => readFile(new URL('../drizzle/' + name, import.meta.url), 'utf8')));
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 const pages = ['options', 'futures'];
@@ -466,4 +467,4 @@ await scenario(`one shared ${MAX_ACQUISITION_MS / 1000}-second deadline covers b
 });
 
 assert.ok(completed > 0, 'runtime filter selected no scenarios');
-console.log(`PASS ${completed} native shared-TAIFEX scenarios; all 25 migrations, 22-table schema and unrelated rows preserved; every source request synthetic`);
+console.log(`PASS ${completed} native shared-TAIFEX scenarios; all 26 migrations, 22-table schema and unrelated rows preserved; every source request synthetic`);

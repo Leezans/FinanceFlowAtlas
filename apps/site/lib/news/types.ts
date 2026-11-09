@@ -31,6 +31,7 @@ export interface ScheduledEvent {
   relatedMarkets: string[];
   startsAt: string | null;
   startDate: string;
+  /** Timestamp source zone; for DATE values, calendar filtering context only, not a timezone carried by DATE. */
   timeZone: string | null;
   allDay: boolean;
   endsAt: string | null;
@@ -57,6 +58,8 @@ export interface NewsSourceStatus {
   halted: boolean;
   error: string | null;
   warnings: string[];
+  /** Informational schedule caveat, not a retrieval failure. */
+  calendarNotice?: string;
   itemCount: number;
   attribution: string;
 }

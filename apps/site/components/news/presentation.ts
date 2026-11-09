@@ -26,8 +26,9 @@ export function calendarDate(now: number, timeZone: string | null = DISPLAY_TIME
 }
 
 export function isUpcoming(event: ScheduledEvent, now: number): boolean {
-  if (event.startsAt) return Date.parse(event.startsAt) >= now;
-  return event.startDate >= calendarDate(now, event.timeZone || 'UTC');
+  if (event.startsAt) return Date.parse(event.startsAt) >= now || (!!event.endsAt && Date.parse(event.endsAt) > now);
+  const today = calendarDate(now, event.timeZone || 'UTC');
+  return event.startDate >= today || (!!event.endDate && event.endDate > today);
 }
 
 /** Reapply the reading window even when the browser only has a retained snapshot. */
@@ -53,7 +54,7 @@ export function publicationLabel(item: NewsItem): string {
 
 export function eventTimeLabel(event: ScheduledEvent): string {
   if (event.startsAt) return `${formatTime(event.startsAt)}（北京时间）`;
-  return `${event.startDate}（来源日期${event.allDay ? ' · 全天' : ' · 具体时刻未提供'}）`;
+  return `${event.startDate}（来源日期 · 具体时刻未提供）`;
 }
 
 export function relatedMarketLinks(ids: string[]) {

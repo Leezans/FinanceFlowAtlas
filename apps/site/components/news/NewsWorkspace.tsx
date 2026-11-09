@@ -37,11 +37,14 @@ function NewsCard({item, source, retained}: {item: NewsItem; source?: NewsSource
 function EventCard({event, source, retained}: {event: ScheduledEvent; source?: NewsSourceStatus; retained: boolean}) {
   return <article className={s.eventCard} aria-label={event.title}>
     <div className={s.cardMeta}><span className={s.category}>{categoryLabels[event.category]}</span><span className={event.status === 'cancelled' ? s.cancelledTag : s.scheduledTag}>{eventStatus[event.status]}</span>{(retained || source?.status === 'stale') && <span className={s.staleTag}>旧副本 · 请回原站确认</span>}</div>
-    <p className={s.eventTime}>{eventTimeLabel(event)}</p>
+    <p className={s.eventTime}>{event.sourceId === 'eu-events' && '来源日程时间：'}{eventTimeLabel(event)}</p>
+    {event.endsAt && <p className={s.time}>来源日程结束边界：{formatTime(event.endsAt)}（北京时间；不代表核验实际结束）</p>}
+    {!event.startsAt && event.endDate && <p className={s.time}>来源日程结束日期：{event.endDate}（不含该日；仅日期）</p>}
     <h3><SourceLink url={event.url}>{event.title}</SourceLink></h3>
-    <p className={s.time}>来源：{event.sourceName} · 原始时区：{event.timeZone || '未提供'}{!event.startsAt && '；未换算为北京时间'}</p>
+    <p className={s.time}>来源：{event.sourceName} · {event.startsAt ? '原始时区' : '日历日期筛选时区上下文'}：{event.timeZone || (event.startsAt ? '未提供' : 'UTC（默认筛选）')}{!event.startsAt && '；仅日期本身不携带时区，未换算为北京时间'}</p>
     <p className={s.unknown}>{event.status === 'cancelled' ? '来源标记此日程已取消。' : '官方计划日程，不代表事件已经发生；临时变更请以原站为准。'}</p>
     <p className={s.origin}>日程条目发布时间：{event.publishedAt ? `${formatTime(event.publishedAt)}（北京时间）` : '未知'} · 未独立交叉核验</p>
+    {source?.calendarNotice && <p className={s.unknown}>{source.calendarNotice}</p>}
     <RelatedMarkets ids={event.relatedMarkets}/>
   </article>;
 }
@@ -55,6 +58,7 @@ function SourcePanel({snapshot}: {snapshot: NewsSnapshot}) {
       <h3>{source.name}</h3>
       <dl><div><dt>上次成功获取</dt><dd>{formatTime(source.fetchedAt)}</dd></div><div><dt>最近尝试</dt><dd>{formatTime(source.lastAttemptAt)}</dd></div><div><dt>缓存下次可检查</dt><dd>{source.halted ? '已停止自动重试' : formatTime(source.nextRefreshAt)}</dd></div><div><dt>来源条目</dt><dd>{source.itemCount} 条（筛选前）</dd></div></dl>
       {source.error && <p className={s.sourceError}>获取情况：{source.error}</p>}
+      {source.calendarNotice && <p className={s.unknown}>{source.calendarNotice}</p>}
       {source.warnings.length > 0 && <ul className={s.warnings}>{source.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
       <p className={s.license}>{source.attribution}<br/>{source.license}</p>
       <div className={s.sourceLinks}><SourceLink url={source.websiteUrl}>官方网站</SourceLink><SourceLink url={source.url}>数据来源</SourceLink><SourceLink url={source.termsUrl}>使用条款</SourceLink></div>
@@ -120,7 +124,7 @@ export default function NewsWorkspace() {
 
     {section === 'sources' ? snapshot ? <SourcePanel snapshot={snapshot}/> : !feed.pending && <div className={s.empty}><h2>暂未收到来源状态</h2><p>请重新检查。连接失败不代表没有新闻。</p></div> : snapshot && <section aria-labelledby="news-list-title" aria-busy={feed.pending}>
       <div className={s.sectionHeading}><div><p className={s.eyebrow}>{section === 'news' ? 'PUBLISHED UPDATES' : 'OFFICIAL CALENDAR'}</p><h2 id="news-list-title">{section === 'news' ? '最近 30 天的公开发布' : '未来 90 天的官方日程'}</h2></div><span>{selectedCount} 条{filtered ? '符合筛选' : ''}</span></div>
-      <p className={s.help}>{section === 'news' ? '发布时间未知的条目仍保留并标注。仅日期的发布按 UTC 日历日期筛选，不推断时刻或时区。标题与摘要保留来源原文；不同来源并列不代表交叉证实。' : '日程单独展示，不混入已发布新闻。仅日期条目不推断具体时刻；时区未知时以 UTC 日期筛选，仍需回原站确认。'}</p>
+      <p className={s.help}>{section === 'news' ? '发布时间未知的条目仍保留并标注。仅日期的发布按 UTC 日历日期筛选，不推断时刻或时区。标题与摘要保留来源原文；不同来源并列不代表交叉证实。' : '日程单独展示，不混入已发布新闻。含来源时间范围尚未结束的活动，不代表已核验正在举行。仅日期条目不推断具体时刻；时区未知时以 UTC 日期筛选，仍需回原站确认。'}</p>
       {selectedCount ? <div className={s.feed}>{section === 'news' ? news.map(item => <NewsCard key={item.id} item={item} source={getSource(item.sourceId)} retained={retainedSource(item.sourceId)}/>) : events.map(event => <EventCard key={event.id} event={event} source={getSource(event.sourceId)} retained={retainedSource(event.sourceId)}/>)}</div> : <div className={s.empty}><p className={s.eyebrow}>NO MATCHING ITEMS</p><h3>{filtered ? '没有符合筛选的条目' : section === 'events' ? '当前来源没有可展示的未来日程' : '当前没有可展示的新闻'}</h3><p>{filtered ? '试试其他主题、地区或关键词。' : '可能暂无条目、来源暂不可用或副本已过期；不代表全球没有相关事件。'}</p>{filtered && <button type="button" onClick={resetFilters}>清除筛选</button>}</div>}
     </section>}
     {!feed.pending && !snapshot && section !== 'sources' && <div className={s.empty}><h2>新闻列表等待可用来源</h2><p>当前未展示新闻或日程。上方「重新检查」可再次尝试。</p></div>}

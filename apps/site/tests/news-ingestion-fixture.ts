@@ -10,6 +10,7 @@ export const vevent = (uid = 'event-a', start = 'DTSTART;TZID=US-Eastern:2026111
 export const calendar = (events = vevent()) => `BEGIN:VCALENDAR\nVERSION:2.0\n${events}\nEND:VCALENDAR`;
 export function sourceBody(url: string): string {
   const source = NEWS_SOURCES.find((entry) => entry.url === url)!;
+  if (source.calendar) return calendar(vevent(source.id, 'DTSTART;VALUE=DATE:20261110'));
   if (source.format === 'ics') return calendar();
   if (source.format === 'atom') return atom();
   if (source.id === 'nist-news') return rss(rssItem('https://www.nist.gov/news-events/news/fixture'));
