@@ -1,5 +1,5 @@
 /** Source statements and published schedules, never independently corroborated news or forecasts. */
-export type NewsCategory = 'technology' | 'geopolitics' | 'finance';
+export type NewsCategory = 'technology' | 'geopolitics' | 'finance' | 'official';
 
 export interface NewsItem {
   id: string;
@@ -52,7 +52,7 @@ export interface NewsSourceStatus {
   status: 'ok' | 'stale' | 'error';
   /** Retrieval time, not source publication or event occurrence. */
   fetchedAt: string | null;
-  lastAttemptAt: string;
+  lastAttemptAt: string | null;
   nextRefreshAt: string | null;
   halted: boolean;
   error: string | null;

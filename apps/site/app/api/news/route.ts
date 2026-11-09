@@ -1,4 +1,4 @@
-import { loadNewsSnapshot } from '@/lib/news/service';
+import { loadNewsSnapshot } from '@/lib/news/host';
 export const dynamic = 'force-dynamic';
 /** Closed source list only. No URL/source query parameter is ever fetched. */
 export async function GET() {

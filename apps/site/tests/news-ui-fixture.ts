@@ -14,3 +14,14 @@ export function newsUiEvent(overrides: Partial<ScheduledEvent> = {}): ScheduledE
 export function newsUiSnapshot(): NewsSnapshot {
   return {schemaVersion: 1, generatedAt: new Date(NEWS_UI_NOW).toISOString(), status: 'ok', news: [newsUiItem(), newsUiItem({id: 'geo-1', title: 'Synthetic diplomatic statement', url: 'https://example.invalid/politics/1', sourceId: 'geo', sourceName: 'Synthetic geo', category: 'geopolitics', regions: ['GBR'], publishedAt: null, publishedDate: null, publicationTimeKind: 'unknown', relatedMarkets: []}), newsUiItem({id: 'finance-1', title: 'Synthetic finance release', url: 'https://example.invalid/finance/1', sourceId: 'finance', sourceName: 'Synthetic finance', category: 'finance', regions: ['USA'], publicationTimeKind: 'updated', relatedMarkets: ['fx']})], events: [newsUiEvent(), newsUiEvent({id: 'date-only', title: 'Synthetic date-only meeting', url: 'https://example.invalid/events/date', startsAt: null, startDate: '2026-11-12', timeZone: null, allDay: true, status: 'tentative'}), newsUiEvent({id: 'cancelled-event', title: 'Synthetic cancelled event', url: 'https://example.invalid/events/cancelled', status: 'cancelled'})], sources: [newsUiSource('tech', 'technology'), newsUiSource('geo', 'geopolitics'), newsUiSource('finance', 'finance'), newsUiSource('calendar', 'finance', 'events')], cacheTtlSeconds: 900, maxStaleSeconds: 86400, dedup: {newsRemoved: 1, eventsRemoved: 2, method: 'canonical-url; events additionally use identity and start'}, disclaimer: 'Synthetic source statements are not investment advice.'};
 }
+
+/** Supplemental region/category coverage without coupling lifecycle tests to source count. */
+export function expandedNewsUiSnapshot(): NewsSnapshot {
+  const snapshot = newsUiSnapshot();
+  snapshot.news.push(
+    newsUiItem({id: 'hk-1', title: 'Synthetic Hong Kong government update', url: 'https://example.invalid/hk/1', sourceId: 'hk', sourceName: 'Synthetic HK government', category: 'official', regions: ['HKG'], relatedMarkets: []}),
+    newsUiItem({id: 'ecb-1', title: 'Synthetic ECB monetary policy release', url: 'https://example.invalid/ecb/1', sourceId: 'ecb', sourceName: 'Synthetic ECB', category: 'finance', regions: ['EU'], relatedMarkets: ['fx'], summary: null}),
+  );
+  snapshot.sources.push(newsUiSource('hk', 'official'), newsUiSource('ecb', 'finance'));
+  return snapshot;
+}

@@ -77,7 +77,7 @@ export function parseNewsFeed(xml: string, source: NewsSource): { news: NewsItem
       publishedAt: date.instant, publishedDate: date.date,
       publicationTimeKind: known ? (published ? 'published' : 'updated') : 'unknown',
       occurredAt: null,
-      summary: plainText(field(entry, source.format === 'rss' ? 'description' : 'summary')) || null,
+      summary: source.includeSummary === false ? null : plainText(field(entry, source.format === 'rss' ? 'description' : 'summary')) || null,
     });
   }
   if (entries.length && !news.length) throw new Error('No valid entries in nonempty feed');

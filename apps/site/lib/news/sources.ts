@@ -14,6 +14,10 @@ export interface NewsSource {
   relatedMarkets: string[];
   /** Only these exact HTTPS hosts are accepted for article/event links. */
   articleHosts: string[];
+  /** When set, keep links within reviewed publication sections. */
+  articlePathPrefixes?: string[];
+  /** Metadata-only sources never reproduce feed descriptions. */
+  includeSummary?: boolean;
   attribution: string;
 }
 
@@ -62,6 +66,26 @@ export const NEWS_SOURCES: readonly NewsSource[] = [
     category: 'finance', regions: ['USA'], relatedMarkets: ['fx', 'cftc'],
     articleHosts: ['www.bls.gov', 'bls.gov'],
     attribution: 'Source: U.S. Bureau of Labor Statistics. Published release schedule, subject to change. No endorsement implied.',
+  },
+  {
+    id: 'hk-government', name: 'Hong Kong SAR Government / Information Services Department', kind: 'news', format: 'rss',
+    url: 'https://www.info.gov.hk/gia/rss/general_en.xml',
+    websiteUrl: 'https://data.gov.hk/en-data/dataset/hk-isd-gnmis-gnmis/resource/751b5a45-5c70-4ccb-9aff-d18fdcf2750e',
+    termsUrl: 'https://data.gov.hk/en/terms-and-conditions',
+    license: 'DATA.GOV.HK terms permit commercial and non-commercial reuse with source and intellectual-property acknowledgment; third-party material excluded',
+    category: 'official', regions: ['HKG'], relatedMarkets: [],
+    articleHosts: ['www.info.gov.hk'], articlePathPrefixes: ['/gia/general/'],
+    attribution: 'Source: The Government of the Hong Kong Special Administrative Region / Information Services Department. Intellectual property rights belong to the Government and relevant owners. Data made available through DATA.GOV.HK. Feed text is shortened and formatting removed by FinanceFlowAtlas (2026-11-09). No endorsement implied.',
+  },
+  {
+    id: 'ecb-press', name: 'European Central Bank', kind: 'news', format: 'rss',
+    url: 'https://www.ecb.europa.eu/rss/press.html',
+    websiteUrl: 'https://www.ecb.europa.eu/home/html/rss.en.html',
+    termsUrl: 'https://www.ecb.europa.eu/services/using-our-site/disclaimer/html/index.en.html',
+    license: 'Accurate attributed reuse under ECB terms; excludes separately authored papers and third-party material',
+    category: 'finance', regions: ['EU'], relatedMarkets: ['fx'],
+    articleHosts: ['www.ecb.europa.eu'], articlePathPrefixes: ['/press/pr/'], includeSummary: false,
+    attribution: 'Source: European Central Bank. ECB information is available free of charge on its website. Headlines may be shortened and formatting is removed by FinanceFlowAtlas (2026-11-09); feed descriptions are not reproduced. No endorsement implied.',
   },
 ] as const;
 

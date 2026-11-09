@@ -76,6 +76,19 @@ describe('official ICS schedules, not predictions', () => {
     const event = parseCalendar(calendar(vevent('all-day', 'DTSTART;VALUE=DATE:20261110', 'DTEND;VALUE=DATE:20261112')), bls).events[0];
     expect(event).toMatchObject({ startsAt: null, startDate: '2026-11-10', endDate: '2026-11-12', timeZone: null, allDay: true });
   });
+  it.each([
+    ['DTSTART;VALUE=DATE:20261110', 'DTEND:20261111T120000Z'],
+    ['DTSTART:20261110T120000Z', 'DTEND;VALUE=DATE:20261111'],
+    ['DTSTART;VALUE=DATE:20261110', 'DTEND;VALUE=DATE:20261110'],
+    ['DTSTART:20261110T120000Z', 'DTEND:20261110T120000Z'],
+    ['DTSTART:20261110T120000Z', 'DTEND:20261110T115959Z'],
+  ])('rejects mixed or non-increasing DTSTART/DTEND: %s / %s', (start, end) => {
+    expect(() => parseCalendar(calendar(vevent('invalid-end', start, end)), bls)).toThrow(/No supported/);
+  });
+  it('accepts strictly later timed ends across source timezones', () => {
+    const event = parseCalendar(calendar(vevent('valid-end', 'DTSTART;TZID=US-Eastern:20261110T083000', 'DTEND:20261110T133001Z')), bls).events[0];
+    expect(event.endsAt).toBe('2026-11-10T13:30:01.000Z');
+  });
   it('retains distinct same-time calendar releases sharing one calendar URL', () => {
     const events = parseCalendar(calendar(vevent('a') + '\n' + vevent('b')), bls).events;
     expect(events).toHaveLength(2);

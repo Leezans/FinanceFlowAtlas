@@ -7,7 +7,7 @@ import {useNewsFeed} from './useNewsFeed';
 import s from './news.module.css';
 
 type Section = 'news' | 'events' | 'sources';
-const regions: Record<string, string> = {USA: '美国', GBR: '英国', CHN: '中国', JPN: '日本', EU: '欧盟', GLOBAL: '全球', TWN: '台湾', BRA: '巴西'};
+const regions: Record<string, string> = {USA: '美国', GBR: '英国', CHN: '中国', HKG: '中国香港', JPN: '日本', EU: '欧盟', GLOBAL: '全球', TWN: '台湾', BRA: '巴西'};
 const regionLabel = (region: string) => regions[region] || region;
 const eventStatus = {scheduled: '已排期', tentative: '暂定', cancelled: '已取消'};
 const sourceStatus = {ok: '已获取', stale: '上次可用副本', error: '获取失败'};
@@ -49,7 +49,7 @@ function EventCard({event, source, retained}: {event: ScheduledEvent; source?: N
 function SourcePanel({snapshot}: {snapshot: NewsSnapshot}) {
   return <section aria-labelledby="news-sources-title" className={s.sourcePanel}>
     <div className={s.sectionHeading}><div><p className={s.eyebrow}>SOURCE OBSERVATORY</p><h2 id="news-sources-title">逐个来源核验</h2></div><span>{snapshot.sources.length} 个接入来源</span></div>
-    <p className={s.help}>仅覆盖下列来源，不是全球新闻全量。来源失败不等于没有发生新闻。官方发布也仅代表发布机构的陈述，来源数量不等于独立证实数量。</p>
+    <p className={s.help}>仅覆盖下列来源，不是全球新闻全量。香港政府政务综合含日常发布，不代表中国内地或亚洲全面覆盖，未自动判断事件重要性。来源失败不等于没有发生新闻。官方发布也仅代表发布机构的陈述，来源数量不等于独立证实数量。</p>
     <div className={s.sourceGrid}>{snapshot.sources.map(source => <article className={s.sourceCard} key={source.id}>
       <div className={s.cardMeta}><span>{source.kind === 'events' ? '官方日程' : '新闻发布'}</span><span className={source.status === 'ok' ? s.goodTag : s.staleTag}>{sourceStatus[source.status]}</span></div>
       <h3>{source.name}</h3>
@@ -88,7 +88,7 @@ export default function NewsWorkspace() {
 
   return <main className={s.workspace}>
     <header className={s.hero}>
-      <div><p className={s.eyebrow}>FINANCE FLOW ATLAS / GLOBAL BRIEFING</p><h1>全球新闻与日程</h1><p className={s.intro}>跟踪科技、地缘政治与金融的公开发布。<br/>先看来源与时间，再进入相关市场。</p></div>
+      <div><p className={s.eyebrow}>FINANCE FLOW ATLAS / GLOBAL BRIEFING</p><h1>全球新闻与日程</h1><p className={s.intro}>跟踪科技、地缘政治、金融与政务综合的公开发布。<br/>先看来源与时间，再进入相关市场。</p></div>
       <div className={s.timezone}><span>统一阅读时区</span><strong>北京时间 · UTC+8</strong><small>仅对已知时刻换算；日期型日程保留原始日期</small></div>
     </header>
 
@@ -103,7 +103,7 @@ export default function NewsWorkspace() {
     {feed.error && <p role="alert" className={s.error}>{feed.error}{feed.browserStale && ' 仅保留 24 小时内获取的副本；原始时间不变。'}</p>}
     {!!failedSources && <p className={s.notice}>{failedSources} 个来源获取失败或使用旧副本。{snapshot?.status === 'unavailable' ? '当前没有可展示的来源内容。' : '以下结果不完整。'} <button type="button" onClick={() => setSection('sources')}>查看来源状态</button></p>}
     {agingSources > 0 && <p className={s.notice}>{agingSources} 个来源副本已超过缓存检查间隔，请重新检查；页面上的获取时间仍是原始获取时间。</p>}
-    {expiredCount > 0 && <p className={s.notice}>已隐藏 {expiredCount} 条超出副本保留期或来源不可用的新闻，请重新检查。</p>}
+    {expiredCount > 0 && <p className={s.notice}>已隐藏 {expiredCount} 条超出副本保留期、新闻时间窗口或来源不可用的新闻，请重新检查。</p>}
 
     <nav className={s.sections} aria-label="新闻与日程视图">
       <button type="button" aria-pressed={section === 'news'} onClick={() => setSection('news')}>新闻发布 <span>{visible.news.length}</span></button>
@@ -112,7 +112,7 @@ export default function NewsWorkspace() {
     </nav>
 
     {section !== 'sources' && <section className={s.filters} aria-label="筛选新闻与日程">
-      <div className={s.categories} role="group" aria-label="主题分类">{(['all', 'technology', 'geopolitics', 'finance'] as const).map(value => <button type="button" key={value} aria-pressed={category === value} onClick={() => setCategory(value)}>{value === 'all' ? '全部主题' : categoryLabels[value]}</button>)}</div>
+      <div className={s.categories} role="group" aria-label="主题分类">{(['all', 'technology', 'geopolitics', 'finance', 'official'] as const).map(value => <button type="button" key={value} aria-pressed={category === value} onClick={() => setCategory(value)}>{value === 'all' ? '全部主题' : categoryLabels[value]}</button>)}</div>
       <div className={s.filterFields}><label>搜索标题 / 来源<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="输入关键词，也可搜索原文"/></label><label>来源 / 主题地区<select value={region} onChange={event => setRegion(event.target.value)}><option value="all">全部地区</option>{region !== 'all' && !regionOptions.includes(region) && <option value={region}>{regionLabel(region)}（当前无条目）</option>}{regionOptions.map(value => <option key={value} value={value}>{regionLabel(value)}</option>)}</select></label>{section === 'events' && <label>日程状态<select value={eventState} onChange={event => setEventState(event.target.value)}><option value="all">全部状态</option>{Object.entries(eventStatus).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}{filtered && <button type="button" className={s.clear} onClick={resetFilters}>清除筛选</button>}</div>
     </section>}
 
@@ -120,7 +120,7 @@ export default function NewsWorkspace() {
 
     {section === 'sources' ? snapshot ? <SourcePanel snapshot={snapshot}/> : !feed.pending && <div className={s.empty}><h2>暂未收到来源状态</h2><p>请重新检查。连接失败不代表没有新闻。</p></div> : snapshot && <section aria-labelledby="news-list-title" aria-busy={feed.pending}>
       <div className={s.sectionHeading}><div><p className={s.eyebrow}>{section === 'news' ? 'PUBLISHED UPDATES' : 'OFFICIAL CALENDAR'}</p><h2 id="news-list-title">{section === 'news' ? '最近 30 天的公开发布' : '未来 90 天的官方日程'}</h2></div><span>{selectedCount} 条{filtered ? '符合筛选' : ''}</span></div>
-      <p className={s.help}>{section === 'news' ? '发布时间未知的条目仍保留并标注。标题与摘要保留来源原文；不同来源并列不代表交叉证实。' : '日程单独展示，不混入已发布新闻。仅日期条目不推断具体时刻；时区未知时以 UTC 日期筛选，仍需回原站确认。'}</p>
+      <p className={s.help}>{section === 'news' ? '发布时间未知的条目仍保留并标注。仅日期的发布按 UTC 日历日期筛选，不推断时刻或时区。标题与摘要保留来源原文；不同来源并列不代表交叉证实。' : '日程单独展示，不混入已发布新闻。仅日期条目不推断具体时刻；时区未知时以 UTC 日期筛选，仍需回原站确认。'}</p>
       {selectedCount ? <div className={s.feed}>{section === 'news' ? news.map(item => <NewsCard key={item.id} item={item} source={getSource(item.sourceId)} retained={retainedSource(item.sourceId)}/>) : events.map(event => <EventCard key={event.id} event={event} source={getSource(event.sourceId)} retained={retainedSource(event.sourceId)}/>)}</div> : <div className={s.empty}><p className={s.eyebrow}>NO MATCHING ITEMS</p><h3>{filtered ? '没有符合筛选的条目' : section === 'events' ? '当前来源没有可展示的未来日程' : '当前没有可展示的新闻'}</h3><p>{filtered ? '试试其他主题、地区或关键词。' : '可能暂无条目、来源暂不可用或副本已过期；不代表全球没有相关事件。'}</p>{filtered && <button type="button" onClick={resetFilters}>清除筛选</button>}</div>}
     </section>}
     {!feed.pending && !snapshot && section !== 'sources' && <div className={s.empty}><h2>新闻列表等待可用来源</h2><p>当前未展示新闻或日程。上方「重新检查」可再次尝试。</p></div>}

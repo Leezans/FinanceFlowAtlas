@@ -2,11 +2,12 @@ import {evidenceSources} from '@/lib/catalog/sources';
 import type {NewsCategory, NewsItem, NewsSnapshot, ScheduledEvent} from '@/lib/news/types';
 
 export const categoryLabels: Record<NewsCategory, string> = {
-  technology: '科技', geopolitics: '地缘政治', finance: '金融',
+  technology: '科技', geopolitics: '地缘政治', finance: '金融', official: '政务综合',
 };
 export const DISPLAY_TIME_ZONE = 'Asia/Shanghai';
 export const NEWS_REFRESH_MS = 5 * 60 * 1000;
 export const BROWSER_RETENTION_MS = 24 * 60 * 60 * 1000;
+export const NEWS_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function formatTime(value: string | null): string {
   if (!value || !Number.isFinite(Date.parse(value))) return '未知';
@@ -27,6 +28,20 @@ export function calendarDate(now: number, timeZone: string | null = DISPLAY_TIME
 export function isUpcoming(event: ScheduledEvent, now: number): boolean {
   if (event.startsAt) return Date.parse(event.startsAt) >= now;
   return event.startDate >= calendarDate(now, event.timeZone || 'UTC');
+}
+
+/** Reapply the reading window even when the browser only has a retained snapshot. */
+export function isRecentPublication(item: NewsItem, now: number): boolean {
+  if (item.publishedAt) {
+    const published = Date.parse(item.publishedAt);
+    return Number.isFinite(published) && published >= now - NEWS_LOOKBACK_MS && published <= now;
+  }
+  if (item.publishedDate) {
+    // A date-only source does not establish an instant or a timezone. Compare
+    // calendar dates in UTC, matching the API's disclosed day-level policy.
+    return item.publishedDate >= calendarDate(now - NEWS_LOOKBACK_MS, 'UTC') && item.publishedDate <= calendarDate(now, 'UTC');
+  }
+  return true;
 }
 
 export function publicationLabel(item: NewsItem): string {
@@ -50,7 +65,7 @@ export function visibleSnapshot(snapshot: NewsSnapshot, now: number) {
   const retention = Math.min(BROWSER_RETENTION_MS, snapshot.maxStaleSeconds * 1000);
   const available = new Set(snapshot.sources.filter(source => source.status !== 'error' && !source.halted && source.fetchedAt && now - Date.parse(source.fetchedAt) <= retention).map(source => source.id));
   return {
-    news: snapshot.news.filter(item => available.has(item.sourceId)),
+    news: snapshot.news.filter(item => available.has(item.sourceId) && isRecentPublication(item, now)),
     events: snapshot.events.filter(item => available.has(item.sourceId) && isUpcoming(item, now)),
   };
 }

@@ -66,8 +66,9 @@ const {outputFiles} = await build({stdin: {contents: `
  }};`, resolveDir: root, sourcefile: 'offline-taifex-host.ts'}, bundle: true, format: 'esm', platform: 'neutral', target: 'es2022', external: ['cloudflare:workers'], write: false});
 
 const migrations = (await readdir(new URL('../drizzle/', import.meta.url))).filter(name => /^\d{4}.*\.sql$/.test(name)).sort();
-assert.equal(migrations.length, 24, 'shared TAIFEX must not add another migration');
-assert.equal(migrations.at(-1), '0023_taifex_options_gate.sql');
+assert.equal(migrations.length, 25, 'only the isolated news gate is appended to the existing migration set');
+assert.equal(migrations[23], '0023_taifex_options_gate.sql');
+assert.equal(migrations.at(-1), '0024_news_source_gate.sql');
 const migrationSQL = await Promise.all(migrations.map(name => readFile(new URL('../drizzle/' + name, import.meta.url), 'utf8')));
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 const pages = ['options', 'futures'];
@@ -147,7 +148,7 @@ async function scenario(name, settings, fn) {
   const db = await mf.getD1Database('DB', 'warm');
   for (const sql of migrationSQL) await apply(db, sql);
   const tables = (await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all()).results.map(table => table.name);
-  assert.equal(tables.length, 21, 'all existing application tables and no new gate/cache');
+  assert.equal(tables.length, 22, 'all application tables including isolated news gate');
   assert.deepEqual(await row(db), {id: 'daily_institutions', status: 'idle', lease_token: null, payload: null, updated_ms: 0, not_before_ms: 0});
   const untouchedTables = tables.filter(name => name !== 'taifex_options_gate');
   // Preserve independent stopped gates, leases, cooldowns and cache sentinels.
@@ -171,7 +172,7 @@ async function scenario(name, settings, fn) {
    assert.deepEqual((await db.prepare(`SELECT * FROM ${untouchedTables[i]} ORDER BY 1`).all()).results, rowsBefore[i].results, `${untouchedTables[i]} rows remain exact`);
   }
   assert.equal((await db.prepare('SELECT count(*) AS count FROM taifex_options_gate').first()).count, 1, 'only the original singleton exists');
-  assert.deepEqual((await db.prepare(schemaSQL).all()).results, schemaBefore, 'all 21 tables, indexes and triggers remain exact');
+  assert.deepEqual((await db.prepare(schemaSQL).all()).results, schemaBefore, 'all 22 tables, indexes and triggers remain exact');
   completed++; console.log(`PASS ${name}`);
  } finally {await mf.dispose(); await mock.close();}
 }
@@ -465,4 +466,4 @@ await scenario(`one shared ${MAX_ACQUISITION_MS / 1000}-second deadline covers b
 });
 
 assert.ok(completed > 0, 'runtime filter selected no scenarios');
-console.log(`PASS ${completed} native shared-TAIFEX scenarios; all 24 existing migrations, 21-table schema and unrelated rows preserved; every source request synthetic`);
+console.log(`PASS ${completed} native shared-TAIFEX scenarios; all 25 migrations, 22-table schema and unrelated rows preserved; every source request synthetic`);

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NewsSnapshot } from '@/lib/news/types';
 const { load } = vi.hoisted(() => ({ load: vi.fn() }));
-vi.mock('@/lib/news/service', () => ({ loadNewsSnapshot: load }));
+vi.mock('@/lib/news/host', () => ({ loadNewsSnapshot: load }));
 import { GET } from '@/app/api/news/route';
 const snapshot = (status: NewsSnapshot['status']): NewsSnapshot => ({
   schemaVersion: 1, status, generatedAt: '2026-11-09T10:00:00.000Z', news: [], events: [], sources: [],

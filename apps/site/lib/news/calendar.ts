@@ -123,7 +123,8 @@ export function parseCalendar(ics: string, source: NewsSource): { events: Schedu
     const end = parseCalendarDate(endProp);
     const rawUrl = record.get('URL')?.value;
     const url = rawUrl ? canonicalUrl(decode(rawUrl), source) : source.websiteUrl;
-    if (!title || !start || !url || (endProp && !end) || (end?.instant && start.instant && end.instant < start.instant) || (end && end.date < start.date)) { skipped++; continue; }
+    if (!title || !start || !url || (endProp && !end) ||
+      (end && (end.allDay !== start.allDay || (start.allDay ? end.date <= start.date : !end.instant || !start.instant || end.instant <= start.instant)))) { skipped++; continue; }
     const rawStatus = record.get('STATUS')?.value.toUpperCase();
     if (rawStatus && !['CONFIRMED', 'TENTATIVE', 'CANCELLED'].includes(rawStatus)) { skipped++; continue; }
     const sequenceText = record.get('SEQUENCE')?.value ?? '0';

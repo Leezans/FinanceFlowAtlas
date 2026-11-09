@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {parseNewsSnapshot} from '../components/news/client';
-import {calendarDate, eventTimeLabel, formatTime, isUpcoming, publicationLabel, visibleSnapshot} from '../components/news/presentation';
+import {calendarDate, eventTimeLabel, formatTime, isRecentPublication, isUpcoming, NEWS_LOOKBACK_MS, publicationLabel, visibleSnapshot} from '../components/news/presentation';
 import {NEWS_UI_NOW, newsUiEvent, newsUiItem, newsUiSnapshot} from './news-ui-fixture';
 
 describe('news response boundary', () => {
@@ -42,6 +42,34 @@ describe('honest news and schedule time presentation', () => {
     expect(isUpcoming(newsUiEvent({startsAt: '2026-11-09T16:00:00Z'}), midnightShanghai)).toBe(false);
     expect(isUpcoming(newsUiEvent({startsAt: null, startDate: '2026-11-09', timeZone: 'America/New_York'}), midnightShanghai)).toBe(true);
     expect(isUpcoming(newsUiEvent({startsAt: null, startDate: '2026-11-09', timeZone: null}), midnightShanghai)).toBe(true);
+  });
+  it('uses an exact inclusive 30-day window for known publication and update instants', () => {
+    const itemAt = (when: number) => newsUiItem({publishedAt: new Date(when).toISOString()});
+    expect(isRecentPublication(itemAt(NEWS_UI_NOW - NEWS_LOOKBACK_MS), NEWS_UI_NOW)).toBe(true);
+    expect(isRecentPublication(itemAt(NEWS_UI_NOW - NEWS_LOOKBACK_MS - 1), NEWS_UI_NOW)).toBe(false);
+    expect(isRecentPublication(itemAt(NEWS_UI_NOW), NEWS_UI_NOW)).toBe(true);
+    expect(isRecentPublication(itemAt(NEWS_UI_NOW + 1), NEWS_UI_NOW)).toBe(false);
+    expect(isRecentPublication(newsUiItem({publicationTimeKind: 'updated', publishedAt: new Date(NEWS_UI_NOW - NEWS_LOOKBACK_MS - 1).toISOString()}), NEWS_UI_NOW)).toBe(false);
+  });
+  it('keeps date-only precision and rolls the 30-day window by UTC calendar date', () => {
+    const lateUtc = Date.parse('2026-11-09T23:59:59Z'); // Already November 10 in Shanghai.
+    const dated = (publishedDate: string) => newsUiItem({publishedAt: null, publishedDate});
+    expect(isRecentPublication(dated('2026-10-10'), lateUtc)).toBe(true);
+    expect(isRecentPublication(dated('2026-10-09'), lateUtc)).toBe(false);
+    expect(isRecentPublication(dated('2026-11-09'), lateUtc)).toBe(true);
+    expect(isRecentPublication(dated('2026-11-10'), lateUtc)).toBe(false);
+    expect(isRecentPublication(dated('2026-10-10'), lateUtc + 1000)).toBe(false);
+    expect(isRecentPublication(dated('2026-11-10'), lateUtc + 1000)).toBe(true);
+    expect(publicationLabel(dated('2026-10-10'))).toBe('来源发布时间：2026-10-10（仅日期，时刻 / 时区未提供）');
+  });
+  it('retains explicitly unknown publication dates while hiding aged or future instants', () => {
+    const snapshot = newsUiSnapshot();
+    snapshot.news[0].publishedAt = new Date(NEWS_UI_NOW - NEWS_LOOKBACK_MS - 1).toISOString();
+    snapshot.news[2].publishedAt = new Date(NEWS_UI_NOW + 1).toISOString();
+    const visible = visibleSnapshot(snapshot, NEWS_UI_NOW);
+    expect(visible.news.map(item => item.id)).toEqual(['geo-1']);
+    expect(publicationLabel(visible.news[0])).toBe('来源发布时间：未知');
+    expect(snapshot.sources[0].fetchedAt).toBe(new Date(NEWS_UI_NOW).toISOString());
   });
   it('enforces original source expiry, shorter server retention and source denial', () => {
     const snapshot = newsUiSnapshot(); snapshot.maxStaleSeconds = 60;

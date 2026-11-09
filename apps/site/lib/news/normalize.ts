@@ -19,8 +19,10 @@ export function plainText(value: string, limit = 360): string {
 /** Normalize only known tracking fields; preserve meaningful query and path data. */
 export function canonicalUrl(raw: string, source: NewsSource): string | null {
   try {
-    const url = new URL(raw.trim(), source.websiteUrl);
+    // Relative feed links resolve against the fetched feed, not a separate dataset directory.
+    const url = new URL(raw.trim(), source.url);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || !source.articleHosts.includes(url.hostname)) return null;
+    if (source.articlePathPrefixes && !source.articlePathPrefixes.some((prefix) => url.pathname.startsWith(prefix))) return null;
     url.hash = '';
     for (const key of [...url.searchParams.keys()]) {
       if (/^utm_/i.test(key) || /^(fbclid|gclid)$/i.test(key)) url.searchParams.delete(key);
@@ -45,6 +47,7 @@ export function contextTags(title: string, source: NewsSource): { regions: strin
     [/\b(?:China|Chinese)\b/i, 'CHN'], [/\b(?:Japan|Japanese)\b/i, 'JPN'],
     [/\b(?:Europe|European Union|ECB)\b/i, 'EU'], [/\b(?:United States|U\.S\.|Federal Reserve)\b/i, 'USA'],
     [/\b(?:United Kingdom|Britain|British)\b/i, 'GBR'],
+    [/\bHong Kong\b/i, 'HKG'],
   ] as const) if (pattern.test(title)) regions.add(code);
   if (/\b(?:currency|foreign exchange|monetary|interest rate|inflation|consumer price)\b/i.test(title)) markets.add('fx');
   if (/\b(?:oil|gold|commodity|commodities|futures)\b/i.test(title)) markets.add('cftc');

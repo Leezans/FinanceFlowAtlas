@@ -5,7 +5,7 @@ import {act, cleanup, fireEvent, render, screen, within} from '@testing-library/
 import NewsWorkspace from '../components/news/NewsWorkspace';
 import {BROWSER_RETENTION_MS, NEWS_REFRESH_MS} from '../components/news/presentation';
 import {NEWS_REQUEST_TIMEOUT_MS} from '../components/news/useNewsFeed';
-import {NEWS_UI_NOW, newsUiItem, newsUiSnapshot} from './news-ui-fixture';
+import {NEWS_UI_NOW, expandedNewsUiSnapshot, newsUiItem, newsUiSnapshot} from './news-ui-fixture';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NEWS_UI_NOW); Object.defineProperty(document, 'visibilityState', {value: 'visible', configurable: true}); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -14,6 +14,29 @@ async function start() { const view = render(<NewsWorkspace/>); await tick(); re
 function mockSuccess() { const fetcher = vi.fn(async () => Response.json(newsUiSnapshot())); vi.stubGlobal('fetch', fetcher); return fetcher; }
 
 describe('global news reading workspace', () => {
+  it('filters Hong Kong government and ECB coverage without relabeling it as global corroboration', async () => {
+    const snapshot = expandedNewsUiSnapshot();
+    const fetcher = vi.fn(async () => Response.json(snapshot)); vi.stubGlobal('fetch', fetcher); await start();
+    expect(screen.getAllByRole('article')).toHaveLength(snapshot.news.length);
+    expect(screen.getByRole('option', {name: '中国香港'}).getAttribute('value')).toBe('HKG');
+    fireEvent.click(screen.getByRole('button', {name: '政务综合'}));
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    const hk = screen.getByRole('article', {name: 'Synthetic Hong Kong government update'});
+    expect(within(hk).getByText(/单一来源陈述，未独立交叉核验.*中国香港/)).toBeTruthy();
+    expect(within(hk).queryByRole('navigation', {name: '相关市场'})).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: '全部主题'}));
+    fireEvent.change(screen.getByRole('combobox', {name: '来源 / 主题地区'}), {target: {value: 'EU'}});
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    const ecb = screen.getByRole('article', {name: 'Synthetic ECB monetary policy release'});
+    expect(within(ecb).getByRole('link', {name: '外汇行情 ↗'}).getAttribute('href')).toBe('/forex');
+    fireEvent.click(screen.getByRole('button', {name: /来源状态/}));
+    expect(screen.getByText(`${snapshot.sources.length} 个接入来源`)).toBeTruthy();
+    expect(screen.getAllByRole('link', {name: /使用条款/})).toHaveLength(snapshot.sources.length);
+    expect(screen.getByText(/不代表中国内地或亚洲全面覆盖，未自动判断事件重要性/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: /新闻发布/}));
+    expect(screen.getByRole('article', {name: 'Synthetic ECB monetary policy release'})).toBeTruthy();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('separates publication from occurrence and links only existing markets', async () => {
     mockSuccess(); await start();
     expect(screen.getByRole('heading', {name: '全球新闻与日程'})).toBeTruthy();
