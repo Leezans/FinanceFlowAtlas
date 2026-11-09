@@ -2,9 +2,9 @@ import {describe, expect, it} from 'vitest';
 import {NEWS_SOURCES, assertAllowedSource} from '@/lib/news/sources';
 import {evidenceSources} from '@/lib/catalog/sources';
 
-describe('reviewed nine-source coverage', () => {
-  it('enables only the nine reviewed sources, with four calendars and no unresolved candidate', () => {
-    expect(NEWS_SOURCES.map(source => source.id)).toEqual(['fed-press', 'nist-news', 'fcdo-updates', 'bls-calendar', 'hk-government', 'ecb-press', 'eurostat-euroindicators', 'eurostat-technology', 'eu-events']);
+describe('reviewed eleven-source coverage', () => {
+  it('enables only the eleven reviewed sources, with four calendars and no unresolved candidate', () => {
+    expect(NEWS_SOURCES.map(source => source.id)).toEqual(['fed-press', 'nist-news', 'fcdo-updates', 'bls-calendar', 'hk-government', 'ecb-press', 'eurostat-euroindicators', 'eurostat-technology', 'eu-events', 'taiwan-nstc', 'japan-digital-agency']);
     expect(NEWS_SOURCES.filter(source => source.kind === 'events').map(source => source.id)).toEqual(['bls-calendar', 'eurostat-euroindicators', 'eurostat-technology', 'eu-events']);
     for (const source of NEWS_SOURCES) {
       expect(() => assertAllowedSource(source)).not.toThrow();

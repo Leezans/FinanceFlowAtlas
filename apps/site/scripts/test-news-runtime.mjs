@@ -77,26 +77,38 @@ try {
  assert.deepEqual((await rows()).filter(r=>!added.includes(r.id)),oldRows);
  assert.equal((await rows()).length,9);
  for(const id of added){const row=(await rows()).find(r=>r.id===id);assert.deepEqual(row,{id,status:'idle',lease_token:null,payload:null,error_text:null,attempted_ms:0,updated_ms:0,not_before_ms:0});}
+ const asia=['taiwan-nstc','japan-digital-agency'];
+ for(const id of asia)assert.deepEqual(await get(0,'gate-check?id='+id),{inspect:'source_gate_unavailable',acquire:'source_gate_unavailable'});
+ const beforeAsia=await rows();
+ const asiaSql=(await readFile(new URL('../drizzle/0026_news_asia_technology.sql',import.meta.url),'utf8')).split('--> statement-breakpoint').filter(s=>s.trim());
+ await db.batch(asiaSql.map(sql=>db.prepare(sql)));
+ assert.deepEqual((await rows()).filter(r=>!asia.includes(r.id)),beforeAsia);
+ assert.equal((await rows()).length,11);
+ const afterAsia=await rows();
+ await assert.rejects(db.batch(asiaSql.map(sql=>db.prepare(sql))));
+ assert.deepEqual(await rows(),afterAsia,'failed duplicate migration must roll back without changing gate state');
+ for(const id of asia)assert.deepEqual((await rows()).find(r=>r.id===id),{id,status:'idle',lease_token:null,payload:null,error_text:null,attempted_ms:0,updated_ms:0,not_before_ms:0});
+ assert.equal((await stats()).calls,0);
  for(const sql of ["INSERT INTO news_source_gate (id,status) VALUES ('unreviewed','idle')", "UPDATE news_source_gate SET status='busy' WHERE id='eu-events'", "UPDATE news_source_gate SET attempted_ms=-1 WHERE id='eu-events'", "UPDATE news_source_gate SET payload='invalid JSON' WHERE id='eu-events'", "UPDATE news_source_gate SET status='blocked',payload='{}' WHERE id='eu-events'"])await assert.rejects(db.prepare(sql).run());
  console.log('PASS migration preserves existing busy/blocked/cache/lease rows exactly and retains constraints; new sources fail closed before migration');
  await reset();
  assert.equal((await get(0,'?mode=missing-db')).status,'unavailable');assert.equal((await stats()).calls,0);
- console.log('PASS missing DB/schema fail closed; all migrations seed nine sources');
- await Promise.all(workers.map((_,i)=>get(i,'?mode=slow')));assert.equal((await stats()).calls,9);
+ console.log('PASS missing DB/schema fail closed; all migrations seed eleven sources');
+ await Promise.all(workers.map((_,i)=>get(i,'?mode=slow')));assert.equal((await stats()).calls,11);
  assert.ok((await rows()).every(r=>r.status==='idle'&&r.payload));
- await get(1);assert.equal((await stats()).calls,9);
+ await get(1);assert.equal((await stats()).calls,11);
  console.log('PASS cross-isolate race admits exactly one request/source and reuses D1 cache');
  await db.prepare('UPDATE news_source_gate SET not_before_ms=0').run();await get(1,'?mode=denied');
  assert.ok((await rows()).every(r=>r.status==='blocked'&&r.payload===null));
- const denied=await get();assert.equal(denied.status,'unavailable');assert.equal(denied.news.length,0);assert.ok(denied.sources.every(s=>s.halted));assert.equal((await stats()).calls,18);
+ const denied=await get();assert.equal(denied.status,'unavailable');assert.equal(denied.news.length,0);assert.ok(denied.sources.every(s=>s.halted));assert.equal((await stats()).calls,22);
  console.log('PASS denial durable across workers and suppresses previously cached evidence');
- await reset();await db.prepare("UPDATE news_source_gate SET status='busy',lease_token='lost-worker',attempted_ms=1").run();await get();await get(1);assert.equal((await stats()).calls,18);assert.ok((await rows()).every(r=>r.status==='busy'));
+ await reset();await db.prepare("UPDATE news_source_gate SET status='busy',lease_token='lost-worker',attempted_ms=1").run();await get();await get(1);assert.equal((await stats()).calls,22);assert.ok((await rows()).every(r=>r.status==='busy'));
  console.log('PASS old busy lease never expires or permits takeover');
  await reset();assert.equal((await get(0,'stale')).code,'source_stale_lease');assert.equal((await rows()).find(r=>r.id==='fed-press').status,'busy');
  console.log('PASS wrong-token release cannot overwrite owned lease');
  for(const target of ['acquire','release'])for(const phase of ['before','after']){
  await reset();const initial=await stats();const result=await get(0,'?fault='+target+'-'+phase);
- assert.equal(result.status,'unavailable');const end=await stats();assert.equal(end.calls-initial.calls,target==='acquire'?0:9);assert.equal(end.writes-initial.writes,9);
+ assert.equal(result.status,'unavailable');const end=await stats();assert.equal(end.calls-initial.calls,target==='acquire'?0:11);assert.equal(end.writes-initial.writes,11);
  assert.ok((await rows()).every(r=>r.status===(target==='acquire'?(phase==='before'?'idle':'busy'):(phase==='before'?'busy':'idle'))));
  if(target==='acquire'&&phase==='after'||target==='release'&&phase==='before'){await get(1);assert.equal((await stats()).calls,end.calls);}
  if(target==='release'&&phase==='after'){await get(1);assert.equal((await stats()).calls,end.calls);}
@@ -105,9 +117,9 @@ try {
  await reset();await get();await db.prepare('UPDATE news_source_gate SET not_before_ms=0').run();
  const denialBefore=await stats();await get(0,'?mode=denied&fault=release-after');
  assert.ok((await rows()).every(r=>r.status==='blocked'&&r.payload===null));
- const recoveredDenial=await get(1);assert.ok(recoveredDenial.sources.every(s=>s.halted));assert.equal(recoveredDenial.news.length,0);assert.equal((await stats()).calls-denialBefore.calls,9);
+ const recoveredDenial=await get(1);assert.ok(recoveredDenial.sources.every(s=>s.halted));assert.equal(recoveredDenial.news.length,0);assert.equal((await stats()).calls-denialBefore.calls,11);
  console.log('PASS committed denial with lost acknowledgment still suppresses cache and retries');
- await reset();const initial=await stats();await get(0,'?mode=retry');await get(1);assert.equal((await stats()).calls-initial.calls,9);assert.ok((await rows()).every(r=>r.not_before_ms>Date.now()+3500000));
+ await reset();const initial=await stats();await get(0,'?mode=retry');await get(1);assert.equal((await stats()).calls-initial.calls,11);assert.ok((await rows()).every(r=>r.not_before_ms>Date.now()+3500000));
  console.log('PASS shared one-hour Retry-After cooldown');
  await reset();const skewStart=Date.now();await get(0,'?mode=skew');assert.ok((await rows()).every(r=>r.not_before_ms>skewStart+3500000&&r.not_before_ms<skewStart+3700000));
  console.log('PASS HTTP-date Retry-After uses database time despite three-day isolate clock skew');
@@ -115,10 +127,10 @@ try {
  for(const mode of ['late','body','excessive','gate-hang']){
  await reset();const initial=await stats(),started=Date.now();const result=await get(0,'?mode='+mode);
  assert.equal(result.status,'unavailable');assert.ok(Date.now()-started<12000,'response bounded');
- assert.equal((await stats()).calls-initial.calls,mode==='gate-hang'?0:9);
+ assert.equal((await stats()).calls-initial.calls,mode==='gate-hang'?0:11);
  if(mode!=='gate-hang'){
  await new Promise(r=>setTimeout(r,250));assert.ok((await rows()).every(r=>r.status==='busy'&&r.payload===null));
- await get(1);assert.equal((await stats()).calls-initial.calls,9);
+ await get(1);assert.equal((await stats()).calls-initial.calls,11);
  }
  console.log('PASS '+mode+': bounded response, no unsafe retry or cache publication');
  }

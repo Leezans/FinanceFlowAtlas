@@ -90,7 +90,7 @@ async function scenario(initial,fn){
   // Preserve pre-existing stopped providers exactly; the new gate cannot reset them.
   await db.prepare("UPDATE ashare_source_gate SET status='blocked',lease_token=NULL,reason_code='http_403'").run();
   for(const table of ['sina_source_gate','kraken_source_gate','ecb_fx_source_gate','cftc_source_gate','tpex_source_gate','asean_source_gate','cvm_source_gate','worldbank_equity_source_gate','polymarket_source_gate','tpex_summary_gate','cboe_delayed_source_gate','japan_mof_source_gate','taifex_options_gate'])await db.prepare(`UPDATE ${table} SET status='blocked',lease_token=NULL`).run();
-  assert.equal(migrations.length+1,26);assert.equal(tables.length,21);
+  assert.equal(migrations.length+1,27);assert.equal(tables.length,21);
   assert.ok(tables.includes('news_source_gate'), 'news gate must remain unchanged by Deribit migration');
   const before=await Promise.all(tables.map(table=>db.prepare(`SELECT * FROM ${table}`).all()));
   for(const statement of migration.split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();

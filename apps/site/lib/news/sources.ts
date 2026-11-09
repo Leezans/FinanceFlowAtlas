@@ -18,6 +18,8 @@ export interface NewsSource {
   articlePathPrefixes?: string[];
   /** Metadata-only sources never reproduce feed descriptions. */
   includeSummary?: boolean;
+  /** Disable keyword-derived geography and market associations for narrow official feeds. */
+  inferTitleContext?: boolean;
   attribution: string;
   /** Reviewed calendar semantics, never inferred from titles. */
   calendar?: { dateZone: string; tentativeByDefault?: boolean; notice: string };
@@ -121,6 +123,26 @@ export const NEWS_SOURCES: readonly NewsSource[] = [
     articleHosts: ['european-union.europa.eu'], includeSummary: false,
     calendar: { dateZone: 'UTC', notice: '欧盟机构活动日历并非政治峰会全量。保留来源 UTC 时间并换算显示；日程边界不视为实际开场时间，具体时刻及活动详情请查官方日历。' },
     attribution: 'Source: European Union. Reused under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Titles may be shortened, formatting removed and UTC timestamps converted for display by FinanceFlowAtlas. No endorsement implied.',
+  },
+  {
+    id: 'taiwan-nstc', name: 'Taiwan National Science and Technology Council', kind: 'news', format: 'rss',
+    url: 'https://www.nstc.gov.tw/nstc/rss/newsdata',
+    websiteUrl: 'https://www.nstc.gov.tw/folksonomy/rss',
+    termsUrl: 'https://www.nstc.gov.tw/folksonomy/detail/858cc36c-51c8-4772-a749-3fb22fcf8fc1?l=en',
+    license: 'Open Government Data License, version 1.0 (Taiwan); excludes specially marked permission-required and third-party material, logos and personal data',
+    category: 'technology', regions: ['TWN'], relatedMarkets: [],
+    articleHosts: ['www.nstc.gov.tw'], includeSummary: false, inferTitleContext: false,
+    attribution: 'Source: National Science and Technology Council, Taiwan. Reused under the Open Government Data License, version 1.0. Titles may be shortened and formatting removed by FinanceFlowAtlas (2026-11-09); descriptions are not reproduced. Official research-policy announcements, not a ranking of major technology events. No endorsement implied.',
+  },
+  {
+    id: 'japan-digital-agency', name: 'Japan Digital Agency', kind: 'news', format: 'rss',
+    url: 'https://www.digital.go.jp/en/rss/news.xml',
+    websiteUrl: 'https://www.digital.go.jp/en',
+    termsUrl: 'https://www.digital.go.jp/en/resources/open_data/public_data_license_v1.0',
+    license: 'Public Data License 1.0 (Japan); attribution and change disclosure required, third-party material excluded',
+    category: 'technology', regions: ['JPN'], relatedMarkets: [],
+    articleHosts: ['www.digital.go.jp'], includeSummary: false, inferTitleContext: false,
+    attribution: 'Source: Digital Agency, Japan. Reused under Public Data License 1.0. Titles may be shortened and formatting removed by FinanceFlowAtlas (2026-11-09); descriptions are not reproduced. Includes routine digital-government administration, not only major technology events. No endorsement implied.',
   },
 ] as const;
 
