@@ -66,10 +66,11 @@ const {outputFiles} = await build({stdin: {contents: `
  }};`, resolveDir: root, sourcefile: 'offline-taifex-host.ts'}, bundle: true, format: 'esm', platform: 'neutral', target: 'es2022', external: ['cloudflare:workers'], write: false});
 
 const migrations = (await readdir(new URL('../drizzle/', import.meta.url))).filter(name => /^\d{4}.*\.sql$/.test(name)).sort();
-assert.equal(migrations.length, 26, 'only the isolated news gate and its allowlist extension are appended');
+assert.equal(migrations.length, 27, 'only the isolated news gate and its two allowlist extensions are appended');
 assert.equal(migrations[23], '0023_taifex_options_gate.sql');
 assert.equal(migrations[24], '0024_news_source_gate.sql');
-assert.equal(migrations.at(-1), '0025_news_europe_calendars.sql');
+assert.equal(migrations[25], '0025_news_europe_calendars.sql');
+assert.equal(migrations.at(-1), '0026_news_asia_technology.sql');
 const migrationSQL = await Promise.all(migrations.map(name => readFile(new URL('../drizzle/' + name, import.meta.url), 'utf8')));
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 const pages = ['options', 'futures'];
