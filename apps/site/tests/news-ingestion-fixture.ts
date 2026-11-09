@@ -16,6 +16,8 @@ export function sourceBody(url: string): string {
   if (source.id === 'nist-news') return rss(rssItem('https://www.nist.gov/news-events/news/fixture'));
   if (source.id === 'hk-government') return hkRss();
   if (source.id === 'ecb-press') return ecbRss();
+  if (source.id === 'taiwan-nstc') return rss(rssItem('https://www.nstc.gov.tw/folksonomy/detail/fixture', 'Mon, 09 Nov 2026 01:30:00 GMT', '合成科技政策公告'));
+  if (source.id === 'japan-digital-agency') return rss(rssItem('https://www.digital.go.jp/en/news/fixture', 'Mon, 09 Nov 2026 10:30:00 +0900', 'Synthetic digital government update'));
   if (source.id === 'fed-press') return rss();
   throw new Error(`Missing synthetic fixture for ${source.id}`);
 }

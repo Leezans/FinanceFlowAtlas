@@ -2,13 +2,13 @@
 
 ## Product scope
 
-The hosted `/news` workspace is a small, attributable **official-source feed reader and release-calendar view**, integrated with FinanceFlowAtlas navigation. It is not comprehensive global journalism. Its nine reviewed sources comprise five news publishers: the US Federal Reserve, NIST, UK FCDO, Hong Kong SAR Government Information Services Department and European Central Bank (ECB), plus four calendars: US Bureau of Labor Statistics (BLS), Eurostat Euro indicators, Eurostat science/technology/digital-society releases, and European Union institutional events. Coverage extends beyond US/UK sources but remains limited: the Hong Kong feed does not establish mainland China or pan-Asian coverage, and ECB releases do not establish complete European or international coverage. An official statement remains the publishing institution's statement, not independently verified reporting. The Hong Kong general feed includes routine government announcements, so it has a supplementary **政务综合 / official** category rather than automatically labeling every item as finance or geopolitics; no importance ranking is claimed. English source titles/excerpts remain in their original language inside a Chinese interface; no unverified AI translation, forecast, sentiment score, price-effect claim or fabricated event is generated.
+The hosted `/news` workspace is a small, attributable **official-source feed reader and release-calendar view**, integrated with FinanceFlowAtlas navigation. It is not comprehensive global journalism. Its eleven reviewed sources comprise seven news publishers: Taiwan National Science and Technology Council (NSTC), Japan Digital Agency, the US Federal Reserve, NIST, UK FCDO, Hong Kong SAR Government Information Services Department and European Central Bank (ECB), plus four calendars: US Bureau of Labor Statistics (BLS), Eurostat Euro indicators, Eurostat science/technology/digital-society releases, and European Union institutional events. Coverage extends beyond US/UK sources but remains limited: the Hong Kong feed does not establish mainland China or pan-Asian coverage, and ECB releases do not establish complete European or international coverage. An official statement remains the publishing institution's statement, not independently verified reporting. The Hong Kong general feed includes routine government announcements, so it has a supplementary **政务综合 / official** category rather than automatically labeling every item as finance or geopolitics; no importance ranking is claimed. Chinese and English source titles/excerpts remain in their original language inside a Chinese interface; no unverified AI translation, forecast, sentiment score, price-effect claim or fabricated event is generated.
 
-The public-source acquisition endpoint is `/api/news`. Existing site authentication is unchanged. No API keys, paid subscription, scheduled job or alert service is required or installed. The persistent gate requires the existing primary D1 binding and migrations `0024_news_source_gate.sql` and `0025_news_europe_calendars.sql`; missing binding/schema fails closed without upstream requests. The migration is prepared locally, not applied to any remote database by this work. Opening/refetching the page can acquire sources. Closing it stops the page's requests. The application does not promise unattended monitoring or timely delivery of breaking news.
+The public-source acquisition endpoint is `/api/news`. Existing site authentication is unchanged. No API keys, paid subscription, scheduled job or alert service is required or installed. The persistent gate requires the existing primary D1 binding and migrations `0024_news_source_gate.sql` `0025_news_europe_calendars.sql` and `0026_news_asia_technology.sql`; missing binding/schema fails closed without upstream requests. The migration is prepared locally, not applied to any remote database by this work. Opening/refetching the page can acquire sources. Closing it stops the page's requests. The application does not promise unattended monitoring or timely delivery of breaking news.
 
 ## Reviewed sources and reuse
 
-Review date: **2026-11-09**. Text headlines, source-provided short excerpts where permitted, source links and schedule metadata only. ECB is metadata-only: title, original link and source publication time, with no description reproduced. No photographs, official seals/logos, full articles, third-party enclosures or article pages are downloaded. Attribution and terms links are included in every source status and shown in the workspace. All source relationships are informational; no endorsement is implied.
+Review date: **2026-11-09**. Text headlines, source-provided short excerpts where permitted, source links and schedule metadata only. ECB, Taiwan NSTC and Japan Digital Agency are metadata-only: title, original link and source publication time, with no description reproduced. No photographs, official seals/logos, full articles, third-party enclosures or article pages are downloaded. Attribution and terms links are included in every source status and shown in the workspace. All source relationships are informational; no endorsement is implied.
 
 | Source / category | Fixed feed | Source and reuse evidence |
 | --- | --- | --- |
@@ -46,11 +46,11 @@ These candidates are published-news feeds, not verified future-event calendars. 
 
 ## Acquisition and failure behavior
 
-`apps/site/lib/news/sources.ts` is a closed reviewed allowlist. Query parameters and feed-supplied links cannot select a fetch target. Only the nine configured feed URLs are requested. Redirects are never followed. Article links must use HTTPS, contain no credentials or nondefault port and match an exact reviewed source host; no scripts or remote enclosures execute.
+`apps/site/lib/news/sources.ts` is a closed reviewed allowlist. Query parameters and feed-supplied links cannot select a fetch target. Only the eleven configured feed URLs are requested. Redirects are never followed. Article links must use HTTPS, contain no credentials or nondefault port and match an exact reviewed source host; no scripts or remote enclosures execute.
 
-The service concurrently acquires the nine feeds with an 8-second whole-request deadline (including streaming body), 1 MiB maximum decoded body per source, strict UTF-8 and bounded record/nesting counts. RSS/Atom uses the installed `saxes` parser, rejects DTDs/external entities and malformed XML, validates namespace/root structure, and emits inert plain text only. ICS parsing supports a deliberately limited non-recurring event subset, unfolds lines, validates dates/timezones and bounds lines/records. Nothing in a feed is executed or treated as an instruction.
+The service concurrently acquires the eleven feeds with an 8-second whole-request deadline (including streaming body), 1 MiB maximum decoded body per source, strict UTF-8 and bounded record/nesting counts. RSS/Atom uses the installed `saxes` parser, rejects DTDs/external entities and malformed XML, validates namespace/root structure, and emits inert plain text only. ICS parsing supports a deliberately limited non-recurring event subset, unfolds lines, validates dates/timezones and bounds lines/records. Nothing in a feed is executed or treated as an instruction.
 
-The **primary-D1 persistent gate** stores a separate row for each of the nine sources, including bounded last-good evidence, next allowed attempt, lease and permission state. Every request checks shared state before serving evidence. Atomic conditional acquisition prevents different Worker isolates from acquiring the same source simultaneously. Same-isolate requests also coalesce in memory. A confirmed acquisition is required before fetching; a missing/unknown row, failed read, or uncertain acquisition acknowledgment performs no upstream request. Busy leases never expire or automatically transfer ownership, even after a Worker restart. A confirmed release publishes the cache and refresh deadline together; failed/uncertain release acknowledgment is not retried and does not expose unconfirmed data.
+The **primary-D1 persistent gate** stores a separate row for each of the eleven sources, including bounded last-good evidence, next allowed attempt, lease and permission state. Every request checks shared state before serving evidence. Atomic conditional acquisition prevents different Worker isolates from acquiring the same source simultaneously. Same-isolate requests also coalesce in memory. A confirmed acquisition is required before fetching; a missing/unknown row, failed read, or uncertain acquisition acknowledgment performs no upstream request. Busy leases never expire or automatically transfer ownership, even after a Worker restart. A confirmed release publishes the cache and refresh deadline together; failed/uncertain release acknowledgment is not retried and does not expose unconfirmed data.
 
 The minimum interval is 15 minutes. Cooldowns must be valid finite integer durations of at most seven days. An invalid or longer provider deadline is not shortened: release is refused and the durable lease remains busy, preventing an earlier retry. D1 operations have a five-second caller deadline; a late/uncertain acknowledgment does not authorize a fetch or retry. A whole-request timeout leaves its lease busy because aborting does not prove an upstream operation stopped; late fetch/body completion cannot publish evidence or trigger a new attempt. Browser five-minute checks/manual refresh do not bypass it. Busy and blocked rows suppress old evidence. Unknown permission state also suppresses evidence. The gate uses database time for persisted attempt/acquisition and cooldown timestamps; response assembly and item-window filtering use application time. Operational recovery of stuck/busy or blocked rows requires separate review and authorization; this module provides no automatic reset or takeover.
 
@@ -64,7 +64,7 @@ The API returns 200 for successful/partial coverage and 503 with the same struct
 - Expansion runtime probe on 2026-11-09: anonymous HTTPS GET plus XML inspection returned Hong Kong RSS HTTP 200 (`application/xml`, 412,498 bytes) and ECB RSS HTTP 200 (`application/rss+xml`, 5,867 bytes). These source-access observations are not a claim that the expanded application service, durable gate or production deployment was end-to-end verified; synthetic contract tests separately cover the new item shapes and exclusion rules. No live source text is committed.
 - The web research reader's “unsupported content-type” result for raw RSS/Atom/ICS was not treated as runtime success. The HTTP/parse smoke above was a separate actual runtime check. Production Worker egress can differ; a local pass does not certify hosted deployment availability.
 - Automated tests are synthetic and perform no external network requests. The service unit suite uses an explicit in-memory gate double for clock-driven scenarios; this is not evidence of SQL atomicity. Native-D1 runtime coverage is evaluated separately. Run from `apps/site`: `npx vitest run --config vitest.config.ts tests/news-ingestion.test.ts tests/news-service.test.ts tests/news-route.test.ts`. They cover XML/ICS safety and dates, unknown timestamps, DST transitions, canonical-link dedup, UID revisions/cancellation, recurrence skipping, complete/partial/empty failure, bounded bodies/deadlines, coalescing, cache expiration, permission stops including cancellation failures, Retry-After and API status.
-- Native D1 verification: `npm run test:news-runtime` runs production gate/service code in local workerd with external networking disabled. It covers nine migration rows; missing binding/schema; three-isolate shared races; persistent denial and cache suppression; no busy takeover; stale leases; acquire/release and denial acknowledgment loss; absolute Retry-After under isolate clock skew; excessive cooldown; late fetch; hanging body/D1; and unchanged pre-existing tables. These are synthetic runtime checks, not provider-access or deployed-database verification.
+- Native D1 verification: `npm run test:news-runtime` runs production gate/service code in local workerd with external networking disabled. It covers eleven migration rows; missing binding/schema; three-isolate shared races; persistent denial and cache suppression; no busy takeover; stale leases; acquire/release and denial acknowledgment loss; absolute Retry-After under isolate clock skew; excessive cooldown; late fetch; hanging body/D1; and unchanged pre-existing tables. These are synthetic runtime checks, not provider-access or deployed-database verification.
 - Synthetic migration regressions also passed `npm run test:deribit-runtime` and all 55 scenarios in `npm run test:taifex-options-runtime`, preserving the 22-table schema and unrelated provider rows after adding migration 0024.
 - Local recovery verification on 2026-11-09 passed TypeScript (`tsc --noEmit`), ESLint, production build plus asset-manifest verification, and all 196 Vitest files / 3,295 tests (`vitest run --config vitest.config.ts --maxWorkers=2`). The first higher-concurrency run had two unrelated matrix UI timing failures; both passed their focused rerun and the complete lower-concurrency rerun. The news service suite also verifies unknown/preserved request timestamps. A repository change is not a production deployment.
 
@@ -128,3 +128,45 @@ unchanged, including busy leases, blocked states, payloads and cooldown clocks.
 It seeds only the three new IDs. Before migration, missing source rows fail
 closed without upstream requests. It must run through the normal atomic migration
 path; no remote migration or deployment was performed for this change.
+
+## Asia technology expansion (2026-11-09)
+
+Two official sources add selected Taiwan research-policy and Japan digital-government
+updates. Both include routine administration, not only major technology events.
+Category or keyword does not establish importance or market relevance. Both retain
+publisher geography (TWN/JPN) without title-derived market/region associations.
+Original Chinese/English titles remain untranslated. Coverage is not pan-Asian.
+
+- Taiwan NSTC: https://www.nstc.gov.tw/nstc/rss/newsdata, from the official directory
+  https://www.nstc.gov.tw/folksonomy/rss. Terms:
+  https://www.nstc.gov.tw/folksonomy/detail/858cc36c-51c8-4772-a749-3fb22fcf8fc1?l=en
+  (Open Government Data License, version 1.0, Taiwan). Attribution required;
+  specially marked permission-required material, third-party content, logos and
+  personal data excluded. Only title, official link and source publication time.
+- Japan Digital Agency: https://www.digital.go.jp/en/rss/news.xml. Terms:
+  https://www.digital.go.jp/en/resources/open_data/public_data_license_v1.0
+  (Public Data License 1.0). Attribution and modification disclosure retained,
+  third-party material excluded, no endorsement implied. Title/link/time only.
+
+No descriptions, images, linked article text or enclosures are republished.
+Prior anonymous research observed HTTP 200, approximately 181 KB and 13 KB
+respectively. NSTC item dates include GMT and Japan dates +0900. Source offsets
+are normalized without replacing them with a local timezone. Missing item dates
+stay unknown; channel dates are not used. Prior access observations are not a
+hosted runtime guarantee. No additional provider request or live text fixture
+is part of this implementation.
+
+Migration 0026 extends the closed gate ID constraint and seeds only the two new
+sources. Every prior row field is copied unchanged, including blocked state, busy
+lease, cached payload and clocks. Missing rows fail closed before atomic migration.
+The fifteen-minute minimum refresh, durable denial stops, fixed fetch URLs and
+body/time bounds remain unchanged. No production migration or deployment performed.
+
+Local verification for this expansion: TypeScript, ESLint, production build with
+asset-manifest verification, offline build-asset regressions, and all 198 Vitest
+files / 3,314 synthetic tests passed. The first
+native D1 runtime run exited successfully across eleven sources. An additional
+rerun printed all successful cases, including duplicate-migration rollback, but
+its completion check was denied for an unexpected workers.cloudflare.com connection;
+that run's process completion is unconfirmed and it was not retried or bypassed.
+No production/provider availability is inferred from these synthetic checks.

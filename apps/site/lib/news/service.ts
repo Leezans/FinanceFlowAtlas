@@ -242,7 +242,7 @@ export class NewsService {
       status: sources.every((source) => source.status === 'error') ? 'unavailable' : sources.some((source) => source.status !== 'ok' || source.warnings.length) ? 'partial' : 'ok',
       news, events, sources, cacheTtlSeconds: NEWS_CACHE_TTL_MS / 1000, maxStaleSeconds: NEWS_MAX_STALE_MS / 1000,
       dedup: { newsRemoved, eventsRemoved, method: 'canonical-url; events additionally use identity and start' },
-      disclaimer: '仅接入美国、英国、中国香港及欧洲机构的九个精选官方来源（五个新闻来源、四个日历），非全球全面报道。香港政务综合含日常发布，不代表中国内地或亚洲全面覆盖，也不自动判断事件重要性。官方表述不等于独立核实；同链接去重不等于多源证实。分类、地区及市场关联仅为检索导航，不构成因果判断、价格预测或投资建议。新闻时间是发布/更新日期，事件发生时间未知；日程来自官方日历并可能调整，不代表事件已发生。按请求更新，无后台采集或提醒。',
+      disclaimer: '仅接入美国、英国、中国香港、台湾、日本及欧洲机构的十一个精选官方来源（七个新闻来源、四个日历），非全球全面报道。香港政务综合、日本数字厅及台湾国科会包含日常政务或科研政策发布，科技分类不是重大事件排名。不代表中国内地或亚洲全面覆盖，不自动判断事件重要性。官方表述不等于独立核实；同链接去重不等于多源证实。分类、地区及市场关联仅为检索导航，不构成因果判断、价格预测或投资建议。新闻时间是发布/更新日期，事件发生时间未知；日程来自官方日历并可能调整，不代表事件已发生。按请求更新，无后台采集或提醒。',
     };
   }
 }

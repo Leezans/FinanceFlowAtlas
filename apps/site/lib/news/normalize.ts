@@ -42,6 +42,7 @@ export function stableId(sourceId: string, identity: string): string {
 export function contextTags(title: string, source: NewsSource): { regions: string[]; relatedMarkets: string[] } {
   const regions = new Set(source.regions);
   const markets = new Set(source.relatedMarkets);
+  if (source.inferTitleContext === false) return { regions: [...regions], relatedMarkets: [...markets] };
   // Literal title matches and publisher context, not NLP causality or investment advice.
   for (const [pattern, code] of [
     [/\b(?:China|Chinese)\b/i, 'CHN'], [/\b(?:Japan|Japanese)\b/i, 'JPN'],
