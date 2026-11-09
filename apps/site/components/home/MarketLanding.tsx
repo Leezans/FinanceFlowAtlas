@@ -15,6 +15,7 @@ export default function MarketLanding({onOpenTic}:{onOpenTic?:()=>void}={}){
    <a href={entry('taifex-futures')} aria-label="打开台湾期货日度名义金额矩阵：TAIFEX三类法人">台湾期货日报</a>
    <a href={entry('cftc')} aria-label="打开期货持仓：美国 CFTC 精选市场">期货持仓</a>
    <a href={entry('fx')} aria-label="打开外汇行情：Kraken 法币现货与 ECB 每日参考">外汇行情</a>
+   <a href="/news" aria-label="打开全球新闻与官方日程">新闻与日程 <span>科技 · 地缘政治 · 金融</span></a>
    <a href="#tic-view" onClick={onOpenTic}>继续看美国 TIC</a>
   </nav>
   <p className={s.disclosure}>主力净额仅是东方财富大单与超大单的订单分类估算，不是所有交易资金净流入，也非市场真实新增资金。各来源独立展示，不混合单位、时点或口径。</p>

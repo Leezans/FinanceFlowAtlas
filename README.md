@@ -55,3 +55,21 @@ The hosted heatmaps share an [evidence relationship registry](docs/data-organiza
 for asset navigation, country-related views and source-specific metric context.
 Relationships aid discovery; they never combine incompatible observations or
 claim a globally complete, comparable capital-flow total.
+
+## News and scheduled events
+
+The hosted `/news` workspace adds a separate news and official-calendar layer
+alongside the existing market matrices. It separates source publication time,
+retrieval time and scheduled event time, displays timed events in Asia/Shanghai,
+and links related market views only as navigation context, never evidence that a
+headline caused a price or flow change. Source statements are not independent
+corroboration; scheduled releases are not forecasts of their outcomes.
+
+This is selected official-source coverage, not an exhaustive global wire service.
+Refresh is request-driven with bounded caching. The open page can refresh, but
+closing it stops client checks; no unattended alert service, push delivery or
+guaranteed real-time arrival is enabled by this module. See
+[news sources and limitations](docs/source-global-news.md).
+
+CI runs for both `dev` and `main` pushes. Develop on `dev`, verify that exact
+commit's checks, and only then promote reviewed changes to `main`.
