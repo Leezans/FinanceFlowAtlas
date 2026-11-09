@@ -90,10 +90,11 @@ async function scenario(initial,fn){
   // Preserve pre-existing stopped providers exactly; the new gate cannot reset them.
   await db.prepare("UPDATE ashare_source_gate SET status='blocked',lease_token=NULL,reason_code='http_403'").run();
   for(const table of ['sina_source_gate','kraken_source_gate','ecb_fx_source_gate','cftc_source_gate','tpex_source_gate','asean_source_gate','cvm_source_gate','worldbank_equity_source_gate','polymarket_source_gate','tpex_summary_gate','cboe_delayed_source_gate','japan_mof_source_gate','taifex_options_gate'])await db.prepare(`UPDATE ${table} SET status='blocked',lease_token=NULL`).run();
-  assert.equal(migrations.length+1,24);assert.equal(tables.length,20);
+  assert.equal(migrations.length+1,25);assert.equal(tables.length,21);
+  assert.ok(tables.includes('news_source_gate'), 'news gate must remain unchanged by Deribit migration');
   const before=await Promise.all(tables.map(table=>db.prepare(`SELECT * FROM ${table}`).all()));
   for(const statement of migration.split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement.trim()).run();
-  assert.equal((await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all()).results.length,21);
+  assert.equal((await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all()).results.length,22);
   await fn(mf,db,()=>({summaryCalls,metadataCalls}),value=>{mode=value;},metadataTimes,responseSizes);
   for(let i=0;i<tables.length;i++)assert.deepEqual((await db.prepare(`SELECT * FROM ${tables[i]}`).all()).results,before[i].results,`${tables[i]} remains unchanged`);
  }finally{await mf.dispose();await mock.close();}
@@ -184,4 +185,4 @@ for(const mode of ['ack-before','ack-after'])await scenario('plain',async(mf,db,
  assert.equal(after.status,row.status);assert.equal(after.lease_token,row.lease_token);assert.equal(after.payload,row.payload);
  console.log(`PASS native ${mode}: actual D1 boundary, fail-closed response, no blind retry, cleanup or busy takeover`);
 });
-console.log('PASS all 24 migrations and 20 unrelated tables preserved (21 total); external network disabled; no captured provider observations bundled');
+console.log('PASS all 25 migrations and 21 unrelated tables preserved (22 total); external network disabled; no captured provider observations bundled');

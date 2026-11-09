@@ -37,7 +37,8 @@
     "scheduler:status": "node scripts/check-ashare-scheduler.mjs",
     "test:diagnostics-runtime": "node scripts/test-diagnostics-runtime.mjs",
     "test:deribit-runtime": "node scripts/test-deribit-runtime.mjs",
-    "test:taifex-options-runtime": "node scripts/test-taifex-options-runtime.mjs"
+    "test:taifex-options-runtime": "node scripts/test-taifex-options-runtime.mjs",
+    "test:news-runtime": "node scripts/test-news-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -29,7 +29,7 @@ the actual pinned Vite/RSC compiler, proves the corrected ordering preserves CSS
 and verifies the isolated browser transport. No external requests are needed.
 After building, `node scripts/prepare-built-browser-fixture.mjs` executes the
 unmodified production Worker in native Miniflare with network disabled and saves
-12 routes' original HTML, RSC responses and real client assets under the ignored
+the configured routes’ original HTML, RSC responses and real client assets under the ignored
 `.offline-built-browser` directory. Preview HTML only adds an early isolation
 bootstrap that stubs every API request. These fixtures exercise hydration,
 navigation and honest schema-error states, not populated or live market data.
@@ -606,3 +606,12 @@ one hourly acquisition budget. A complete versioned bundle preserves legacy
 options caches, rejects partial publication and shares denial across both pages.
 No migration, new provider row, reset or unattended scheduler is added. See the
 [official units, rights, coverage and provider contract](docs/source-taifex-futures.md).
+
+## News and official schedules
+
+The `/news` workspace keeps official source statements and upcoming release
+schedules separate from market observations. It uses selected reviewed public
+RSS/Atom feeds and an official calendar, with source status, attribution,
+Asia/Shanghai instant display and explicit date-only/unknown timestamps.
+See [source coverage, caching and limits](../../docs/source-global-news.md).
+No background alert delivery or complete global-news coverage is enabled.

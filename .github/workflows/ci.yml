@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [dev, main]
 
 # Untrusted PR code runs only on disposable GitHub-hosted runners.
 # Never replace pull_request with pull_request_target here.
