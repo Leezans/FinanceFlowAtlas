@@ -108,6 +108,27 @@ describe('global news reading workspace', () => {
     fireEvent.click(screen.getByRole('button', {name: /来源状态 4/}));
     expect(screen.getAllByText('已停止自动重试')).toHaveLength(4);
   });
+  it('keeps normal empty news and event guidance with retry enabled', async () => {
+    const snapshot = newsUiSnapshot(); snapshot.news = []; snapshot.events = []; snapshot.sources.forEach(source => {source.itemCount = 0;});
+    const fetcher = vi.fn(async () => Response.json(snapshot)); vi.stubGlobal('fetch', fetcher); await start();
+    expect(screen.getByText('当前没有可展示的新闻')).toBeTruthy();
+    expect(screen.getByText('可能暂无条目、来源暂不可用或副本已过期；不代表全球没有相关事件。')).toBeTruthy();
+    expect(screen.getByRole('button', {name: '重新检查'})).toHaveProperty('disabled', false);
+    fireEvent.click(screen.getByRole('button', {name: /未来日程/}));
+    expect(screen.getByText('当前来源没有可展示的未来日程')).toBeTruthy();
+    expect(screen.queryByText(/请确认访问权限后刷新页面/)).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('keeps retry guidance across empty sections after a transient error', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline')); vi.stubGlobal('fetch', fetcher); await start();
+    for (const section of [/新闻发布/, /未来日程/, /来源状态/]) {
+      fireEvent.click(screen.getByRole('button', {name: section}));
+      expect(screen.getByRole('button', {name: '重新检查'})).toHaveProperty('disabled', false);
+      expect(screen.getByText(section.source === '来源状态' ? '请重新检查。连接失败不代表没有新闻。' : '当前未展示新闻或日程。上方「重新检查」可再次尝试。')).toBeTruthy();
+      expect(screen.queryByText(/请确认访问权限后刷新页面/)).toBeNull();
+    }
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('starts in a loading state and retries an initial network failure', async () => {
     const fetcher = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(Response.json(newsUiSnapshot())); vi.stubGlobal('fetch', fetcher);
     render(<NewsWorkspace/>); expect(screen.getByText('正在获取来源快照')).toBeTruthy(); await tick();
@@ -139,6 +160,13 @@ describe('global news reading workspace', () => {
     expect(screen.queryAllByRole('article')).toHaveLength(0); expect(screen.getByRole('alert').textContent).toContain('自动检查已停止');
     await tick(NEWS_REFRESH_MS * 2); expect(fetcher).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', {name: '重新检查'})).toHaveProperty('disabled', true);
+    for (const section of [/新闻发布/, /未来日程/, /来源状态/]) {
+      fireEvent.click(screen.getByRole('button', {name: section}));
+      expect(screen.getByText(section.source === '来源状态' ? '访问受限，检查已停止。请确认访问权限后刷新页面。' : '当前未展示新闻或日程。访问受限，检查已停止。请确认访问权限后刷新页面。')).toBeTruthy();
+      expect(screen.queryByText(/上方「重新检查」可再次尝试|请重新检查。连接失败/)).toBeNull();
+      fireEvent.click(screen.getByRole('button', {name: '重新检查'}));
+    }
+    await tick(NEWS_REFRESH_MS); expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('clears malformed success payloads instead of rendering unchecked content', async () => {
     const fetcher = mockSuccess(); await start(); fetcher.mockResolvedValueOnce(Response.json({...newsUiSnapshot(), sources: [{}]}));
