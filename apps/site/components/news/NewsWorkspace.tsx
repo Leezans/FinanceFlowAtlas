@@ -122,12 +122,12 @@ export default function NewsWorkspace() {
 
     {feed.pending && !snapshot && <div role="status" className={s.loading}><span className={s.loader}/><h2>正在获取来源快照</h2><p>各来源独立检查；无可用数据时会如实显示，不填入示例新闻。</p></div>}
 
-    {section === 'sources' ? snapshot ? <SourcePanel snapshot={snapshot}/> : !feed.pending && <div className={s.empty}><h2>暂未收到来源状态</h2><p>请重新检查。连接失败不代表没有新闻。</p></div> : snapshot && <section aria-labelledby="news-list-title" aria-busy={feed.pending}>
+    {section === 'sources' ? snapshot ? <SourcePanel snapshot={snapshot}/> : !feed.pending && <div className={s.empty}><h2>暂未收到来源状态</h2><p>{feed.blocked ? '访问受限，检查已停止。请确认访问权限后刷新页面。' : '请重新检查。连接失败不代表没有新闻。'}</p></div> : snapshot && <section aria-labelledby="news-list-title" aria-busy={feed.pending}>
       <div className={s.sectionHeading}><div><p className={s.eyebrow}>{section === 'news' ? 'PUBLISHED UPDATES' : 'OFFICIAL CALENDAR'}</p><h2 id="news-list-title">{section === 'news' ? '最近 30 天的公开发布' : '未来 90 天的官方日程'}</h2></div><span>{selectedCount} 条{filtered ? '符合筛选' : ''}</span></div>
       <p className={s.help}>{section === 'news' ? '发布时间未知的条目仍保留并标注。仅日期的发布按 UTC 日历日期筛选，不推断时刻或时区。标题与摘要保留来源原文；不同来源并列不代表交叉证实。' : '日程单独展示，不混入已发布新闻。含来源时间范围尚未结束的活动，不代表已核验正在举行。仅日期条目不推断具体时刻；时区未知时以 UTC 日期筛选，仍需回原站确认。'}</p>
       {selectedCount ? <div className={s.feed}>{section === 'news' ? news.map(item => <NewsCard key={item.id} item={item} source={getSource(item.sourceId)} retained={retainedSource(item.sourceId)}/>) : events.map(event => <EventCard key={event.id} event={event} source={getSource(event.sourceId)} retained={retainedSource(event.sourceId)}/>)}</div> : <div className={s.empty}><p className={s.eyebrow}>NO MATCHING ITEMS</p><h3>{filtered ? '没有符合筛选的条目' : section === 'events' ? '当前来源没有可展示的未来日程' : '当前没有可展示的新闻'}</h3><p>{filtered ? '试试其他主题、地区或关键词。' : '可能暂无条目、来源暂不可用或副本已过期；不代表全球没有相关事件。'}</p>{filtered && <button type="button" onClick={resetFilters}>清除筛选</button>}</div>}
     </section>}
-    {!feed.pending && !snapshot && section !== 'sources' && <div className={s.empty}><h2>新闻列表等待可用来源</h2><p>当前未展示新闻或日程。上方「重新检查」可再次尝试。</p></div>}
+    {!feed.pending && !snapshot && section !== 'sources' && <div className={s.empty}><h2>新闻列表等待可用来源</h2><p>{feed.blocked ? '当前未展示新闻或日程。访问受限，检查已停止。请确认访问权限后刷新页面。' : '当前未展示新闻或日程。上方「重新检查」可再次尝试。'}</p></div>}
 
     <footer className={s.footer}><strong>读新闻，也保留边界。</strong><p>{snapshot?.disclaimer || '这是精选公开来源的阅读入口，不是完整新闻服务、事实裁决或投资建议。'}</p><p>新闻按规范化原文链接去重；日程还保留事件标识与开始时间，避免合并不同日期的同名发布。不做同一事件的语义合并。{snapshot && `本次去重移除新闻 ${snapshot.dedup.newsRemoved} 条、日程 ${snapshot.dedup.eventsRemoved} 条。`}同一事件的不同报道可能并列，不能据此认定已获得独立证实。</p><p>地区是来源 / 主题标签，不代表影响范围。相关市场入口仅帮助浏览，不能证明新闻导致价格变化或资金流入。</p><a href="/markets">回到全球市场矩阵 ↗</a></footer>
   </main>;
